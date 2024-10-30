@@ -320,25 +320,19 @@ void SsaoApp::Draw(const GameTimer& gt)
 
     ObjectConstants oc;
     XMMATRIX model;
-    //model = XMMatrixScaling(0.1, 0.1, 0.1);
-    //model *= XMMatrixTranslation(0, 2, 0);
+
     model = XMMatrixRotationX(5);
-    //model *= XMMatrixRotationY(-90);
-    //model = XMMatrixScaling(1,1,1);
     XMStoreFloat4x4(&oc.World, model);
     res->CopyData(0, oc);
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
     
     mCommandList->SetGraphicsRootConstantBufferView(0, res->Resource()->GetGPUVirtualAddress());
-    //mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.vbv);
-    //mCommandList->IASetIndexBuffer(&m_PbrModel.ibv);
-    //mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    //mCommandList->DrawIndexedInstanced(m_PbrModel.numElements, 1, 0, 0, 0);
-    mCommandList->IASetVertexBuffers(0, 1, &m_SkyBox.vbv);
+    mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.vbv);
     mCommandList->SetGraphicsRootConstantBufferView(0, res->Resource()->GetGPUVirtualAddress());
+    mCommandList->IASetIndexBuffer(&m_PbrModel.ibv);
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    mCommandList->IASetIndexBuffer(&m_SkyBox.ibv);
-    mCommandList->DrawIndexedInstanced(m_SkyBox.numElements, 1, 0, 0, 0);
+    mCommandList->DrawIndexedInstanced(m_PbrModel.numElements, 1, 0, 0, 0);
+
     static int mips = 0;
     ImGui::InputInt("mips", &mips);
     mCommandList->SetGraphicsRoot32BitConstants(9, 1, &mips, 0);

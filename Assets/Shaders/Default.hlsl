@@ -188,7 +188,7 @@ float4 PS(VertexOut pin) : SV_Target
     color = color / (color +1);
     color = pow(color, 1.0f / 2.2f);
     //directLighting *= shadowFactor;
-    return float4(N, 1.0);
+    return float4(color, 1.0);
 }
 
 
