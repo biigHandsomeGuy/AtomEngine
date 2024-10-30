@@ -1,0 +1,109 @@
+﻿  SsaoApp.cpp
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(40,13): error C2143: 语法错误: 缺少“;”(在“*”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(40,5): error C4430: 缺少类型说明符 - 假定为 int。注意: C++ 不支持默认 int
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(40,28): error C2238: 意外的标记位于“;”之前
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(41,17): error C2143: 语法错误: 缺少“;”(在“*”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(41,5): error C4430: 缺少类型说明符 - 假定为 int。注意: C++ 不支持默认 int
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(41,32): error C2238: 意外的标记位于“;”之前
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(124,53): error C2065: “MeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(124,42): error C2923: "std::unique_ptr": "MeshGeometry" 不是参数 "_Ty" 的有效 模板 类型参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(124,42): error C2976: “std::unique_ptr'”: 模板 参数太少
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(124,42): error C3203: "unique_ptr": 未指定的 类 模板 不能用作 模板 参数 "_Ty" 的 模板 参数，应为真实类型
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(125,53): error C2065: “Material”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(125,42): error C2923: "std::unique_ptr": "Material" 不是参数 "_Ty" 的有效 模板 类型参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(125,42): error C2976: “std::unique_ptr'”: 模板 参数太少
+D:\SmileEngine\Samples\SSAO\SsaoApp.h(125,42): error C3203: "unique_ptr": 未指定的 类 模板 不能用作 模板 参数 "_Ty" 的 模板 参数，应为真实类型
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(427,36): error C2039: "Mat": 不是 "RenderItem" 的成员
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(444,3): error C2065: “Material”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(444,13): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(445,6): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(447,44): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(450,28): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(451,24): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(452,24): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(454,30): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(455,29): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(457,33): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(460,4): error C2065: “mat”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(645,9): error C2679: 二元“=”: 没有找到接受“_Ty”类型的右操作数的运算符(或没有可接受的转换)
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(645,9): error C2679:         with
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(645,9): error C2679:         [
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(645,9): error C2679:             _Ty=std::wstring
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(645,9): error C2679:         ]
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(646,3): error C2664: “HRESULT DirectX::CreateDDSTextureFromFile12(ID3D12Device *,ID3D12GraphicsCommandList *,const wchar_t *,Microsoft::WRL::ComPtr<ID3D12Resource> &,Microsoft::WRL::ComPtr<ID3D12Resource> &,size_t,DirectX::DDS_ALPHA_MODE *)”: 无法将参数 3 从“const _Elem *”转换为“const wchar_t *”
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(646,3): error C2664:         with
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(646,3): error C2664:         [
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(646,3): error C2664:             _Elem=char
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(646,3): error C2664:         ]
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(933,2): error C2065: “SubmeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(933,18): error C2146: 语法错误: 缺少“;”(在标识符“boxSubmesh”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(933,18): error C2065: “boxSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(934,2): error C2065: “boxSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(935,2): error C2065: “boxSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(936,2): error C2065: “boxSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(938,2): error C2065: “SubmeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(938,18): error C2146: 语法错误: 缺少“;”(在标识符“gridSubmesh”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(938,18): error C2065: “gridSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(939,2): error C2065: “gridSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(940,2): error C2065: “gridSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(941,2): error C2065: “gridSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(943,2): error C2065: “SubmeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(943,18): error C2146: 语法错误: 缺少“;”(在标识符“sphereSubmesh”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(943,18): error C2065: “sphereSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(944,2): error C2065: “sphereSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(945,2): error C2065: “sphereSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(946,2): error C2065: “sphereSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(948,2): error C2065: “SubmeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(948,18): error C2146: 语法错误: 缺少“;”(在标识符“cylinderSubmesh”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(948,18): error C2065: “cylinderSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(949,2): error C2065: “cylinderSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(950,2): error C2065: “cylinderSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(951,2): error C2065: “cylinderSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(953,5): error C2065: “SubmeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(953,21): error C2146: 语法错误: 缺少“;”(在标识符“quadSubmesh”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(953,21): error C2065: “quadSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(954,5): error C2065: “quadSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(955,5): error C2065: “quadSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(956,5): error C2065: “quadSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1023,30): error C2065: “MeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1023,18): error C2672: “std::make_unique”: 未找到匹配的重载函数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1024,2): error C3536: “geo”: 初始化之前无法使用
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1026,2): error C2660: “D3DCreateBlob”: 函数不接受 1 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1029,2): error C2660: “D3DCreateBlob”: 函数不接受 1 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1032,34): error C2660: “d3dUtil::CreateDefaultBuffer”: 函数不接受 4 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1035,33): error C2660: “d3dUtil::CreateDefaultBuffer”: 函数不接受 4 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1043,25): error C2065: “boxSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1044,26): error C2065: “gridSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1045,28): error C2065: “sphereSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1046,30): error C2065: “cylinderSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1047,29): error C2065: “quadSubmesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1133,33): error C2065: “MeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1133,21): error C2672: “std::make_unique”: 未找到匹配的重载函数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1134,5): error C3536: “geo”: 初始化之前无法使用
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1136,5): error C2660: “D3DCreateBlob”: 函数不接受 1 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1139,5): error C2660: “D3DCreateBlob”: 函数不接受 1 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1142,37): error C2660: “d3dUtil::CreateDefaultBuffer”: 函数不接受 4 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1145,36): error C2660: “d3dUtil::CreateDefaultBuffer”: 函数不接受 4 个参数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1153,5): error C2065: “SubmeshGeometry”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1153,21): error C2146: 语法错误: 缺少“;”(在标识符“submesh”的前面)
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1153,21): error C2065: “submesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1154,5): error C2065: “submesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1155,5): error C2065: “submesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1156,5): error C2065: “submesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1157,5): error C2065: “submesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1159,30): error C2065: “submesh”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1343,37): error C2065: “Material”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1343,25): error C2672: “std::make_unique”: 未找到匹配的重载函数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1344,5): error C3536: “bricks0”: 初始化之前无法使用
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1352,35): error C2065: “Material”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1352,23): error C2672: “std::make_unique”: 未找到匹配的重载函数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1353,5): error C3536: “tile0”: 初始化之前无法使用
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1361,37): error C2065: “Material”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1361,25): error C2672: “std::make_unique”: 未找到匹配的重载函数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1362,5): error C3536: “mirror0”: 初始化之前无法使用
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1370,38): error C2065: “Material”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1370,26): error C2672: “std::make_unique”: 未找到匹配的重载函数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1371,5): error C3536: “skullMat”: 初始化之前无法使用
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1379,33): error C2065: “Material”: 未声明的标识符
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1379,21): error C2672: “std::make_unique”: 未找到匹配的重载函数
+D:\SmileEngine\Samples\SSAO\SsaoApp.cpp(1379,21): error C1003: 错误计数超过 100；正在停止编译
