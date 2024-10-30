@@ -9,6 +9,8 @@ const int gNumFrameResources = 2;
 
 UINT text;
 
+std::string s;
+
 D3DApp* CreateApp(HINSTANCE hInstance)
 {
     return new SsaoApp(hInstance);
