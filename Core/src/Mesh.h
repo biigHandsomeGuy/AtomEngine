@@ -7,7 +7,20 @@
 #include <string>
 
 
+struct Vertex
+{
+	DirectX::XMFLOAT3 Position;
+	DirectX::XMFLOAT3 Normal;
+	DirectX::XMFLOAT2 TexCoords;
+	DirectX::XMFLOAT3 Tangent;
+	DirectX::XMFLOAT3 BiTangent;
+};
 
+struct MeshData
+{
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+};
 
 class Mesh
 {

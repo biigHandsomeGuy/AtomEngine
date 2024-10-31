@@ -143,26 +143,6 @@ public:
 };
 
 
-struct Light
-{
-    DirectX::XMFLOAT3 Strength = { 1, 1, 1 };
-    float FalloffStart = 1.0f;                          // point/spot light only
-    DirectX::XMFLOAT3 Position = { 0.0f, 0.0f, -10.0f };// directional/spot light only
-    float FalloffEnd = 10.0f;                           // point/spot light only
-};
-
-#define MaxLights 16
-
-struct Texture
-{
-	// Unique material name for lookup.
-	std::string Name;
-
-	std::string Filename;
-
-	Microsoft::WRL::ComPtr<ID3D12Resource> Resource = nullptr;
-	Microsoft::WRL::ComPtr<ID3D12Resource> UploadHeap = nullptr;
-};
 
 #ifndef ThrowIfFailed
 #define ThrowIfFailed(x)                                              \

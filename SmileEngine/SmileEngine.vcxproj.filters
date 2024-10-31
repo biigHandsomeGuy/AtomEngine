@@ -15,23 +15,17 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\FrameResource.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="src\ShadowMap.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="src\Ssao.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\main.cpp">
+    <ClCompile Include="src\d3d12.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\FrameResource.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="src\ShadowMap.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -39,6 +33,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="src\SsaoApp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\d3d.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

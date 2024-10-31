@@ -19,13 +19,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\FrameResource.cpp" />
+    <ClCompile Include="src\d3d12.cpp" />
     <ClCompile Include="src\ShadowMap.cpp" />
     <ClCompile Include="src\Ssao.cpp" />
-    <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\FrameResource.h" />
+    <ClInclude Include="src\d3d.h" />
     <ClInclude Include="src\ShadowMap.h" />
     <ClInclude Include="src\Ssao.h" />
     <ClInclude Include="src\SsaoApp.h" />

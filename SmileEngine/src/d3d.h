@@ -3,11 +3,11 @@
 #include "../../Core/src/UploadBuffer.h" 
 #include "../../Core/src/GeometryGenerator.h"
 #include "../../Core/src/Camera.h"
-#include "FrameResource.h"
 #include "ShadowMap.h"
 #include "Ssao.h"
 #include "../../Core/src/Mesh.h"
 #include "../../Core/src/d3dUtil.h"
+#include "../../Core/src/Texture.h"
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
@@ -15,14 +15,14 @@ using namespace DirectX::PackedVector;
 enum class DescriptorHeapLayout : UINT8
 {
     ShpereMaterialHeap,
-    ShpereMapHeap = 4,
-    ShadowMapHeap = 5,
-    SsaoMapHeap = 6,
-    NullCubeCbvHeap = 11,
-    NullTexSrvHeap1 = 12,
-    NullTexSrvHeap2 = 13, 
-    EnvirUnfilterSrvHeap = 14,
-    EnvirUnfilterUavHeap = 15,
+    ShpereMapHeap = 8,
+    ShadowMapHeap = 9,
+    SsaoMapHeap = 10,
+    NullCubeCbvHeap = 15,
+    NullTexSrvHeap1,
+    NullTexSrvHeap2, 
+    EnvirUnfilterSrvHeap,
+    EnvirUnfilterUavHeap ,
     EnvirUnfilterMipMap1,
     EnvirUnfilterMipMap2,
     EnvirUnfilterMipMap3,
@@ -42,6 +42,20 @@ enum class DescriptorHeapLayout : UINT8
 
 };
 
+enum RootBindings
+{
+    kMeshConstants,       // for VS
+    kMaterialConstants,   // for PS
+    kMaterialSRVs,        // material texture 
+    kCommonSRVs,          // cubemap?
+    kCommonCBV,           // global cbv
+    kCubemapSrv,
+    kIrradianceSrv,
+    kSpecularSrv,
+    kLUT,
+
+    kNumRootBindings      
+};
 
 struct MeshBuffer
 {
@@ -77,7 +91,7 @@ private:
     void UpdateObjectCBs(const GameTimer& gt);
     void UpdateMaterialBuffer(const GameTimer& gt);
     void UpdateShadowTransform(const GameTimer& gt);
-    void UpdateMainPassCB(const GameTimer& gt);
+    void UpdateGlobalConstantBuffers(const GameTimer& gt);
     void UpdateShadowPassCB(const GameTimer& gt);
     void UpdateSsaoCB(const GameTimer& gt);
 
@@ -108,9 +122,6 @@ private:
 
 private:
 
-    std::vector<std::unique_ptr<FrameResource>> mFrameResources;
-    FrameResource* mCurrFrameResource = nullptr;
-    int mCurrFrameResourceIndex = 0;
 
     ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
     ComPtr<ID3D12RootSignature> mSsaoRootSignature = nullptr;
@@ -128,30 +139,20 @@ private:
 
     CD3DX12_GPU_DESCRIPTOR_HANDLE mNullSrv;
 
-    PassConstants mMainPassCB;  // index 0 of pass cbuffer.
-    PassConstants mShadowPassCB;// index 1 of pass cbuffer.
-
     Camera mCamera;
 
     std::unique_ptr<ShadowMap> mShadowMap;
 
-    std::unique_ptr<Ssao> mSsao;
+    //std::unique_ptr<Ssao> mSsao;
 
     DirectX::BoundingSphere mSceneBounds;
 
-    float mLightNearZ = 0.0f;
-    float mLightFarZ = 0.0f;
-    XMFLOAT3 mLightPosW;
-    XMFLOAT4X4 mLightView = MathHelper::Identity4x4();
-    XMFLOAT4X4 mLightProj = MathHelper::Identity4x4();
+
+    XMFLOAT4 mLightPosW;
     XMFLOAT4X4 mShadowTransform = MathHelper::Identity4x4();
 
     float mLightRotationAngle = 0.0f;
-    XMFLOAT3 mBaseLightDirections[3] = {
-        XMFLOAT3(0.57735f, -0.57735f, 0.57735f),
-        XMFLOAT3(-0.57735f, -0.57735f, 0.57735f),
-        XMFLOAT3(0.0f, -0.707f, -0.707f)
-    };
+
     XMFLOAT3 mRotatedLightDirections[3];
 
     POINT mLastMousePos;
@@ -163,7 +164,13 @@ private:
 
     MeshBuffer m_PbrModel;
     MeshBuffer m_SkyBox;
+    MeshBuffer m_Ground;
 
     BYTE* data = nullptr;
+
+    XMMATRIX m_pbrModelMatrix;
+    XMMATRIX m_GroundModelMatrix;
+
+    std::unique_ptr<Ssao> mSsao;
 };
 

@@ -131,24 +131,15 @@
     <ClInclude Include="src\Texture.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="src\ConstantBuffers.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Renderer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\Assets\Shaders\Common.hlsli">
-      <Filter>Assets</Filter>
-    </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\Default.hlsl">
-      <Filter>Assets</Filter>
-    </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\DrawNormals.hlsl">
-      <Filter>Assets</Filter>
-    </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\TextureDebug.hlsl">
-      <Filter>Assets</Filter>
-    </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\Shadows.hlsl">
-      <Filter>Assets</Filter>
-    </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\Sky.hlsl">
       <Filter>Assets</Filter>
     </CustomBuild>
     <CustomBuild Include="..\Assets\Shaders\Ssao.hlsl">
@@ -157,9 +148,31 @@
     <CustomBuild Include="..\Assets\Shaders\SsaoBlur.hlsl">
       <Filter>Assets</Filter>
     </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\SphereMapToCubeMap.hlsl" />
-    <CustomBuild Include="..\Assets\Shaders\IrradianceMap.hlsl" />
-    <CustomBuild Include="..\Assets\Shaders\SpecularMap.hlsl" />
-    <CustomBuild Include="..\Assets\Shaders\spbrdf.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\Assets\Shaders\pbrPS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\pbrVS.hlsl">
+      <Filter>Assets</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Assets\Shaders\SkyBoxVS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\SkyBoxPS.hlsl">
+      <Filter>Assets</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Assets\Shaders\SpecularBRDFCS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\SpecularMapCS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\SphereMapToCubeMapCS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\IrradianceMapCS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\TextureDebugPS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\TextureDebugVS.hlsl">
+      <Filter>Assets</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Assets\Shaders\ShadowPS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\ShadowVS.hlsl">
+      <Filter>Assets</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Assets\Shaders\DrawNormalsVS.hlsl">
+      <Filter>Assets</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Assets\Shaders\DrawNormalsPS.hlsl" />
   </ItemGroup>
 </Project>
