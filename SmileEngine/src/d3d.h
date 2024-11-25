@@ -8,9 +8,10 @@
 #include "../../Core/src/Mesh.h"
 #include "../../Core/src/d3dUtil.h"
 #include "../../Core/src/Texture.h"
+#include <unordered_map>
+#include <DirectXCollision.h>
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
-using namespace DirectX::PackedVector;
 
 enum class DescriptorHeapLayout : UINT8
 {
@@ -18,7 +19,7 @@ enum class DescriptorHeapLayout : UINT8
     ShpereMapHeap = 8,
     ShadowMapHeap = 9,
     SsaoMapHeap = 10,
-    NullCubeCbvHeap = 15,
+    NullCubeCbvHeap = 11,
     NullTexSrvHeap1,
     NullTexSrvHeap2, 
     EnvirUnfilterSrvHeap,
@@ -97,7 +98,6 @@ private:
 
     void LoadTextures();
     void BuildRootSignature();
-    void BuildSsaoRootSignature();
     void BuildDescriptorHeaps();
     void BuildShadersAndInputLayout();
     void BuildShapeGeometry();
@@ -111,10 +111,7 @@ private:
     void CreateCubeMap();
     void CreateIBL();
     D3D12_CPU_DESCRIPTOR_HANDLE CreateTextureUav(ID3D12Resource* res, UINT mipSlice);
-    CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuSrv(int index)const;
-    CD3DX12_GPU_DESCRIPTOR_HANDLE GetGpuSrv(int index)const;
-    CD3DX12_CPU_DESCRIPTOR_HANDLE GetDsv(int index)const;
-    CD3DX12_CPU_DESCRIPTOR_HANDLE GetRtv(int index)const;
+
     MeshBuffer CreateMeshBuffer(const std::unique_ptr<class Mesh>& mesh);
 
 
@@ -124,7 +121,6 @@ private:
 
 
     ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
-    ComPtr<ID3D12RootSignature> mSsaoRootSignature = nullptr;
 
     ComPtr<ID3D12DescriptorHeap> mSrvDescriptorHeap = nullptr;
 
@@ -134,8 +130,6 @@ private:
     std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
-    //std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout_Pos_UV;
-
 
     CD3DX12_GPU_DESCRIPTOR_HANDLE mNullSrv;
 
@@ -143,7 +137,6 @@ private:
 
     std::unique_ptr<ShadowMap> mShadowMap;
 
-    //std::unique_ptr<Ssao> mSsao;
 
     DirectX::BoundingSphere mSceneBounds;
 
