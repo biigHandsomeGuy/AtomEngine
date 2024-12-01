@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Texture.h"
+
 #include <d3d12.h>
 #include <DirectXMath.h>
 #include <vector>
@@ -16,38 +18,33 @@ struct Vertex
 	DirectX::XMFLOAT3 BiTangent;
 };
 
-struct MeshData
-{
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
-};
-
 class Mesh
 {
 public:
-	struct Vertex
-	{
-		DirectX::XMFLOAT3 Position;
-		DirectX::XMFLOAT3 Normal;
-		DirectX::XMFLOAT2 TexCoords;
-		DirectX::XMFLOAT3 Tangent;
-		DirectX::XMFLOAT3 BiTangent;
-	};
+	// std::vector<Texture> textures;
+	std::vector<Vertex> Vertices;
+	std::vector<UINT> Indices;
+	ComPtr<ID3D12Resource> vertexBuffer;
+	ComPtr<ID3D12Resource> indexBuffer;
 
-	struct Face
-	{
-		uint32_t v1, v2, v3;
-	};
+	D3D12_VERTEX_BUFFER_VIEW vbv;
+	D3D12_INDEX_BUFFER_VIEW ibv;
 
-	static std::unique_ptr<Mesh> fromFile(const std::string fileName);
+	//DirectX::XMMATRIX Transform;
+};
 
-	const std::vector<Vertex>& vertices() const { return m_Vertices; }
-	const std::vector<Face>& faces() const { return m_Faces; }
+struct aiMesh;
+struct aiNode;
+struct aiScene;
 
+class Model
+{
+public:
+	void Load(const std::string& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
+	void Render(ID3D12GraphicsCommandList* commandList);
+	std::vector<Mesh> meshes;
 private:
-	Mesh(const struct aiMesh* mesh);
-
-	std::vector<Vertex> m_Vertices;
-	std::vector<Face> m_Faces;
-
+	
+	Mesh ProcessMesh(aiMesh* mesh, const DirectX::XMMATRIX& transform, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
+	void ProcessNode(aiNode* node, const aiScene* scene, const DirectX::XMMATRIX& parentTransform, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
 };

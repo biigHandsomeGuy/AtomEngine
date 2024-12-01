@@ -40,3 +40,12 @@ __declspec(align(256)) struct SsaoConstants
     float OcclusionFadeEnd = 2.0f;
     float SurfaceEpsilon = 0.05f;
 };
+
+// struct 
+
+__declspec(align(256)) struct ShaderParams
+{
+    bool UseSSAO;
+    char pad0[3];
+    bool UseShadow;
+};

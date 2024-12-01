@@ -44,7 +44,7 @@ SsaoApp::SsaoApp(HINSTANCE hInstance)
     // the world space origin.  In general, you need to loop over every world space vertex
     // position and compute the bounding sphere.
     mSceneBounds.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
-    mSceneBounds.Radius = 30;
+    mSceneBounds.Radius = 15;
 }
 
 SsaoApp::~SsaoApp()
@@ -77,7 +77,7 @@ bool SsaoApp::Initialize()
         mClientWidth, mClientHeight);
     mSsao->Initialize();
     m_pbrModelMatrix = XMMatrixScaling(0.1, 0.1, 0.1);
-    m_pbrModelMatrix = XMMatrixRotationX(0);
+    //m_pbrModelMatrix = XMMatrixRotationX(0);
 
 
     m_GroundModelMatrix = XMMatrixScaling(30,1,30);
@@ -86,7 +86,7 @@ bool SsaoApp::Initialize()
 	LoadTextures();
     BuildRootSignature();
 	BuildDescriptorHeaps();
-    BuildShadersAndInputLayout(); 
+    BuildInputLayout();
     BuildShapeGeometry();
     CreateCubeMap();
    
@@ -177,7 +177,7 @@ void SsaoApp::Update(const GameTimer& gt)
     
     OnKeyboardInput(gt);
 
-    
+    UpdateUI();
 
     //
     // Animate the lights (and hence shadows).
@@ -197,11 +197,6 @@ void SsaoApp::Draw(const GameTimer& gt)
     // Reusing the command list reuses memory.
     ThrowIfFailed(mCommandList->Reset(mDirectCmdListAlloc.Get(), mPSOs["opaque"].Get()));
 
-    // Start the Dear ImGui frame
-    ImGui_ImplDX12_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-    
 
     ID3D12DescriptorHeap* descriptorHeaps[] = { mSrvDescriptorHeap.Get() };
     mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
@@ -318,44 +313,7 @@ void SsaoApp::Draw(const GameTimer& gt)
     auto skyTexDescriptor = GetGpuHandle(mSrvDescriptorHeap.Get(), int(DescriptorHeapLayout::ShpereMapHeap));
     mCommandList->SetGraphicsRootDescriptorTable(kCommonSRVs, skyTexDescriptor);
 
-    static bool show_demo_window = false;
-    static bool show_another_window = false;
     
-    static ImVec4 clear_color = ImVec4(0,0,0,1);
-    color = XMFLOAT4(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-    if (show_demo_window)
-        ImGui::ShowDemoWindow(&show_demo_window);
-    static int b = 0;
-    static bool UsePcss = true;
-    static bool UseSsao = true;
-    {
-        static float f = 0.0f;
-        static int counter = 0;
-
-        ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-        ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-        ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-        ImGui::Checkbox("Another Window", &show_another_window);
-
-        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-        ImGui::Checkbox("UsePcss", &UsePcss);
-        ImGui::Checkbox("UseSsao", &UseSsao);
-        
-        if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-            counter++;
-        ImGui::SameLine();
-        ImGui::Text("counter = %d", counter);
-
-        ImGuiIO& io = ImGui::GetIO(); (void)io;
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-        ImGui::End();
-    }
 
     auto cubeMapDescriptor = GetGpuHandle(mSrvDescriptorHeap.Get(), int(DescriptorHeapLayout::EnvirSrvHeap));
     mCommandList->SetGraphicsRootDescriptorTable(kCubemapSrv, cubeMapDescriptor);
@@ -427,12 +385,40 @@ void SsaoApp::Draw(const GameTimer& gt)
         materialBuffer.gMatIndex = 0;
         memcpy(data, &materialBuffer, bufferSize);
     }
+    
+    // shaderParameter cbuffer
+    ComPtr<ID3D12Resource> shaderParamsCbuffer;
+    {
+        const UINT64 bufferSize = sizeof(ShaderParams);
+
+        ThrowIfFailed(md3dDevice->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(shaderParamsCbuffer.GetAddressOf())
+        ));
+        BYTE* data = nullptr;
+        shaderParamsCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+
+        memcpy(data, &m_ShaderAttribs, bufferSize);
+    }
     mCommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, materialCbuffer->GetGPUVirtualAddress());
-    mCommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshCbuffer->GetGPUVirtualAddress());
-    mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.vbv);
-    mCommandList->IASetIndexBuffer(&m_PbrModel.ibv);
-    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    mCommandList->DrawIndexedInstanced(m_PbrModel.numElements, 1, 0, 0, 0);
+    mCommandList->SetGraphicsRootConstantBufferView(kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
+
+    {
+        for (uint32_t meshIndex = 0; meshIndex < m_PbrModel.meshes.size(); meshIndex++)
+        {
+            mCommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshCbuffer->GetGPUVirtualAddress());
+            mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.meshes[meshIndex].vbv);
+            mCommandList->IASetIndexBuffer(&m_PbrModel.meshes[meshIndex].ibv);
+            mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            mCommandList->DrawIndexedInstanced(m_PbrModel.meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+        }
+
+        
+    }
 
 
     //XMStoreFloat4x4(&groundOC.World, m_GroundModelMatrix);
@@ -450,10 +436,10 @@ void SsaoApp::Draw(const GameTimer& gt)
     // mCommandList->SetGraphicsRoot32BitConstants(9, 1, &mips, 0);
    
     mCommandList->SetPipelineState(mPSOs["sky"].Get());
-    mCommandList->IASetVertexBuffers(0, 1, &m_SkyBox.vbv);
+    mCommandList->IASetVertexBuffers(0, 1, &m_SkyBox.meshes[0].vbv);
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    mCommandList->IASetIndexBuffer(&m_SkyBox.ibv);
-    mCommandList->DrawIndexedInstanced(m_SkyBox.numElements,1,0,0,0);
+    mCommandList->IASetIndexBuffer(&m_SkyBox.meshes[0].ibv);
+    mCommandList->DrawIndexedInstanced(m_SkyBox.meshes[0].Indices.size(), 1, 0, 0, 0);
 
 
     //// Texture Debug
@@ -599,6 +585,57 @@ void SsaoApp::UpdateSsaoCB(const GameTimer& gt)
 
 }
 
+void SsaoApp::UpdateUI()
+{
+    // Start the Dear ImGui frame
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+
+
+    static bool show_demo_window = false;
+    static bool show_another_window = false;
+
+   
+    if (show_demo_window)
+        ImGui::ShowDemoWindow(&show_demo_window);
+    static int b = 0;
+    
+    
+
+    {
+        static float f = 0.0f;
+        static int counter = 0;
+
+        ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+        ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+        ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+        ImGui::Checkbox("Another Window", &show_another_window);
+
+        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+
+        ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
+
+        ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);
+
+        if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+            counter++;
+        ImGui::SameLine();
+        ImGui::Text("counter = %d", counter);
+
+
+
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::End();
+    }
+}
+
 void SsaoApp::LoadTextures()
 {
 	std::vector<std::string> texNames = 
@@ -724,6 +761,7 @@ void SsaoApp::BuildRootSignature()
     slotRootParameter[kMaterialSRVs].InitAsDescriptorTable(1, &materialSrv, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kCommonSRVs].InitAsDescriptorTable(1, &commonSrv, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kCommonCBV].InitAsConstantBufferView(1);
+    slotRootParameter[kShaderParams].InitAsConstantBufferView(2, 0, D3D12_SHADER_VISIBILITY_PIXEL);;
     slotRootParameter[kCubemapSrv].InitAsDescriptorTable(1, &cubemapRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kIrradianceSrv].InitAsDescriptorTable(1, &irradianceRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kSpecularSrv].InitAsDescriptorTable(1, &specularRange, D3D12_SHADER_VISIBILITY_PIXEL);
@@ -1030,25 +1068,8 @@ void SsaoApp::BuildDescriptorHeaps()
     }
 }
 
-void SsaoApp::BuildShadersAndInputLayout()
+void SsaoApp::BuildInputLayout()
 {
-	const D3D_SHADER_MACRO alphaTestDefines[] =
-	{
-		"ALPHA_TEST", "1",
-		NULL, NULL
-	};
-    const D3D_SHADER_MACRO pcssDefines[] =
-    {
-        "PCSS", "1",
-        NULL, NULL
-    };
-    const D3D_SHADER_MACRO ssaoDefines[] =
-    {
-        "SSAO", "1",
-        NULL, NULL
-    };
-
-
     mInputLayout =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -1058,19 +1079,13 @@ void SsaoApp::BuildShadersAndInputLayout()
 		{ "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
-    //mInputLayout_Pos_UV =
-    //{
-    //    { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	//	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    //};
 }
 
 void SsaoApp::BuildShapeGeometry()
-{
-  
-    m_SkyBox = CreateMeshBuffer(Mesh::fromFile(std::string("D:/SmileEngine/Assets/Models/cube.fbx")));
-    m_PbrModel = CreateMeshBuffer(Mesh::fromFile(std::string("D:/SmileEngine/Assets/Models/Cerberus_LP.FBX")));
-    m_Ground = CreateMeshBuffer(Mesh::fromFile(std::string("D:/SmileEngine/Assets/Models/cube.fbx")));
+{  
+    m_SkyBox.Load(std::string("D:/SmileEngine/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
+    m_PbrModel.Load(std::string("D:/SmileEngine/Assets/Models/Cerberus_LP.FBX"),md3dDevice.Get(),mCommandList.Get());
+    m_Ground.Load(std::string("D:/SmileEngine/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
 
 }
 
@@ -1113,7 +1128,7 @@ void SsaoApp::BuildPSOs()
     opaquePsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     opaquePsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
-
+    
     //
     // PSO for shadow map pass.
     //
@@ -1258,8 +1273,8 @@ void SsaoApp::DrawSceneToShadowMap()
         XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
         
         XMMATRIX viewProj = XMMatrixMultiply(lightView, lightProj);
-
-        XMStoreFloat4x4(&vsConstants.MVP, viewProj);
+        XMMATRIX mvp = XMMatrixMultiply(m_pbrModelMatrix, viewProj);
+        XMStoreFloat4x4(&vsConstants.MVP, mvp);
         
 		     // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
         XMMATRIX T(
@@ -1287,13 +1302,15 @@ void SsaoApp::DrawSceneToShadowMap()
     
     mCommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
 
-    // Draw Pbr model   
-    mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.vbv);
-    mCommandList->IASetIndexBuffer(&m_PbrModel.ibv);
-    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    mCommandList->DrawIndexedInstanced(m_PbrModel.numElements, 1, 0, 0, 0);
-    
-    
+
+    for (uint32_t meshIndex = 0; meshIndex < m_PbrModel.meshes.size(); meshIndex++)
+    {
+        mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.meshes[meshIndex].vbv);
+        mCommandList->IASetIndexBuffer(&m_PbrModel.meshes[meshIndex].ibv);
+        mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        mCommandList->DrawIndexedInstanced(m_PbrModel.meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+    }
+
     //// Draw Ground
     //ObjectConstants groundOC;
     //
@@ -1337,7 +1354,33 @@ void SsaoApp::DrawNormalsAndDepth()
 
     // Bind the constant buffer for this pass.
     mCommandList->SetPipelineState(mPSOs["drawNormals"].Get());
+    
+    {
+        __declspec(align(256)) struct
+        {
+            XMFLOAT4X4 model;
+        } vsConstants;
 
+        const UINT64 bufferSize = sizeof(vsConstants);
+
+        ThrowIfFailed(md3dDevice->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(meshBuffer.GetAddressOf())
+        ));
+
+        XMStoreFloat4x4(&vsConstants.model, m_pbrModelMatrix);
+
+        BYTE* data = nullptr;
+        ThrowIfFailed(meshBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+
+
+        memcpy(data, &vsConstants, bufferSize);
+        meshBuffer->Unmap(0, nullptr);
+    }
     // Create Global Constant Buffer
     
     {
@@ -1371,14 +1414,15 @@ void SsaoApp::DrawNormalsAndDepth()
 
 
     mCommandList->SetGraphicsRootConstantBufferView(kCommonCBV, globalCbuffer->GetGPUVirtualAddress());
+    mCommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
  
-    mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.vbv);
-    mCommandList->IASetIndexBuffer(&m_PbrModel.ibv);
-    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    mCommandList->DrawIndexedInstanced(m_PbrModel.numElements, 1, 0, 0, 0);
-
-
-
+    for (uint32_t meshIndex = 0; meshIndex < m_PbrModel.meshes.size(); meshIndex++)
+    {
+        mCommandList->IASetVertexBuffers(0, 1, &m_PbrModel.meshes[meshIndex].vbv);
+        mCommandList->IASetIndexBuffer(&m_PbrModel.meshes[meshIndex].ibv);
+        mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        mCommandList->DrawIndexedInstanced(m_PbrModel.meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+    }
 
     // // Draw Ground
     // ObjectConstants groundOC;
@@ -1620,53 +1664,6 @@ D3D12_CPU_DESCRIPTOR_HANDLE SsaoApp::CreateTextureUav(ID3D12Resource* res, UINT 
 }
 
 
-MeshBuffer SsaoApp::CreateMeshBuffer(const std::unique_ptr<Mesh>& mesh)
-{
-    MeshBuffer buffer;
-    buffer.numElements = mesh->faces().size() * 3;
-
-    const size_t vertexDataSize = mesh->vertices().size() * sizeof(Mesh::Vertex);
-    const size_t indexDataSize = mesh->faces().size() * sizeof(Mesh::Face);
-
-    // create GPU resource
-    ThrowIfFailed(md3dDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-        D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(vertexDataSize),
-        D3D12_RESOURCE_STATE_COMMON,
-        nullptr,
-        IID_PPV_ARGS(&buffer.vertexBuffer)
-    ));
-
-    buffer.vbv.BufferLocation = buffer.vertexBuffer->GetGPUVirtualAddress();
-    buffer.vbv.SizeInBytes = static_cast<UINT>(vertexDataSize);
-    buffer.vbv.StrideInBytes = sizeof(Mesh::Vertex);
-
-    ThrowIfFailed(md3dDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_UPLOAD },
-        D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(indexDataSize),
-        D3D12_RESOURCE_STATE_COMMON,
-        nullptr,
-        IID_PPV_ARGS(&buffer.indexBuffer)));
-
-    buffer.ibv.BufferLocation = buffer.indexBuffer->GetGPUVirtualAddress();
-    buffer.ibv.SizeInBytes = static_cast<UINT>(indexDataSize);
-    buffer.ibv.Format = DXGI_FORMAT_R32_UINT;
-
-    UINT8* data = nullptr;
-    // copy vertex
-    ThrowIfFailed(buffer.vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
-    memcpy(data, &mesh->vertices()[0], vertexDataSize);
-    buffer.vertexBuffer->Unmap(0, nullptr);
-
-    // copy index
-    buffer.indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-    memcpy(data, mesh->faces().data(), indexDataSize);
-    buffer.indexBuffer->Unmap(0, nullptr);
-
-    return buffer;
-}
 
 std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> SsaoApp::GetStaticSamplers()
 {

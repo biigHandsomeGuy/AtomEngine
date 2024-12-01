@@ -1,3 +1,8 @@
+cbuffer VSConstant : register(b0)
+{
+    float4x4 gModel;
+}
+
 cbuffer GlobalConstants : register(b1)
 {
     float4x4 gView;
@@ -32,7 +37,7 @@ VertexOut main(VertexIn vin)
     
     // Transform to homogeneous clip space.
 
-    vout.PosH = mul(gViewProj, float4(vin.PosL, 1.0f));
+    vout.PosH = mul(gViewProj, mul(gModel, float4(vin.PosL, 1.0f)));
 	
     return vout;
 }

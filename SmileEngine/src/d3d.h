@@ -8,6 +8,7 @@
 #include "../../Core/src/Mesh.h"
 #include "../../Core/src/d3dUtil.h"
 #include "../../Core/src/Texture.h"
+#include "../../Core/src/Mesh.h"
 #include <unordered_map>
 #include <DirectXCollision.h>
 using Microsoft::WRL::ComPtr;
@@ -50,6 +51,7 @@ enum RootBindings
     kMaterialSRVs,        // material texture 
     kCommonSRVs,          // cubemap?
     kCommonCBV,           // global cbv
+    kShaderParams,
     kCubemapSrv,
     kIrradianceSrv,
     kSpecularSrv,
@@ -58,14 +60,6 @@ enum RootBindings
     kNumRootBindings      
 };
 
-struct MeshBuffer
-{
-    ComPtr<ID3D12Resource> vertexBuffer;
-    ComPtr<ID3D12Resource> indexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW vbv;
-    D3D12_INDEX_BUFFER_VIEW ibv;
-    UINT numElements;
-};
 
 class SsaoApp : public D3DApp
 {
@@ -89,30 +83,23 @@ private:
     virtual void OnMouseMove(WPARAM btnState, int x, int y)override;
 
     void OnKeyboardInput(const GameTimer& gt);
-    void UpdateObjectCBs(const GameTimer& gt);
-    void UpdateMaterialBuffer(const GameTimer& gt);
-    void UpdateShadowTransform(const GameTimer& gt);
-    void UpdateGlobalConstantBuffers(const GameTimer& gt);
-    void UpdateShadowPassCB(const GameTimer& gt);
+
     void UpdateSsaoCB(const GameTimer& gt);
+
+    void UpdateUI();
 
     void LoadTextures();
     void BuildRootSignature();
     void BuildDescriptorHeaps();
-    void BuildShadersAndInputLayout();
+    void BuildInputLayout();
     void BuildShapeGeometry();
-    void BuildSkullGeometry();
     void BuildPSOs();
-    void BuildFrameResources();
-    void BuildMaterials();
-    void BuildRenderItems();
     void DrawSceneToShadowMap();
     void DrawNormalsAndDepth();
     void CreateCubeMap();
     void CreateIBL();
     D3D12_CPU_DESCRIPTOR_HANDLE CreateTextureUav(ID3D12Resource* res, UINT mipSlice);
 
-    MeshBuffer CreateMeshBuffer(const std::unique_ptr<class Mesh>& mesh);
 
 
     std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> GetStaticSamplers();
@@ -155,9 +142,9 @@ private:
     ComPtr<ID3D12Resource> m_IrradianceMap;
     ComPtr<ID3D12Resource> m_LUT;
 
-    MeshBuffer m_PbrModel;
-    MeshBuffer m_SkyBox;
-    MeshBuffer m_Ground;
+    Model m_PbrModel;
+    Model m_SkyBox;
+    Model m_Ground;
 
     BYTE* data = nullptr;
 
@@ -165,5 +152,7 @@ private:
     XMMATRIX m_GroundModelMatrix;
 
     std::unique_ptr<Ssao> mSsao;
+
+    ShaderParams m_ShaderAttribs;
 };
 

@@ -31,6 +31,12 @@ cbuffer GlobalConstants : register(b1)
     float3 gSunPosition;
 
 };
+
+cbuffer ShaderParams
+{
+    bool UseSSAO;
+    bool UseShadow;
+};
 SamplerState gsamAnisotropicWrap : register(s4);
 static const float3 Fdielectric = 0.04;
 static const float Epsilon = 0.00001;
@@ -59,12 +65,12 @@ float DistributionGGX(float3 N, float3 H, float roughness);
 float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(float3 N, float3 V, float3 L, float roughness);
 float3 fresnelSchlick(float cosTheta, float3 F0);
+float CalcShadowFactorPCSS(float4 shadowPosH);
 
 float CalcShadowFactor(float4 shadowPosH);
 
 float4 main(VertexOut pin) : SV_Target
 {
-    
     
     float3 albedo = pow(gAlbedeTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
     float metalness = gMetalnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
@@ -86,17 +92,14 @@ float4 main(VertexOut pin) : SV_Target
     // Fresnel reflectance at normal incidence (for metals use albedo color).
     float3 F0 = lerp(Fdielectric, albedo, metalness);
     
-    
-#ifdef SSAO
-    // Finish texture projection and sample SSAO map.
-    pin.SsaoPosH /= pin.SsaoPosH.w;
-    float ambientAccess = gSsaoMap.Sample(gsamLinearClamp, pin.SsaoPosH.xy, 0.0f).r;
-
-#else
-    pin.SsaoPosH /= pin.SsaoPosH.w;
-    float ambientAccess = gSsaoMap.Sample(gsamLinearWrap, pin.SsaoPosH.xy, 0.0f).r;
-#endif
-    
+    float ambientAccess = 1;
+    if (UseSSAO)
+    {
+        // Finish texture projection and sample SSAO map.
+        pin.SsaoPosH /= pin.SsaoPosH.w;
+        ambientAccess = gSsaoMap.Sample(gsamLinearWrap, pin.SsaoPosH.xy, 0.0f).r;
+    }
+  
     // Direct lighting calculation for analytical lights.
     float3 directLighting = 0.0;
     {
@@ -132,14 +135,13 @@ float4 main(VertexOut pin) : SV_Target
         directLighting += (diffuseBRDF + specularBRDF) * radiance * cosLi;
     }
     // Only the first light casts a shadow.
-    float shadowFactor = 0;
+    float shadowFactor = 1;
      
-#ifdef PCSS
-    //shadowFactor = CalcShadowFactorPCSS(pin.ShadowPosH);
-#else
-    //shadowFactor = CalcShadowFactor(pin.ShadowPosH);
-#endif
-    shadowFactor = CalcShadowFactor(pin.ShadowPosH);
+    if (UseShadow)
+    {
+        shadowFactor = CalcShadowFactor(pin.ShadowPosH);
+    }
+
     float3 ambientLighting = 0;
     {
         float3 irradiance = gIrradianceMap.Sample(gsamAnisotropicWrap, N).rgb;
@@ -168,12 +170,12 @@ float4 main(VertexOut pin) : SV_Target
         
     }
     
-    float3 color = directLighting + ambientLighting * ambientAccess;
-    //color = albedo;
+    float3 color = directLighting * shadowFactor + ambientLighting * ambientAccess;
+
     
     color = color / (color + 1);
     color = pow(color, 1.0f / 2.2f);
-    //directLighting *= shadowFactor;
+
     return float4(color, 1.0);
 }
 // ----------------------------------------------------------------------------
