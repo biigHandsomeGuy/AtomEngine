@@ -5,29 +5,12 @@
 //***************************************************************************************
 
 #pragma once
-
-#include <windows.h>
-#include <wrl.h>
 #include <dxgi1_4.h>
 #include <d3d12.h>
-#include <D3Dcompiler.h>
-#include <DirectXMath.h>
-#include <DirectXPackedVector.h>
-#include <DirectXColors.h>
-#include <DirectXCollision.h>
 #include <string>
-#include <memory>
-#include <algorithm>
-#include <vector>
-#include <array>
-#include <unordered_map>
-#include <cstdint>
-#include <fstream>
-#include <sstream>
-#include <cassert>
+#include <wrl/client.h>
 #include "d3dx12.h"
-#include "DDSTextureLoader.h"
-#include "MathHelper.h"
+
 
 extern const int gNumFrameResources;
 
@@ -156,3 +139,14 @@ public:
 #ifndef ReleaseCom
 #define ReleaseCom(x) { if(x){ x->Release(); x = 0; } }
 #endif
+
+namespace Graphics
+{
+    extern UINT RtvDescriptorSize;
+    extern UINT DsvDescriptorSize;
+    extern UINT CbvSrvUavDescriptorSize;
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(ID3D12DescriptorHeap* heap, int offset);
+
+CD3DX12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(ID3D12DescriptorHeap* heap, int offset);

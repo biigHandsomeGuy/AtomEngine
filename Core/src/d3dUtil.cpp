@@ -2,7 +2,7 @@
 #include "d3dUtil.h"
 #include <comdef.h>
 #include <fstream>
-
+#include <d3dcompiler.h>
 using Microsoft::WRL::ComPtr;
 
 DxException::DxException(HRESULT hr, const std::wstring& functionName, const std::wstring& filename, int lineNumber) :
@@ -122,4 +122,53 @@ std::wstring DxException::ToString()const
     return FunctionName + L" failed in " + Filename + L"; line " + std::to_wstring(LineNumber) + L"; error: " + msg;
 }
 
+namespace Graphics
+{
+    UINT RtvDescriptorSize = 0;
+    UINT DsvDescriptorSize = 0;
+    UINT CbvSrvUavDescriptorSize = 0;
+}
+CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(ID3D12DescriptorHeap* heap, int offset)
+{
+    auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(heap->GetCPUDescriptorHandleForHeapStart());
 
+    UINT size = 0;
+
+    if (heap->GetDesc().Type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
+    {
+        size = Graphics::CbvSrvUavDescriptorSize;
+    }
+    else if (heap->GetDesc().Type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
+    {
+        size = Graphics::DsvDescriptorSize;
+    }
+    else if (heap->GetDesc().Type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+    {
+        size = Graphics::RtvDescriptorSize;
+    }
+
+    handle.Offset(offset, size);
+    return handle;
+}
+CD3DX12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(ID3D12DescriptorHeap* heap, int offset)
+{
+    auto handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(heap->GetGPUDescriptorHandleForHeapStart());
+
+    UINT size = 0;
+
+    if (heap->GetDesc().Type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
+    {
+        size = Graphics::CbvSrvUavDescriptorSize;
+    }
+    else if (heap->GetDesc().Type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
+    {
+        size = Graphics::DsvDescriptorSize;
+    }
+    else if (heap->GetDesc().Type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+    {
+        size = Graphics::RtvDescriptorSize;
+    }
+
+    handle.Offset(offset, size);
+    return handle;
+}

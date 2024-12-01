@@ -17,6 +17,8 @@
 #pragma comment(lib, "D3D12.lib")
 #pragma comment(lib, "dxgi.lib")
 
+
+
 class D3DApp
 {
 public:
@@ -112,10 +114,6 @@ protected:
 
     D3D12_VIEWPORT mScreenViewport; 
     D3D12_RECT mScissorRect;
-
-	UINT mRtvDescriptorSize = 0;
-	UINT mDsvDescriptorSize = 0;
-	UINT mCbvSrvUavDescriptorSize = 0;
 
 	// Derived class should set these in derived constructor to customize starting values.
 	std::wstring mMainWndCaption = L"d3d App";

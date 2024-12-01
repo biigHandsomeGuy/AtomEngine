@@ -137,8 +137,8 @@ private:
 
     POINT mLastMousePos;
     bool mouseDown = true;
-    ComPtr<ID3D12Resource> m_EnvirMap;
-    ComPtr<ID3D12Resource> m_EnvirMapUnfiltered;
+    ComPtr<ID3D12Resource> m_EnvirMap; // cube map with different roughness mip maps
+    ComPtr<ID3D12Resource> m_EnvirMapUnfiltered; // cube map with different mip maps
     ComPtr<ID3D12Resource> m_IrradianceMap;
     ComPtr<ID3D12Resource> m_LUT;
 
@@ -154,5 +154,47 @@ private:
     std::unique_ptr<Ssao> mSsao;
 
     ShaderParams m_ShaderAttribs;
+    EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
 };
 
+namespace
+{
+
+    inline const char* c_str(const std::string& str)
+    {
+        return str.c_str();
+    }
+
+    inline const char* c_str(const char* str)
+    {
+        return str;
+    }
+
+} // namespace
+namespace ImGui
+{
+
+
+    template <typename ItemType, typename StrType>
+    bool Combo(const char* label, ItemType* current_item, const std::pair<ItemType, StrType> items[], int items_count, int popup_max_height_in_items = -1)
+    {
+        int item_idx = 0;
+        while (item_idx < items_count && items[item_idx].first != *current_item)
+            ++item_idx;
+        ThrowIfFailed(item_idx >= items_count);
+        // if (item_idx >= items_count)
+        // {
+        //     
+        //     UNEXPECTED("Current item was not found in the items list");
+        //     return false;
+        // }
+        auto names = std::make_unique<const char* []>(items_count);
+        for (int i = 0; i < items_count; ++i)
+            names[i] = c_str(items[i].second);
+        auto value_changed = Combo(label, &item_idx, names.get(), items_count, popup_max_height_in_items);
+        if (value_changed)
+            *current_item = items[item_idx].first;
+
+        return value_changed;
+    }
+}

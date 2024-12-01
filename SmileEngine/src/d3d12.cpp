@@ -77,7 +77,6 @@ bool SsaoApp::Initialize()
         mClientWidth, mClientHeight);
     mSsao->Initialize();
     m_pbrModelMatrix = XMMatrixScaling(0.1, 0.1, 0.1);
-    //m_pbrModelMatrix = XMMatrixRotationX(0);
 
 
     m_GroundModelMatrix = XMMatrixScaling(30,1,30);
@@ -231,7 +230,7 @@ void SsaoApp::Draw(const GameTimer& gt)
 	// Compute SSAO.
 	// 
 
-    mSsao->ComputeSsao(mCommandList.Get(), ssaoCB, 3);
+    mSsao->ComputeSsao(mCommandList.Get(), ssaoCB, 1);
 
     mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
@@ -431,9 +430,26 @@ void SsaoApp::Draw(const GameTimer& gt)
     //mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     //mCommandList->DrawIndexedInstanced(m_Ground.numElements, 1, 0, 0, 0);
 
-    static int mips = 0;
-    ImGui::InputInt("mips", &mips);
-    // mCommandList->SetGraphicsRoot32BitConstants(9, 1, &mips, 0);
+    // material cbuffer
+    ComPtr<ID3D12Resource> envMapBuffer;
+    {
+        const UINT64 bufferSize = sizeof(EnvMapRenderer::RenderAttribs);
+
+        ThrowIfFailed(md3dDevice->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(envMapBuffer.GetAddressOf())
+        ));
+        BYTE* data = nullptr;
+        envMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+
+        memcpy(data, &m_EnvMapAttribs, bufferSize);
+    }
+
+    mCommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
    
     mCommandList->SetPipelineState(mPSOs["sky"].Get());
     mCommandList->IASetVertexBuffers(0, 1, &m_SkyBox.meshes[0].vbv);
@@ -613,12 +629,35 @@ void SsaoApp::UpdateUI()
         ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
         ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
         ImGui::Checkbox("Another Window", &show_another_window);
-
-        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-
+        // Edit 1 float using a slider from 0.0f to 1.0f
+        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);   
+        
+        
+        ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+       
         ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
 
         ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);
+
+        {
+           std::pair<DebugViewType, const char*> DebugViews[] = {
+               {DebugViewType::None, "None"},
+               {DebugViewType::BaseColor, "BaseColor"},
+               {DebugViewType::Metallic, "Metallic"},
+               {DebugViewType::Roughness, "Roughness"},
+               {DebugViewType::DiffuseColor, "DiffuseColor"},
+               {DebugViewType::SpecularColor, "SpecularColor"},
+               {DebugViewType::AmbientLight, "AmbientLight"},
+               {DebugViewType::DirectLight, "DirectLight"},
+               {DebugViewType::DebugAO, "DebugAO"},
+           };
+           
+           ImGui::Combo("DebugView", &m_ShaderAttribs.DebugView, DebugViews, _countof(DebugViews), 6);
+
+
+           
+        }
+
 
         if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
             counter++;
@@ -884,7 +923,7 @@ void SsaoApp::BuildDescriptorHeaps()
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
     );
 
-    // Create environment Unfilter Map 
+    // Create environment Map unfilter
     {
         D3D12_RESOURCE_DESC desc = {};
         desc.Width = 1024;
@@ -1505,7 +1544,6 @@ void SsaoApp::CreateCubeMap()
         ID3D12DescriptorHeap* descriptorHeaps[] = { mSrvDescriptorHeap.Get() };
         mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-        //mCommandList->SetDescriptorHeaps(1, &mSrvDescriptorHeap);
         mCommandList->SetComputeRootSignature(computeRS.Get());
         mCommandList->SetPipelineState(cubePso.Get());
         auto srvHandle = GetGpuHandle(mSrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::ShpereMapHeap);
@@ -1641,7 +1679,7 @@ void SsaoApp::CreateCubeMap()
 void SsaoApp::CreateIBL()
 {
 
-
+    
 
 }
 

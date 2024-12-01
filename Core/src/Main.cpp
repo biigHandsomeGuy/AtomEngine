@@ -1,5 +1,6 @@
 
 #include "d3dApp.h"
+#include <memory>
 std::unique_ptr<D3DApp> g_App;
 extern D3DApp* CreateApp(HINSTANCE hInstance);
 

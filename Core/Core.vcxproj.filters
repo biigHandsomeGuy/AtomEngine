@@ -142,12 +142,6 @@
     <CustomBuild Include="..\Assets\Shaders\Common.hlsli">
       <Filter>Assets</Filter>
     </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\Ssao.hlsl">
-      <Filter>Assets</Filter>
-    </CustomBuild>
-    <CustomBuild Include="..\Assets\Shaders\SsaoBlur.hlsl">
-      <Filter>Assets</Filter>
-    </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\Assets\Shaders\pbrPS.hlsl" />
@@ -174,5 +168,13 @@
       <Filter>Assets</Filter>
     </FxCompile>
     <FxCompile Include="..\Assets\Shaders\DrawNormalsPS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\SsaoPS.hlsl">
+      <Filter>Assets</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Assets\Shaders\SsaoBlurPS.hlsl">
+      <Filter>Assets</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Assets\Shaders\SsaoVS.hlsl" />
+    <FxCompile Include="..\Assets\Shaders\SsaoBlurVS.hlsl" />
   </ItemGroup>
 </Project>

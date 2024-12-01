@@ -32,9 +32,6 @@
     <ClInclude Include="src\Ssao.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\SsaoApp.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="src\d3d.h">
       <Filter>头文件</Filter>
     </ClInclude>

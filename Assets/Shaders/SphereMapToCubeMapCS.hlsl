@@ -56,7 +56,7 @@ void main(uint3 ThreadID : SV_DispatchThreadID)
     float theta = acos(v.y);
 
 	// Sample equirectangular texture.
-    float4 color = gSphereMap.SampleLevel(gsamLinearWrap, float2(phi / TwoPI, theta / PI), Mips);
+    float4 color = gSphereMap.SampleLevel(gsamLinearWrap, float2(phi / TwoPI, theta / PI), 0);
 	// Write out color to output cubemap.
     outputTexture[ThreadID] = color;
 }

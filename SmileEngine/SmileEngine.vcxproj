@@ -27,7 +27,6 @@
     <ClInclude Include="src\d3d.h" />
     <ClInclude Include="src\ShadowMap.h" />
     <ClInclude Include="src\Ssao.h" />
-    <ClInclude Include="src\SsaoApp.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">
