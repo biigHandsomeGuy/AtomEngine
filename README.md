@@ -9,8 +9,13 @@
 - [x] IBL
 - [x] PCSS
 - [x] SSAO
+- [ ] Editor
 - [ ] Deffer Rendering
 - [ ] Bloom
 - [ ] Depth of Field
 - [ ] Motion Blur
 - [ ] MultiThread
+
+#### Running
+run the GenerateProjects.bat or manually run premake5.lua
+
