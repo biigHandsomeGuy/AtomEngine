@@ -2,3 +2,6 @@
 	path = Atom/Vendor/spdlog
 	url = https://github.com/gabime/spdlog
 
+[submodule "Atom/Vendor/Imgui"]
+	path = Atom/Vendor/Imgui
+	url = https://github.com/biigHandsomeGuy/imgui.git
