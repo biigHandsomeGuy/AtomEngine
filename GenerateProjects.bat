@@ -1,2 +1,0 @@
-call Atom\Vendor\bin\premake5.exe vs2022
-PAUSE
