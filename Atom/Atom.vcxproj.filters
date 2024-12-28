@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Assets">
+      <UniqueIdentifier>{3824E0A7-24C6-0A7E-0D81-1ED2F9C191CE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Shaders">
+      <UniqueIdentifier>{1101E1D1-FDCE-D4D7-E662-45FED2CFB03C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vendor">
+      <UniqueIdentifier>{935FDCD7-7F01-07AE-68BC-1A0254FD8DFE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vendor\stb_image">
+      <UniqueIdentifier>{EDE315D3-D9DC-3425-020F-1AAAEE661431}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vendor\stb_image\stb_image">
+      <UniqueIdentifier>{C7209C99-B330-486A-1CEA-AC8808193703}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{2DAB880B-99B4-887C-2230-9F7C8E38947C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Atom">
+      <UniqueIdentifier>{CDCF1BCF-B99C-76DA-E2B5-6482CEE1AB68}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Atom\Events">
+      <UniqueIdentifier>{11130A9A-7D9E-775E-86AF-FA52F2B9D35E}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h">
+      <Filter>Vendor\stb_image\stb_image</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\Application.h">
+      <Filter>src\Atom</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\Core.h">
+      <Filter>src\Atom</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\EntryPoint.h">
+      <Filter>src\Atom</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\Events\ApplicationEvent.h">
+      <Filter>src\Atom\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\Events\Event.h">
+      <Filter>src\Atom\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\Events\KeyEvent.h">
+      <Filter>src\Atom\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\Events\MouseEvent.h">
+      <Filter>src\Atom\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atom\Log.h">
+      <Filter>src\Atom</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Camera.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ConstantBuffers.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\GameTimer.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\MathHelper.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Mesh.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ShadowMap.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Ssao.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Texture.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\UploadBuffer.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\d3d.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\d3dUtil.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\d3dx12.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\pch.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
+      <Filter>Vendor\stb_image\stb_image</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Atom\Application.cpp">
+      <Filter>src\Atom</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Atom\Log.cpp">
+      <Filter>src\Atom</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Camera.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\GameTimer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MathHelper.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Mesh.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ShadowMap.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Ssao.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\d3d12.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\d3dUtil.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\pch.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\DrawNormalsVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\EquirectToCubeCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\IrradianceMapCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\ShadowPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\ShadowVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SkyBoxPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SkyBoxVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SpecularBRDFCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SpecularMapCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SphereMapToCubeMapCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SsaoBlurPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SsaoBlurVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SsaoPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SsaoVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\TextureDebugPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\TextureDebugVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\pbrPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\pbrVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\Shaders\Common.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
