@@ -9,8 +9,7 @@
 #include "d3dUtil.h"
 #include "Texture.h"
 #include "Mesh.h"
-#include <unordered_map>
-#include <DirectXCollision.h>
+
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 

@@ -1,28 +1,23 @@
 #include "pch.h"
 
 #include "d3d.h"
-#include "Imgui/imgui.h"
-#include "Imgui/imgui_impl_dx12.h"
-#include "Imgui/imgui_impl_win32.h"
-#include "DirectXMath.h"
-#include <iostream>
+
 #include "stb_image/stb_image.h"
 
-#include <array>
-#include "../../bin/ComplierShaders/pbrVS.h"
-#include "../../bin/ComplierShaders/pbrPS.h"
-#include "../../bin/ComplierShaders/SkyBoxVS.h"
-#include "../../bin/ComplierShaders/SkyBoxPS.h"
-#include "../../bin/ComplierShaders/SpecularBRDFCS.h"
-#include "../../bin/ComplierShaders/IrradianceMapCS.h"
-#include "../../bin/ComplierShaders/SpecularMapCS.h"
-#include "../../bin/ComplierShaders/EquirectToCubeCS.h"
-#include "../../bin/ComplierShaders/TextureDebugVS.h"
-#include "../../bin/ComplierShaders/TextureDebugPS.h"
-#include "../../bin/ComplierShaders/ShadowVS.h"
-#include "../../bin/ComplierShaders/ShadowPS.h"
-#include "../../bin/ComplierShaders/DrawNormalsVS.h"
-#include "../../bin/ComplierShaders/DrawNormalsPS.h"
+#include "../CompiledShaders/pbrVS.h"
+#include "../CompiledShaders/pbrPS.h"
+#include "../CompiledShaders/SkyBoxVS.h"
+#include "../CompiledShaders/SkyBoxPS.h"
+#include "../CompiledShaders/SpecularBRDFCS.h"
+#include "../CompiledShaders/IrradianceMapCS.h"
+#include "../CompiledShaders/SpecularMapCS.h"
+#include "../CompiledShaders/EquirectToCubeCS.h"
+#include "../CompiledShaders/TextureDebugVS.h"
+#include "../CompiledShaders/TextureDebugPS.h"
+#include "../CompiledShaders/ShadowVS.h"
+#include "../CompiledShaders/ShadowPS.h"
+#include "../CompiledShaders/DrawNormalsVS.h"
+#include "../CompiledShaders/DrawNormalsPS.h"
 
 #include "ConstantBuffers.h"
 
@@ -698,20 +693,20 @@ void SsaoApp::LoadTextures()
 	
     std::vector<std::string> texFilenames =
     {
-        "D:/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/albedo.tga",
-        "D:/Atom/Assets/Textures/wood/albedo.png",
-
-        "D:/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/normal.tga",
-        "D:/Atom/Assets/Textures/wood/normal.png",
-
-        "D:/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/metallic.tga",
-        "D:/Atom/Assets/Textures/wood/metallic.png",
-
-        "D:/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/roughness.tga",
-
-        "D:/Atom/Assets/Textures/wood/roughness.png",
-
-        "D:/Atom/Assets/Textures/EnvirMap/environment.hdr"
+        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/albedo.tga",
+        "D:/Atom/Atom/Assets/Textures/wood/albedo.png",
+               
+        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/normal.tga",
+        "D:/Atom/Atom/Assets/Textures/wood/normal.png",
+           
+        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/metallic.tga",
+        "D:/Atom/Atom/Assets/Textures/wood/metallic.png",
+              
+        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/roughness.tga",
+            
+        "D:/Atom/Atom/Assets/Textures/wood/roughness.png",
+             
+        "D:/Atom/Atom/Assets/Textures/EnvirMap/environment.hdr"
     };
     //stbi_set_flip_vertically_on_load(true);
 	for(int i = 0; i < (int)texNames.size(); ++i)
@@ -1128,9 +1123,9 @@ void SsaoApp::BuildInputLayout()
 
 void SsaoApp::BuildShapeGeometry()
 {  
-    m_SkyBox.Load(std::string("D:/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
-    m_PbrModel.Load(std::string("D:/Atom/Assets/Models/ball.fbx"),md3dDevice.Get(),mCommandList.Get());
-    m_Ground.Load(std::string("D:/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
+    m_SkyBox.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
+    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/ball.fbx"),md3dDevice.Get(),mCommandList.Get());
+    m_Ground.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
 
 }
 

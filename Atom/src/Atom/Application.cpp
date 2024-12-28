@@ -1,11 +1,9 @@
 //***************************************************************************************
 // Application.cpp by Frank Luna (C) 2015 All Rights Reserved.
 //***************************************************************************************
-
+#include "pch.h"
 #include "Application.h"
-#include <WindowsX.h>
-#include "Imgui/imgui_impl_win32.h"
-#include <vector>
+
 using Microsoft::WRL::ComPtr;
 using namespace std;
 

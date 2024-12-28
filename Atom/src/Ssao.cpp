@@ -1,15 +1,14 @@
 //***************************************************************************************
 // Ssao.cpp by Frank Luna (C) 2011 All Rights Reserved.
 //***************************************************************************************
-
+#include "pch.h"
 #include "Ssao.h"
-#include <DirectXPackedVector.h>
-#include <array>
 
-#include "../../bin/ComplierShaders/SsaoVS.h"
-#include "../../bin/ComplierShaders/SsaoPS.h"
-#include "../../bin/ComplierShaders/SsaoBlurVS.h"
-#include "../../bin/ComplierShaders/SsaoBlurPS.h"
+
+#include "../CompiledShaders/SsaoVS.h"
+#include "../CompiledShaders/SsaoPS.h"
+#include "../CompiledShaders/SsaoBlurVS.h"
+#include "../CompiledShaders/SsaoBlurPS.h"
 #include "MathHelper.h"
 
 using namespace DirectX;
