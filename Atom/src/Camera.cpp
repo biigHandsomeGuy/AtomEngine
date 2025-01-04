@@ -3,6 +3,7 @@
 //***************************************************************************************
 #include "pch.h"
 #include "Camera.h"
+#include <Atom/Log.h>
 
 using namespace DirectX;
 
@@ -13,6 +14,68 @@ Camera::Camera()
 
 Camera::~Camera()
 {
+}
+
+void Camera::Update(float deltaTime)
+{
+	POINT currentCursorPos = {};
+	GetCursorPos(&currentCursorPos);
+	float dx = XMConvertToRadians(0.25f * static_cast<float>(currentCursorPos.x - m_LastMousePos.x));
+	float dy = XMConvertToRadians(0.25f * static_cast<float>(currentCursorPos.y - m_LastMousePos.y));
+	m_LastMousePos = currentCursorPos;
+
+	if (GetAsyncKeyState(VK_RBUTTON) & 0x8000)
+	{	
+		// translate
+		// ATOM_INFO("VK_RBUTTON");
+		XMVECTOR s = XMVectorReplicate(0.1);
+		XMVECTOR p = XMLoadFloat3(&mPosition);
+		XMVECTOR direction;
+		if (GetAsyncKeyState('W') & 0x8000)
+		{			
+			direction = XMLoadFloat3(&mLook);			
+			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, direction, p));
+		}
+		if (GetAsyncKeyState('S') & 0x8000)
+		{
+			direction = XMLoadFloat3(&mLook);
+			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, -direction, p));
+		}
+		if (GetAsyncKeyState('A') & 0x8000)
+		{
+			direction = XMLoadFloat3(&mRight);
+			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, -direction, p));
+		}
+		if (GetAsyncKeyState('D') & 0x8000)
+		{
+			direction = XMLoadFloat3(&mRight);
+			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, direction, p));
+		}
+		if (GetAsyncKeyState('Q') & 0x8000)
+		{
+			direction = XMLoadFloat3(&mUp);
+			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, -direction, p));
+		}		
+		if (GetAsyncKeyState('E') & 0x8000)
+		{
+			direction = XMLoadFloat3(&mUp);
+			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, direction, p));
+		}
+		
+		
+		// rotate
+		// Make each pixel correspond to a quarter of a degree.
+		
+		
+		Pitch(dy);
+		RotateY(dx);
+
+		// x-axis
+
+		// y-axis
+		
+		UpdateViewMatrix();
+	}
 }
 
 XMVECTOR Camera::GetPosition()const
@@ -28,13 +91,11 @@ XMFLOAT3 Camera::GetPosition3f()const
 void Camera::SetPosition(float x, float y, float z)
 {
 	mPosition = XMFLOAT3(x, y, z);
-	mViewDirty = true;
 }
 
 void Camera::SetPosition(const XMFLOAT3& v)
 {
 	mPosition = v;
-	mViewDirty = true;
 }
 
 XMVECTOR Camera::GetRight()const
@@ -139,7 +200,7 @@ void Camera::LookAt(FXMVECTOR pos, FXMVECTOR target, FXMVECTOR worldUp)
 	XMStoreFloat3(&mRight, R);
 	XMStoreFloat3(&mUp, U);
 
-	mViewDirty = true;
+
 }
 
 void Camera::LookAt(const XMFLOAT3& pos, const XMFLOAT3& target, const XMFLOAT3& up)
@@ -150,7 +211,6 @@ void Camera::LookAt(const XMFLOAT3& pos, const XMFLOAT3& target, const XMFLOAT3&
 
 	LookAt(P, T, U);
 
-	mViewDirty = true;
 }
 
 XMMATRIX Camera::GetView()const
@@ -167,35 +227,12 @@ XMMATRIX Camera::GetProj()const
 
 XMFLOAT4X4 Camera::GetView4x4f()const
 {
-	assert(!mViewDirty);
 	return mView;
 }
 
 XMFLOAT4X4 Camera::GetProj4x4f()const
 {
 	return mProj;
-}
-
-void Camera::Strafe(float d)
-{
-	// mPosition += d*mRight
-	XMVECTOR s = XMVectorReplicate(d);
-	XMVECTOR r = XMLoadFloat3(&mRight);
-	XMVECTOR p = XMLoadFloat3(&mPosition);
-	XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, r, p));
-
-	mViewDirty = true;
-}
-
-void Camera::Walk(float d)
-{
-	// mPosition += d*mLook
-	XMVECTOR s = XMVectorReplicate(d);
-	XMVECTOR l = XMLoadFloat3(&mLook);
-	XMVECTOR p = XMLoadFloat3(&mPosition);
-	XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, l, p));
-
-	mViewDirty = true;
 }
 
 void Camera::Pitch(float angle)
@@ -207,7 +244,7 @@ void Camera::Pitch(float angle)
 	XMStoreFloat3(&mUp,   XMVector3TransformNormal(XMLoadFloat3(&mUp), R));
 	XMStoreFloat3(&mLook, XMVector3TransformNormal(XMLoadFloat3(&mLook), R));
 
-	mViewDirty = true;
+	
 }
 
 void Camera::RotateY(float angle)
@@ -220,13 +257,11 @@ void Camera::RotateY(float angle)
 	XMStoreFloat3(&mUp, XMVector3TransformNormal(XMLoadFloat3(&mUp), R));
 	XMStoreFloat3(&mLook, XMVector3TransformNormal(XMLoadFloat3(&mLook), R));
 
-	mViewDirty = true;
 }
 
 void Camera::UpdateViewMatrix()
 {
-	if(mViewDirty)
-	{
+
 		XMVECTOR R = XMLoadFloat3(&mRight);
 		XMVECTOR U = XMLoadFloat3(&mUp);
 		XMVECTOR L = XMLoadFloat3(&mLook);
@@ -268,8 +303,8 @@ void Camera::UpdateViewMatrix()
 		mView(2, 3) = 0.0f;
 		mView(3, 3) = 1.0f;
 
-		mViewDirty = false;
-	}
+		
+	
 }
 
 

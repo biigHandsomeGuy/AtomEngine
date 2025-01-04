@@ -21,6 +21,8 @@ public:
 	Camera();
 	~Camera();
 
+	void Update(float deltaTime);
+
 	// Get/Set world camera position.
 	DirectX::XMVECTOR GetPosition()const;
 	DirectX::XMFLOAT3 GetPosition3f()const;
@@ -62,9 +64,6 @@ public:
 	DirectX::XMFLOAT4X4 GetView4x4f()const;
 	DirectX::XMFLOAT4X4 GetProj4x4f()const;
 
-	// Strafe/Walk the camera a distance d.
-	void Strafe(float d);
-	void Walk(float d);
 
 	// Rotate the camera.
 	void Pitch(float angle);
@@ -74,6 +73,7 @@ public:
 	void UpdateViewMatrix();
 
 private:
+	POINT m_LastMousePos;
 
 	// Camera coordinate system with coordinates relative to world space.
 	DirectX::XMFLOAT3 mPosition = { 0.0f, 0.0f, 0.0f };
@@ -89,7 +89,6 @@ private:
 	float mNearWindowHeight = 0.0f;
 	float mFarWindowHeight = 0.0f;
 
-	bool mViewDirty = true;
 
 	// Cache View/Proj matrices.
 	DirectX::XMFLOAT4X4 mView = MathHelper::Identity4x4();
