@@ -1,30 +1,39 @@
 #include "pch.h"
-
 #include "Renderer.h"
-
 #include "stb_image/stb_image.h"
+#include "ConstantBuffers.h"
 
+namespace VS
+{
 #include "../CompiledShaders/pbrVS.h"
-#include "../CompiledShaders/pbrPS.h"
 #include "../CompiledShaders/SkyBoxVS.h"
+#include "../CompiledShaders/TextureDebugVS.h"
+#include "../CompiledShaders/ShadowVS.h"
+#include "../CompiledShaders/DrawNormalsVS.h"
+}
+
+namespace PS
+{
+#include "../CompiledShaders/pbrPS.h"
 #include "../CompiledShaders/SkyBoxPS.h"
+#include "../CompiledShaders/TextureDebugPS.h"
+#include "../CompiledShaders/ShadowPS.h"
+#include "../CompiledShaders/DrawNormalsPS.h"
+}
+
+namespace CS
+{
 #include "../CompiledShaders/SpecularBRDFCS.h"
 #include "../CompiledShaders/IrradianceMapCS.h"
 #include "../CompiledShaders/SpecularMapCS.h"
 #include "../CompiledShaders/EquirectToCubeCS.h"
-#include "../CompiledShaders/TextureDebugVS.h"
-#include "../CompiledShaders/TextureDebugPS.h"
-#include "../CompiledShaders/ShadowVS.h"
-#include "../CompiledShaders/ShadowPS.h"
-#include "../CompiledShaders/DrawNormalsVS.h"
-#include "../CompiledShaders/DrawNormalsPS.h"
-
-#include "ConstantBuffers.h"
-
-const int gNumFrameResources = 2;
+}
 
 using namespace Graphics;
 using namespace Microsoft::WRL;
+using namespace VS;
+using namespace PS;
+using namespace CS;
 SsaoConstants ssaoCB; 
 
 Application* CreateApplication(HINSTANCE hInstance)
@@ -172,10 +181,9 @@ void Renderer::OnResize()
 
 void Renderer::Update(const GameTimer& gt)
 {
-    
-    OnKeyboardInput(gt);
-
     UpdateUI();
+    mCamera.Update(gt.DeltaTime());
+    
 
     //
     // Animate the lights (and hence shadows).
@@ -382,6 +390,7 @@ void Renderer::Draw(const GameTimer& gt)
 
         materialBuffer.gMatIndex = 0;
         memcpy(data, &materialBuffer, bufferSize);
+        materialCbuffer->Unmap(0, nullptr);
     }
     
     // shaderParameter cbuffer
@@ -401,6 +410,7 @@ void Renderer::Draw(const GameTimer& gt)
         shaderParamsCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
         memcpy(data, &m_ShaderAttribs, bufferSize);
+        shaderParamsCbuffer->Unmap(0, nullptr);
     }
     mCommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, materialCbuffer->GetGPUVirtualAddress());
     mCommandList->SetGraphicsRootConstantBufferView(kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
@@ -510,61 +520,6 @@ void Renderer::Draw(const GameTimer& gt)
     }
 }
 
-void Renderer::OnMouseDown(WPARAM btnState, int x, int y)
-{
-    mLastMousePos.x = x;
-    mLastMousePos.y = y;
-
-    SetCapture(mhMainWnd);
-}
-
-void Renderer::OnMouseUp(WPARAM btnState, int x, int y)
-{
-    ReleaseCapture();
-    mouseDown = false;
-}
-
-void Renderer::OnMouseMove(WPARAM btnState, int x, int y)
-{
-    if((btnState & MK_RBUTTON) != 0)
-    {
-		// Make each pixel correspond to a quarter of a degree.
-		float dx = XMConvertToRadians(0.25f*static_cast<float>(x - mLastMousePos.x));
-		float dy = XMConvertToRadians(0.25f*static_cast<float>(y - mLastMousePos.y));
-
-		mCamera.Pitch(dy);
-		mCamera.RotateY(dx);
-
-        mouseDown = true;
-    }
-
-    mLastMousePos.x = x;
-    mLastMousePos.y = y;
-}
- 
-void Renderer::OnKeyboardInput(const GameTimer& gt)
-{
-    if (mouseDown)
-    {
-        const float dt = gt.DeltaTime();
-
-        if (GetAsyncKeyState('W') & 0x8000)
-            mCamera.Walk(10.0f * dt);
-
-        if (GetAsyncKeyState('S') & 0x8000)
-            mCamera.Walk(-10.0f * dt);
-
-        if (GetAsyncKeyState('A') & 0x8000)
-            mCamera.Strafe(-10.0f * dt);
-
-        if (GetAsyncKeyState('D') & 0x8000)
-            mCamera.Strafe(10.0f * dt);
-
-        mCamera.UpdateViewMatrix();
-    }
-    
-}
- 
 void Renderer::UpdateSsaoCB(const GameTimer& gt)
 {
     XMMATRIX P = mCamera.GetProj();
@@ -630,12 +585,11 @@ void Renderer::UpdateUI()
         ImGui::Checkbox("Another Window", &show_another_window);
          //Edit 1 float using a slider from 0.0f to 1.0f
         ImGui::SliderFloat("float", &f, 0.0f, 1.0f);   
-        
-        
+
         ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
        
         ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
-
+        
         ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);       
 
 

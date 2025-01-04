@@ -77,12 +77,6 @@ private:
     virtual void Update(const GameTimer& gt)override;
     virtual void Draw(const GameTimer& gt)override;
 
-    virtual void OnMouseDown(WPARAM btnState, int x, int y)override;
-    virtual void OnMouseUp(WPARAM btnState, int x, int y)override;
-    virtual void OnMouseMove(WPARAM btnState, int x, int y)override;
-
-    void OnKeyboardInput(const GameTimer& gt);
-
     void UpdateSsaoCB(const GameTimer& gt);
 
     void UpdateUI();
@@ -134,8 +128,7 @@ private:
 
     XMFLOAT3 mRotatedLightDirections[3];
 
-    POINT mLastMousePos;
-    bool mouseDown = true;
+    
     ComPtr<ID3D12Resource> m_EnvirMap; // cube map with different roughness mip maps
     ComPtr<ID3D12Resource> m_EnvirMapUnfiltered; // cube map with different mip maps
     ComPtr<ID3D12Resource> m_IrradianceMap;
