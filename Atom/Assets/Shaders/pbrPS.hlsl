@@ -32,10 +32,10 @@ cbuffer GlobalConstants : register(b1)
 
 };
 
-cbuffer ShaderParams
+cbuffer ShaderParams : register(b2)
 {
-    bool UseSSAO;
-    bool UseShadow;
+    bool UseSSAO = false;
+    bool UseShadow = false;
 };
 SamplerState gsamAnisotropicWrap : register(s4);
 static const float3 Fdielectric = 0.04;
@@ -97,11 +97,12 @@ float4 main(VertexOut pin) : SV_Target
     
     float ambientAccess = 1;
     if (UseSSAO)
-    {
+    {      
         // Finish texture projection and sample SSAO map.
         pin.SsaoPosH /= pin.SsaoPosH.w;
         ambientAccess = gSsaoMap.Sample(gsamLinearWrap, pin.SsaoPosH.xy).r;
     }
+ 
   
     // Direct lighting calculation for analytical lights.
     float3 directLighting = 0.0;
