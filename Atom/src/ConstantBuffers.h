@@ -43,10 +43,10 @@ __declspec(align(256)) struct SsaoConstants
 
 __declspec(align(256)) struct ShaderParams
 {
-    bool UseSSAO = true;
-    char pad0[3];
+    bool UseSSAO = false;
+    char pad0[3]{0,0,0};
     bool UseShadow = false;
-    char pad1[3];
+    char pad1[3]{0,0,0};
 };
 
 namespace EnvMapRenderer
