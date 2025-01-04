@@ -36,7 +36,6 @@ cbuffer ShaderParams
 {
     bool UseSSAO;
     bool UseShadow;
-    uint DebugView;
 };
 SamplerState gsamAnisotropicWrap : register(s4);
 static const float3 Fdielectric = 0.04;
@@ -71,43 +70,22 @@ float CalcShadowFactorPCSS(float4 shadowPosH);
 float CalcShadowFactor(float4 shadowPosH);
 
 
-// enum
-// class DebugViewType : UINT8
-// {
-//     None,
-//     BaseColor,
-//     Metallic,
-//     Roughness,
-//     DiffuseColor,
-//     SpecularColor,
-//     AmbientLight,
-//     DirectLight,
-//     DebugAO,
-// };
-
-
 float4 main(VertexOut pin) : SV_Target
 {
     
     float3 albedo = pow(gAlbedeTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
-    if (DebugView == 1)
-        return float4(albedo, 1);
+
     float metalness = gMetalnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
-    if (DebugView == 2)
-        return float4(metalness.xxx, 1);
+
     float roughness = gRoughnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
-    if (DebugView == 3)
-        return float4(roughness.xxx, 1);
+
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
 
     // Get current fragment's normal and transform to world space.
     float3 N = normalize(2 * gNormalTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1);
     N = normalize(mul(pin.tangentBasis, N));
-    if (DebugView == 9)
-    {
-        return float4(pin.TexC.xy,0, 1);
-    }
+
     // Angle between surface normal and outgoing light direction.
     float cosLo = max(0.0, dot(N, Lo));
     
@@ -122,11 +100,7 @@ float4 main(VertexOut pin) : SV_Target
     {
         // Finish texture projection and sample SSAO map.
         pin.SsaoPosH /= pin.SsaoPosH.w;
-        ambientAccess = gSsaoMap.Sample(gsamLinearWrap, pin.SsaoPosH.xy, 0.0f).r;
-        
-        if (DebugView == 8)
-            return float4(ambientAccess.xxx, 1);
-
+        ambientAccess = gSsaoMap.Sample(gsamLinearWrap, pin.SsaoPosH.xy).r;
     }
   
     // Direct lighting calculation for analytical lights.
@@ -161,10 +135,7 @@ float4 main(VertexOut pin) : SV_Target
         float3 specularBRDF = (F * D * G) / max(Epsilon, 4.0 * cosLi * cosLo);
 
 		// Total contribution for this light.
-        directLighting += (diffuseBRDF + specularBRDF) * radiance * cosLi;
-        
-        if (DebugView == 7)
-            return float4(directLighting, 1);
+        directLighting += (diffuseBRDF + specularBRDF) * radiance * cosLi;    
 
     }
     // Only the first light casts a shadow.
@@ -175,7 +146,7 @@ float4 main(VertexOut pin) : SV_Target
         shadowFactor = CalcShadowFactor(pin.ShadowPosH);
     }
 
-    float3 ambientLighting = 0;
+    float3 ambientLighting = 1;
     {
         float3 irradiance = gIrradianceMap.Sample(gsamAnisotropicWrap, N).rgb;
         
@@ -186,10 +157,7 @@ float4 main(VertexOut pin) : SV_Target
         
         // Irradiance map contains exitant radiance assuming Lambertian BRDF, no need to scale by 1/PI here either.
         float3 diffuseIBL = kd * albedo * irradiance;
-        
-        if (DebugView == 4)
-            return float4(diffuseIBL, 1);
-        
+             
         // Sample pre-filtered specular reflection environment at correct mipmap level.
         uint specularTextureLevels = querySpecularTextureLevels();
         float3 specularIrradiance = gSpecularMap.SampleLevel(gsamAnisotropicWrap, Lr, roughness * specularTextureLevels).rgb;
@@ -200,14 +168,8 @@ float4 main(VertexOut pin) : SV_Target
 		// Total specular IBL contribution.
         float3 specularIBL = (1 - kd) *
         (F0 * specularBRDF.x + specularBRDF.y) * specularIrradiance;
-
-        if (DebugView == 5)
-            return float4(specularIBL, 1);
         
-        
-        ambientLighting = specularIBL + diffuseIBL;
-        if (DebugView == 6)
-            return float4(ambientLighting, 1);
+        ambientLighting = diffuseIBL + specularIBL;
 
     }
        
