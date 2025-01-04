@@ -17,5 +17,5 @@
 - [ ] MultiThread
 
 #### Running
-run the GenerateProjects.bat or manually run premake5.lua
+Only support visual studio(maybe add cmake or something else in future)
 
