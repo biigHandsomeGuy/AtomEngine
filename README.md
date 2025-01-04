@@ -17,5 +17,6 @@
 - [ ] MultiThread
 
 #### Running
+Build your assimp(use cmake)
 Only support visual studio(maybe add cmake or something else in future)
 
