@@ -5,3 +5,6 @@
 [submodule "Atom/Vendor/Imgui"]
 	path = Atom/Vendor/Imgui
 	url = https://github.com/biigHandsomeGuy/imgui.git
+[submodule "Atom/Vendor/assimp"]
+	path = Atom/Vendor/assimp
+	url = https://github.com/biigHandsomeGuy/assimp.git
