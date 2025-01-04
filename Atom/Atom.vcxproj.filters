@@ -84,7 +84,7 @@
     <ClInclude Include="src\UploadBuffer.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\d3d.h">
+    <ClInclude Include="src\Renderer.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\d3dUtil.h">
@@ -125,7 +125,7 @@
     <ClCompile Include="src\Ssao.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\d3d12.cpp">
+    <ClCompile Include="src\Renderer.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\d3dUtil.cpp">

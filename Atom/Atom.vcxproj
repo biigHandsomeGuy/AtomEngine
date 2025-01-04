@@ -111,7 +111,7 @@
     <ClInclude Include="src\Ssao.h" />
     <ClInclude Include="src\Texture.h" />
     <ClInclude Include="src\UploadBuffer.h" />
-    <ClInclude Include="src\d3d.h" />
+    <ClInclude Include="src\Renderer.h" />
     <ClInclude Include="src\d3dUtil.h" />
     <ClInclude Include="src\d3dx12.h" />
   </ItemGroup>
@@ -130,7 +130,7 @@
     <ClCompile Include="src\Mesh.cpp" />
     <ClCompile Include="src\ShadowMap.cpp" />
     <ClCompile Include="src\Ssao.cpp" />
-    <ClCompile Include="src\d3d12.cpp" />
+    <ClCompile Include="src\Renderer.cpp" />
     <ClCompile Include="src\d3dUtil.cpp" />
   </ItemGroup>
   <ItemGroup>
