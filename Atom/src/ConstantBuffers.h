@@ -41,27 +41,12 @@ __declspec(align(256)) struct SsaoConstants
     float SurfaceEpsilon = 0.05f;
 };
 
-enum class DebugViewType : UINT8
-{
-    None,   
-    BaseColor,
-    Metallic,
-    Roughness,
-    DiffuseColor,
-    SpecularColor,
-    AmbientLight,
-    DirectLight,
-    DebugAO,
-    Normal,
-};
-
 __declspec(align(256)) struct ShaderParams
 {
     bool UseSSAO = true;
     char pad0[3];
     bool UseShadow = false;
     char pad1[3];
-    DebugViewType DebugView = DebugViewType::None;
 };
 
 namespace EnvMapRenderer

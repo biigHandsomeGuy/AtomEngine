@@ -75,7 +75,7 @@ bool SsaoApp::Initialize()
         mClientWidth, mClientHeight);
     mSsao->Initialize();
     m_pbrModelMatrix = XMMatrixScaling(0.1, 0.1, 0.1);
-    m_pbrModelMatrix = XMMatrixRotationX(30);
+    m_pbrModelMatrix *= XMMatrixRotationX(30);
 
 
     m_GroundModelMatrix = XMMatrixScaling(30,1,30);
@@ -636,27 +636,7 @@ void SsaoApp::UpdateUI()
        
         ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
 
-        ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);
-
-        {
-           std::pair<DebugViewType, const char*> DebugViews[] = {
-               {DebugViewType::None, "None"},
-               {DebugViewType::BaseColor, "BaseColor"},
-               {DebugViewType::Metallic, "Metallic"},
-               {DebugViewType::Roughness, "Roughness"},
-               {DebugViewType::DiffuseColor, "DiffuseColor"},
-               {DebugViewType::SpecularColor, "SpecularColor"},
-               {DebugViewType::AmbientLight, "AmbientLight"},
-               {DebugViewType::DirectLight, "DirectLight"},
-               {DebugViewType::DebugAO, "DebugAO"},
-               {DebugViewType::Normal, "Normal"},
-           };
-           
-           ImGui::Combo("DebugView", &m_ShaderAttribs.DebugView, DebugViews, _countof(DebugViews), 6);
-
-
-           
-        }
+        ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);       
 
 
         if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
@@ -1124,7 +1104,7 @@ void SsaoApp::BuildInputLayout()
 void SsaoApp::BuildShapeGeometry()
 {  
     m_SkyBox.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
-    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/ball.fbx"),md3dDevice.Get(),mCommandList.Get());
+    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/Cerberus_LP.fbx"),md3dDevice.Get(),mCommandList.Get());
     m_Ground.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
 
 }
