@@ -2,6 +2,8 @@
 #include "Renderer.h"
 #include "stb_image/stb_image.h"
 #include "ConstantBuffers.h"
+#include "GraphicsCore.h"
+
 
 namespace VS
 {
@@ -640,14 +642,11 @@ void Renderer::LoadTextures()
             
         "D:/Atom/Atom/Assets/Textures/wood/roughness.png",
              
-        "D:/Atom/Atom/Assets/Textures/EnvirMap/environment.hdr"
+        "D:/Atom/Atom/Assets/Textures/EnvirMap/marry.hdr"
     };
     //stbi_set_flip_vertically_on_load(true);
-	for(int i = 0; i < (int)texNames.size(); ++i)
+	for(int i = 0; i < (int)texNames.size() - 1; ++i)
 	{
-        if (i == (int)texNames.size() - 1)
-            stbi_set_flip_vertically_on_load(false);
-
         auto texMap = std::make_unique<Texture>();
         texMap->Name = texNames[i];
         texMap->Filename = texFilenames[i];
@@ -656,8 +655,7 @@ void Renderer::LoadTextures()
         
         UCHAR* imageData = stbi_load(texMap->Filename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
         if (!imageData) {
-            // 错误处理
-            assert(1);
+            ATOM_ERROR("Failed to load material texture");
         }
         D3D12_RESOURCE_DESC textureDesc = {};
         textureDesc.MipLevels = 1;                     // mip 级别
@@ -703,6 +701,76 @@ void Renderer::LoadTextures()
 		
 		mTextures[texMap->Name] = std::move(texMap);
 	}		
+
+    {
+        stbi_set_flip_vertically_on_load(false);
+
+        auto texMap = std::make_unique<Texture>();
+        texMap->Name = texNames[texNames.size()-1];
+        texMap->Filename = texFilenames[texNames.size() - 1];
+
+        int width = 0, height = 0, channels = 0;
+
+        float* imageData = stbi_loadf(texMap->Filename.c_str(), &width, &height, &channels, 4);
+        if (!imageData) {
+            ATOM_ERROR("Failed to load skybox texture");
+        }
+
+        //DXGI_FORMAT_R16G16B16A16_FLOAT
+        D3D12_RESOURCE_DESC textureDesc = {};
+        textureDesc.MipLevels = 1;                     // mip 级别
+        textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT; // 纹理格式
+        textureDesc.Width = width;                     // 纹理宽度
+        textureDesc.Height = height;                   // 纹理高度
+        textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        textureDesc.DepthOrArraySize = 1;              // 单层纹理
+        textureDesc.SampleDesc.Count = 1;              // 不使用多重采样
+        textureDesc.SampleDesc.Quality = 0;
+        textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; // 2D 纹理
+
+        ThrowIfFailed(md3dDevice->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            D3D12_HEAP_FLAG_NONE,
+            &textureDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST,   // 初始状态为 COPY_DEST
+            nullptr,
+            IID_PPV_ARGS(&texMap->Resource)
+        ));
+        const UINT64 uploadBufferSize = GetRequiredIntermediateSize(texMap->Resource.Get(), 0, 1);
+        //d3dUtil::CalcConstantBufferByteSize
+        D3D12_RESOURCE_DESC uploadDesc = {};
+        uploadDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        uploadDesc.Alignment = 0;
+        uploadDesc.Width = uploadBufferSize;  // 数据总字节数（RGBA，每个 float 占 4 字节）
+        uploadDesc.Height = 1;
+        uploadDesc.DepthOrArraySize = 1;
+        uploadDesc.MipLevels = 1;
+        uploadDesc.Format = DXGI_FORMAT_UNKNOWN; // 不需要格式
+        uploadDesc.SampleDesc.Count = 1;
+        uploadDesc.SampleDesc.Quality = 0;
+        uploadDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        uploadDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+        ThrowIfFailed(md3dDevice->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &uploadDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&texMap->UploadHeap)
+        ));
+
+        // 复制数据到上传堆
+        D3D12_SUBRESOURCE_DATA textureData = {};
+        textureData.pData = imageData;       // 图像数据
+        textureData.RowPitch = width * 16;    // 每行字节数
+        textureData.SlicePitch = textureData.RowPitch * height;
+
+        // 将数据从上传堆复制到默认堆
+        ATOM_INFO(UpdateSubresources(mCommandList.Get(), texMap->Resource.Get(), texMap->UploadHeap.Get(), 0, 0, 1, &textureData));
+
+        mTextures[texMap->Name] = std::move(texMap);
+    }
 }
 
 void Renderer::BuildRootSignature()
@@ -790,11 +858,7 @@ void Renderer::BuildDescriptorHeaps()
 		mTextures["albedo"]->Resource,mTextures["wood_albedo"]->Resource,
 		mTextures["normal"]->Resource,mTextures["wood_normal"]->Resource,
 		mTextures["metallic"]->Resource,mTextures["wood_metallic"]->Resource,
-		mTextures["roughness"]->Resource,
-		
-		
-		
-		mTextures["wood_roughness"]->Resource,
+		mTextures["roughness"]->Resource,mTextures["wood_roughness"]->Resource,
 	};
 	
 	auto skyCubeMap = mTextures["skyCubeMap"]->Resource;
@@ -805,6 +869,7 @@ void Renderer::BuildDescriptorHeaps()
 	srvDesc.Texture2D.MostDetailedMip = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 	
+    // Create Material Texture srv
 	for(UINT i = 0; i < (UINT)tex2DList.size(); ++i)
 	{
 		srvDesc.Format = tex2DList[i]->GetDesc().Format;
@@ -815,11 +880,10 @@ void Renderer::BuildDescriptorHeaps()
 		hDescriptor.Offset(1, CbvSrvUavDescriptorSize);
 	}
 	
+    // Create SphereMap SRV
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = skyCubeMap->GetDesc().MipLevels;
-   
+    srvDesc.Texture2D.MipLevels = skyCubeMap->GetDesc().MipLevels;   
 	srvDesc.Format = skyCubeMap->GetDesc().Format;
-    // ShpereMap
 	md3dDevice->CreateShaderResourceView(skyCubeMap.Get(), &srvDesc, hDescriptor);
 
 
@@ -958,7 +1022,7 @@ void Renderer::BuildDescriptorHeaps()
         irMapDesc.Width = 32;
         irMapDesc.Height = 32;
         irMapDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        irMapDesc.Format = skyCubeMap->GetDesc().Format;
+        irMapDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         irMapDesc.MipLevels = 1;
         irMapDesc.DepthOrArraySize = 6;
         irMapDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -973,7 +1037,7 @@ void Renderer::BuildDescriptorHeaps()
             IID_PPV_ARGS(&m_IrradianceMap)));
 
         D3D12_SHADER_RESOURCE_VIEW_DESC IrMapSrvDesc = {};
-        IrMapSrvDesc.Format = skyCubeMap->GetDesc().Format;
+        IrMapSrvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         IrMapSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         IrMapSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
         IrMapSrvDesc.TextureCube.MipLevels = -1;
@@ -985,7 +1049,7 @@ void Renderer::BuildDescriptorHeaps()
         md3dDevice->CreateShaderResourceView(m_IrradianceMap.Get(), &IrMapSrvDesc, irMapSrv);
 
         D3D12_UNORDERED_ACCESS_VIEW_DESC IrMapUavDesc = {};
-        IrMapUavDesc.Format = skyCubeMap->GetDesc().Format;
+        IrMapUavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         IrMapUavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
         IrMapUavDesc.Texture2DArray.ArraySize = 6;
         IrMapUavDesc.Texture2DArray.FirstArraySlice = 0;

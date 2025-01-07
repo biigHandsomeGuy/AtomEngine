@@ -96,6 +96,8 @@
     <ClInclude Include="src\pch.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\ColorBuffer.h" />
+    <ClInclude Include="src\GraphicsCore.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -137,6 +139,7 @@
     <ClCompile Include="src\test.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\ColorBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">
@@ -167,9 +170,6 @@
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\SpecularMapCS.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Assets\Shaders\SphereMapToCubeMapCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\SsaoBlurPS.hlsl">
