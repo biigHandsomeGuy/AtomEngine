@@ -56,3 +56,10 @@ namespace EnvMapRenderer
         float EnvMapMipLevel;
     };
 }
+namespace PostProcess
+{
+    __declspec(align(256)) struct RenderAttribs
+    {
+        float exposure;
+    };
+}

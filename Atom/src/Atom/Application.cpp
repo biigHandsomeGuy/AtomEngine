@@ -3,6 +3,8 @@
 //***************************************************************************************
 #include "pch.h"
 #include "Application.h"
+#include "GraphicsCore.h"
+
 
 using Microsoft::WRL::ComPtr;
 using namespace std;
@@ -157,7 +159,7 @@ void Application::OnResize()
     ThrowIfFailed(mSwapChain->ResizeBuffers(
 		SwapChainBufferCount, 
 		mClientWidth, mClientHeight, 
-		mBackBufferFormat, 
+		DXGI_FORMAT_R8G8B8A8_UNORM,
 		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	mCurrBackBuffer = 0;
@@ -493,7 +495,7 @@ void Application::CreateSwapChain()
     sd.BufferDesc.Height = mClientHeight;
     sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.BufferDesc.Format = mBackBufferFormat;
+    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
     sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
     sd.SampleDesc.Count = m4xMsaaState ? 4 : 1;
