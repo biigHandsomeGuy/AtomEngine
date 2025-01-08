@@ -177,10 +177,7 @@ float4 main(VertexOut pin) : SV_Target
     
     float3 color = directLighting * shadowFactor + ambientLighting * ambientAccess;
 
-    
-    color = color / (color + 1);
-    color = pow(color, 1.0f / 2.2f);
-
+  
     return float4(color, 1.0);
 }
 // ----------------------------------------------------------------------------
