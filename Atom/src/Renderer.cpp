@@ -12,6 +12,7 @@ namespace VS
 #include "../CompiledShaders/TextureDebugVS.h"
 #include "../CompiledShaders/ShadowVS.h"
 #include "../CompiledShaders/DrawNormalsVS.h"
+#include "../CompiledShaders/PostProcessVS.h"
 }
 
 namespace PS
@@ -21,6 +22,7 @@ namespace PS
 #include "../CompiledShaders/TextureDebugPS.h"
 #include "../CompiledShaders/ShadowPS.h"
 #include "../CompiledShaders/DrawNormalsPS.h"
+#include "../CompiledShaders/PostProcessPS.h"
 }
 
 namespace CS
@@ -134,9 +136,9 @@ bool Renderer::Initialize()
 
 void Renderer::CreateRtvAndDsvDescriptorHeaps()
 {
-    // Add +1 for screen normal map, +2 for ambient maps.
+    //
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
-    rtvHeapDesc.NumDescriptors = SwapChainBufferCount;
+    rtvHeapDesc.NumDescriptors = SwapChainBufferCount + 1;
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     rtvHeapDesc.NodeMask = 0;
@@ -151,6 +153,8 @@ void Renderer::CreateRtvAndDsvDescriptorHeaps()
     dsvHeapDesc.NodeMask = 0;
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(
         &dsvHeapDesc, IID_PPV_ARGS(mDsvHeap.GetAddressOf())));
+
+
 }
  
 void Renderer::OnResize()
@@ -159,6 +163,9 @@ void Renderer::OnResize()
 
 	mCamera.SetLens(0.25f*MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
 
+    // Resize color buffer
+    if (isColorBufferInit)
+    CreateColorBufferView();
 
    if(mSsao != nullptr)
    {
@@ -268,7 +275,7 @@ void Renderer::Draw(const GameTimer& gt)
     // SO DO NOT CLEAR DEPTH.
 
     // Specify the buffers we are going to render to.
-    mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+    mCommandList->OMSetRenderTargets(1, &m_ColorBufferRtvHandle, true, &DepthStencilView());
 
     mCommandList->RSSetViewports(1, &mScreenViewport);
     mCommandList->RSSetScissorRects(1, &mScissorRect);
@@ -468,6 +475,38 @@ void Renderer::Draw(const GameTimer& gt)
     mCommandList->IASetIndexBuffer(&m_SkyBox.meshes[0].ibv);
     mCommandList->DrawIndexedInstanced(m_SkyBox.meshes[0].Indices.size(), 1, 0, 0, 0);
 
+    mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+
+
+    // Post Process
+
+    ComPtr<ID3D12Resource> ppBuffer;
+    {
+        const UINT64 bufferSize = sizeof(EnvMapRenderer::RenderAttribs);
+
+        ThrowIfFailed(md3dDevice->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(ppBuffer.GetAddressOf())
+        ));
+        BYTE* data = nullptr;
+        ppBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+
+        memcpy(data, &m_ppAttribs, bufferSize);
+    }
+
+    mCommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, ppBuffer->GetGPUVirtualAddress());
+
+    auto postProcessHandle = GetGpuHandle(mSrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::ColorBufferSrv);
+    mCommandList->SetGraphicsRootDescriptorTable(kPostProcess, postProcessHandle);
+    mCommandList->SetPipelineState(mPSOs["postprocess"].Get());
+    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+    mCommandList->DrawInstanced(4, 1, 0, 0); // 绘制 4 个顶点
+
 
     //// Texture Debug
     D3D12_VIEWPORT LUTviewPort = { 0,0,256,256,0,1 };
@@ -480,9 +519,12 @@ void Renderer::Draw(const GameTimer& gt)
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP); 
     mCommandList->DrawInstanced(4, 1, 0, 0);
   
+
+
+
     // RenderingF
     ImGui::Render();
-    //mCommandList->SetDescriptorHeaps(1, &mSrvDescriptorHeap);
+    // //mCommandList->SetDescriptorHeaps(1, &mSrvDescriptorHeap);
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), mCommandList.Get());
 
     // Indicate a state transition on the resource usage.
@@ -589,6 +631,7 @@ void Renderer::UpdateUI()
         ImGui::SliderFloat("float", &f, 0.0f, 1.0f);   
 
         ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
        
         ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
         
@@ -793,6 +836,9 @@ void Renderer::BuildRootSignature()
      CD3DX12_DESCRIPTOR_RANGE lutRange;
      lutRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 16, 0);
 
+     CD3DX12_DESCRIPTOR_RANGE postRange;
+     postRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 17, 0);
+
     // Root parameter can be a table, root descriptor or root constants.
     CD3DX12_ROOT_PARAMETER slotRootParameter[kNumRootBindings];
 
@@ -807,8 +853,9 @@ void Renderer::BuildRootSignature()
     slotRootParameter[kIrradianceSrv].InitAsDescriptorTable(1, &irradianceRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kSpecularSrv].InitAsDescriptorTable(1, &specularRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kLUT].InitAsDescriptorTable(1, &lutRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[kPostProcess].InitAsDescriptorTable(1, &postRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
-
+    
 
 	auto staticSamplers = GetStaticSamplers();
 
@@ -848,7 +895,7 @@ void Renderer::BuildDescriptorHeaps()
 	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
 
-	//
+    
 	// Fill out the heap with actual descriptors.
 	//
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
@@ -1099,11 +1146,14 @@ void Renderer::BuildDescriptorHeaps()
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         uavDesc.Texture2D.MipSlice = 0;
         uavDesc.Texture2D.PlaneSlice = 0;
-        
 
         auto spbrdfUrv = GetCpuHandle(mSrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::LUTuav);
         md3dDevice->CreateUnorderedAccessView(m_LUT.Get(), nullptr, &uavDesc, spbrdfUrv);
     }
+
+    // Create color buffer srv with rtv
+    CreateColorBufferView();
+  
 }
 
 void Renderer::BuildInputLayout()
@@ -1249,6 +1299,34 @@ void Renderer::BuildPSOs()
 		g_pSkyBoxPS,sizeof(g_pSkyBoxPS)
 	};
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skyPsoDesc, IID_PPV_ARGS(&mPSOs["sky"])));
+
+    //
+    // PSO for post process.
+    //
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC ppPsoDesc = basePsoDesc;
+
+    // The camera is inside the sky sphere, so just turn off culling.
+    ppPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    // Make sure the depth function is LESS_EQUAL and not just LESS.  
+    // Otherwise, the normalized depth values at z = 1 (NDC) will 
+    // fail the depth test if the depth buffer was cleared to 1.
+    ppPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    ppPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    ppPsoDesc.pRootSignature = mRootSignature.Get();
+    //skyPsoDesc.InputLayout.NumElements = (UINT)mInputLayout_Pos_UV.size();
+    //skyPsoDesc.InputLayout.pInputElementDescs = mInputLayout_Pos_UV.data();
+    ppPsoDesc.VS =
+    {
+        g_pPostProcessVS,sizeof(g_pPostProcessVS)
+    };
+    ppPsoDesc.PS =
+    {
+        g_pPostProcessPS,sizeof(g_pPostProcessPS)
+    };
+    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&ppPsoDesc, IID_PPV_ARGS(&mPSOs["postprocess"])));
+
+
 
 }
 
@@ -1481,6 +1559,61 @@ void Renderer::DrawNormalsAndDepth()
     // Change back to GENERIC_READ so we can read the texture in a shader.
     mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(normalMap,
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ));
+}
+void Renderer::CreateColorBufferView()
+{
+    isColorBufferInit = true;
+
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Width = mClientWidth;
+    desc.Height = mClientHeight;
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Format = mBackBufferFormat;
+    desc.MipLevels = 1;
+    desc.DepthOrArraySize = 1;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET; // 允许同时作为 RTV 和 SRV;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+
+    ThrowIfFailed(md3dDevice->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        D3D12_HEAP_FLAG_NONE,
+        &desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_ColorBuffer)));
+
+    // Create rtv
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.Format = mBackBufferFormat;
+    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    rtvDesc.Texture2D.MipSlice = 0;
+    rtvDesc.Texture2D.PlaneSlice = 0;
+
+    m_ColorBufferRtvHandle = GetCpuHandle(mRtvHeap.Get(), 2);
+
+    md3dDevice->CreateRenderTargetView(
+        m_ColorBuffer.Get(),
+        &rtvDesc,
+        m_ColorBufferRtvHandle
+    );
+
+    // Create srv
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Format = mBackBufferFormat;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = -1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0;
+
+    auto srvHandle = GetCpuHandle(mSrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::ColorBufferSrv);
+
+    md3dDevice->CreateShaderResourceView(
+        m_ColorBuffer.Get(),
+        &srvDesc,
+        srvHandle);
+
 }
 ComPtr<ID3D12RootSignature> computeRS;
 ComPtr<ID3D12PipelineState> cubePso;

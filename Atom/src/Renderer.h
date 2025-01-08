@@ -39,7 +39,8 @@ enum class DescriptorHeapLayout : UINT8
     EnvirUavHeapMipMap4,
     EnvirUavHeapMipMap5,
     LUTsrv,
-    LUTuav
+    LUTuav,
+    ColorBufferSrv
 
 };
 
@@ -55,7 +56,7 @@ enum RootBindings
     kIrradianceSrv,
     kSpecularSrv,
     kLUT,
-
+    kPostProcess,
     kNumRootBindings      
 };
 
@@ -78,7 +79,6 @@ private:
     virtual void Draw(const GameTimer& gt)override;
 
     void UpdateSsaoCB(const GameTimer& gt);
-
     void UpdateUI();
 
     void LoadTextures();
@@ -89,6 +89,7 @@ private:
     void BuildPSOs();
     void DrawSceneToShadowMap();
     void DrawNormalsAndDepth();
+    void CreateColorBufferView();
     void CreateCubeMap();
     void CreateIBL();
     D3D12_CPU_DESCRIPTOR_HANDLE CreateTextureUav(ID3D12Resource* res, UINT mipSlice);
@@ -134,6 +135,11 @@ private:
     ComPtr<ID3D12Resource> m_IrradianceMap;
     ComPtr<ID3D12Resource> m_LUT;
 
+    // color -> color buffer -->(postprocess) ->back buffer 
+    // 1 srv with 1 rtv
+    ComPtr<ID3D12Resource> m_ColorBuffer;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_ColorBufferRtvHandle;
+
     Model m_PbrModel;
     Model m_SkyBox;
     Model m_Ground;
@@ -142,11 +148,12 @@ private:
 
     XMMATRIX m_pbrModelMatrix;
     XMMATRIX m_GroundModelMatrix;
-
+    bool isColorBufferInit = false;
     std::unique_ptr<Ssao> mSsao;
 
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
+    PostProcess::RenderAttribs m_ppAttribs;
 };
 
 namespace
