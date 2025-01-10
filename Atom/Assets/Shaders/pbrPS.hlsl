@@ -29,13 +29,18 @@ cbuffer GlobalConstants : register(b1)
     float3 gCameraPos;
     float pad;
     float3 gSunPosition;
-
 };
 
 cbuffer ShaderParams : register(b2)
 {
     bool UseSSAO = false;
     bool UseShadow = false;
+    bool UseTexture = false;
+
+    float Roughness;
+    float3 Albedo;
+    float Metallic;
+   
 };
 SamplerState gsamAnisotropicWrap : register(s4);
 static const float3 Fdielectric = 0.04;
@@ -72,20 +77,34 @@ float CalcShadowFactor(float4 shadowPosH);
 
 float4 main(VertexOut pin) : SV_Target
 {
+    float3 albedo = 0;
+    float metalness = 0;
+    float roughness;
+    float3 N;
+    if(UseTexture)
+    {
+        albedo = pow(gAlbedeTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
+        metalness = gMetalnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
+        roughness = gRoughnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
     
-    float3 albedo = pow(gAlbedeTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
-
-    float metalness = gMetalnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
-
-    float roughness = gRoughnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
-
-	// Outgoing light direction (vector from world-space fragment position to the "eye").
+        // Get current fragment's normal and transform to world space.
+        N = normalize(2 * gNormalTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1);
+        N = normalize(mul(pin.tangentBasis, N));
+    
+    }
+    else
+    {
+        albedo = Albedo;
+        metalness = Metallic;
+        roughness = Roughness;
+        
+        N = pin.Normal;
+    }
+    
+    // Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
 
-    // Get current fragment's normal and transform to world space.
-    float3 N = normalize(2 * gNormalTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1);
-    N = normalize(mul(pin.tangentBasis, N));
-
+    
     // Angle between surface normal and outgoing light direction.
     float cosLo = max(0.0, dot(N, Lo));
     
