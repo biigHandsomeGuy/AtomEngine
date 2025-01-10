@@ -87,8 +87,8 @@ bool Renderer::Initialize()
         mCommandList.Get(),
         mClientWidth, mClientHeight);
     mSsao->Initialize();
-    m_pbrModelMatrix = XMMatrixScaling(0.1, 0.1, 0.1);
-    m_pbrModelMatrix *= XMMatrixRotationX(30);
+    //m_pbrModelMatrix = XMMatrixScaling(0.1, 0.1, 0.1);
+    m_pbrModelMatrix = XMMatrixRotationX(30);
 
 
     m_GroundModelMatrix = XMMatrixScaling(30,1,30);
@@ -631,12 +631,17 @@ void Renderer::UpdateUI()
         ImGui::SliderFloat("float", &f, 0.0f, 1.0f);   
 
         ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
        
         ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
-        
         ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);       
-
+        ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);       
+        if (m_ShaderAttribs.UseTexture == false)
+        {
+            ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
+            ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        }
 
         if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
           counter++;
@@ -672,18 +677,21 @@ void Renderer::LoadTextures()
 	
     std::vector<std::string> texFilenames =
     {
-        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/albedo.tga",
         "D:/Atom/Atom/Assets/Textures/wood/albedo.png",
-               
-        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/normal.tga",
+
+        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/albedo.tga",
         "D:/Atom/Atom/Assets/Textures/wood/normal.png",
+
+        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/normal.tga",
            
-        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/metallic.tga",
         "D:/Atom/Atom/Assets/Textures/wood/metallic.png",
-              
+        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/metallic.tga",
+        
+
+         "D:/Atom/Atom/Assets/Textures/wood/roughness.png",
         "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/roughness.tga",
             
-        "D:/Atom/Atom/Assets/Textures/wood/roughness.png",
+        
              
         "D:/Atom/Atom/Assets/Textures/EnvirMap/marry.hdr"
     };
@@ -759,7 +767,9 @@ void Renderer::LoadTextures()
             ATOM_ERROR("Failed to load skybox texture");
         }
 
-        //DXGI_FORMAT_R16G16B16A16_FLOAT
+        // DXGI_FORMAT_R16G16B16A16_FLOAT
+        // DXGI_FORMAT_R32G32B32A32_FLOAT
+        
         D3D12_RESOURCE_DESC textureDesc = {};
         textureDesc.MipLevels = 1;                     // mip 级别
         textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT; // 纹理格式
@@ -806,7 +816,7 @@ void Renderer::LoadTextures()
         // 复制数据到上传堆
         D3D12_SUBRESOURCE_DATA textureData = {};
         textureData.pData = imageData;       // 图像数据
-        textureData.RowPitch = width * 16;    // 每行字节数
+        textureData.RowPitch = width * 4 * 4;    // 每行字节数
         textureData.SlicePitch = textureData.RowPitch * height;
 
         // 将数据从上传堆复制到默认堆
@@ -1172,7 +1182,7 @@ void Renderer::BuildInputLayout()
 void Renderer::BuildShapeGeometry()
 {  
     m_SkyBox.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
-    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/Cerberus_LP.fbx"),md3dDevice.Get(),mCommandList.Get());
+    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/Suzanne.fbx"),md3dDevice.Get(),mCommandList.Get());
     m_Ground.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),md3dDevice.Get(),mCommandList.Get());
 
 }

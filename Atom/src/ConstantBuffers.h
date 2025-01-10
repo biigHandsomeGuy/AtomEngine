@@ -2,9 +2,6 @@
 
 #include <DirectXMath.h>
 
-
-
-
 __declspec(align(256)) struct MaterialConstants
 {
     UINT gMatIndex;
@@ -17,7 +14,7 @@ __declspec(align(256)) struct GlobalConstants
     DirectX::XMFLOAT4X4 ViewProjMatrix;
     DirectX::XMFLOAT4X4 SunShadowMatrix;
     DirectX::XMFLOAT3 CameraPos = { 0.0f, 0.0f, 0.0f };
-    float pad0;
+    float pad0 = 0;
     DirectX::XMFLOAT3 SunPos = { 0.0f, 0.0f, 0.0f };
     
 };
@@ -43,23 +40,30 @@ __declspec(align(256)) struct SsaoConstants
 
 __declspec(align(256)) struct ShaderParams
 {
-    bool UseSSAO = false;
+    bool UseSSAO = false; 
     char pad0[3]{0,0,0};
     bool UseShadow = false;
     char pad1[3]{0,0,0};
+    bool UseTexture = false;
+    char pad2[3]{ 0,0,0 };
+    float roughness = 0;
+    float albedo[3] = { 0,0,0 };
+    float metallic = 0;
+    
+    
 };
 
 namespace EnvMapRenderer
 {
     __declspec(align(256)) struct RenderAttribs
     {
-        float EnvMapMipLevel;
+        float EnvMapMipLevel = 0.0f;
     };
 }
 namespace PostProcess
 {
     __declspec(align(256)) struct RenderAttribs
     {
-        float exposure;
+        float exposure = 0.5f;
     };
 }
