@@ -140,12 +140,7 @@ public:
 #define ReleaseCom(x) { if(x){ x->Release(); x = 0; } }
 #endif
 
-namespace Graphics
-{
-    extern UINT RtvDescriptorSize;
-    extern UINT DsvDescriptorSize;
-    extern UINT CbvSrvUavDescriptorSize;
-}
+
 __declspec(dllexport) CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(ID3D12DescriptorHeap* heap, int offset);
 ;
 CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(ID3D12DescriptorHeap* heap, int offset);

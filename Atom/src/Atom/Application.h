@@ -94,32 +94,39 @@ protected:
 	// Used to keep track of the “delta-time?and game time (?.4).
 	GameTimer mTimer;
 	
-    Microsoft::WRL::ComPtr<IDXGIFactory4> mdxgiFactory;
-    Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain;
-    Microsoft::WRL::ComPtr<ID3D12Device> md3dDevice;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> m_Factory;
+    Microsoft::WRL::ComPtr<IDXGISwapChain> m_SwapChain;
+    Microsoft::WRL::ComPtr<ID3D12Device> m_Device;
 
-    Microsoft::WRL::ComPtr<ID3D12Fence> mFence;
+    Microsoft::WRL::ComPtr<ID3D12Fence> m_Fence;
     UINT64 mCurrentFence = 0;
 	
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> mCommandQueue;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mDirectCmdListAlloc;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_CommandQueue;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_ComputeCommandQueue;
+
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_CommandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_ComputeCommandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_CommandList;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_ComputeCommandList;
 
 	static const int SwapChainBufferCount = 2;
 	int mCurrBackBuffer = 0;
-    Microsoft::WRL::ComPtr<ID3D12Resource> mSwapChainBuffer[SwapChainBufferCount];
-    Microsoft::WRL::ComPtr<ID3D12Resource> mDepthStencilBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_SwapChainBuffer[SwapChainBufferCount];
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_DepthStencilBuffer;
 
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mRtvHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mDsvHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 
-    D3D12_VIEWPORT mScreenViewport; 
-    D3D12_RECT mScissorRect;
+    D3D12_VIEWPORT m_ScreenViewport;
+    D3D12_RECT m_ScissorRect;
 
 	// Derived class should set these in derived constructor to customize starting values.
 	std::wstring mMainWndCaption = L"d3d App";
 	D3D_DRIVER_TYPE md3dDriverType = D3D_DRIVER_TYPE_HARDWARE;
     DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    //DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    //DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    
     DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	int mClientWidth = 800;
 	int mClientHeight = 600;

@@ -91,7 +91,7 @@ public:
  
  
  private:
- 	ID3D12Device* md3dDevice;
+ 	ID3D12Device* m_Device;
  
  	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_RootSignature;
  
@@ -118,7 +118,7 @@ public:
  	DirectX::XMFLOAT4 mOffsets[14];
  
  	D3D12_VIEWPORT mViewport;
- 	D3D12_RECT mScissorRect;
+ 	D3D12_RECT m_ScissorRect;
  };
  
  #endif // SSAO_H

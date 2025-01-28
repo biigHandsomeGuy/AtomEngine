@@ -18,9 +18,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 
     ::AllocConsole();
     Atom::Log::Init();
-    ATOM_ERROR("Error");
-    int a = 5;
-    ATOM_INFO("Hello Log{0}",a);
+
     auto app = CreateApplication(hInstance);
     try
     {

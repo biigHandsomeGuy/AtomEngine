@@ -48,10 +48,10 @@ private:
 
 private:
 
-	ID3D12Device* md3dDevice = nullptr;
+	ID3D12Device* m_Device = nullptr;
 
 	D3D12_VIEWPORT mViewport;
-	D3D12_RECT mScissorRect;
+	D3D12_RECT m_ScissorRect;
 
 	UINT mWidth = 0;
 	UINT mHeight = 0;

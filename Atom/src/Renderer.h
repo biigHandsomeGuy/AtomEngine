@@ -8,7 +8,8 @@
 #include "Mesh.h"
 #include "d3dUtil.h"
 #include "Texture.h"
-#include "Mesh.h"
+#include <DirectXCollision.h>
+
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -100,21 +101,21 @@ private:
 
 private:
 
+    
+    ComPtr<ID3D12RootSignature> m_RootSignature = nullptr;
 
-    ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
-
-    ComPtr<ID3D12DescriptorHeap> mSrvDescriptorHeap = nullptr;
+    ComPtr<ID3D12DescriptorHeap> m_SrvDescriptorHeap = nullptr;
 
 
-    std::unordered_map<std::string, std::unique_ptr<Texture>> mTextures;
-    std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
-    std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
+    std::unordered_map<std::string, std::unique_ptr<Texture>> m_Textures;
+    std::unordered_map<std::string, ComPtr<ID3DBlob>> m_Shaders;
+    std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> m_PSOs;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
     CD3DX12_GPU_DESCRIPTOR_HANDLE mNullSrv;
 
-    Camera mCamera;
+    Camera m_Camera;
 
     std::unique_ptr<ShadowMap> mShadowMap;
 
@@ -139,6 +140,10 @@ private:
     // 1 srv with 1 rtv
     ComPtr<ID3D12Resource> m_ColorBuffer;
     D3D12_CPU_DESCRIPTOR_HANDLE m_ColorBufferRtvHandle;
+
+    ComPtr<ID3D12Resource> m_PosBuffer;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_PosBufferRtvHandle;
+
 
     Model m_PbrModel;
     Model m_SkyBox;

@@ -5,7 +5,7 @@
 #include <DirectXPackedVector.h>
 
 #include <WindowsX.h>
-
+#include <wrl/client.h>
 
 #include <vector>
 #include <array>
