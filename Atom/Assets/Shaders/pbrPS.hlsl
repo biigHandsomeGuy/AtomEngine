@@ -98,9 +98,11 @@ float4 main(VertexOut pin) : SV_Target
         metalness = Metallic;
         roughness = Roughness;
         
-        N = pin.Normal;
+        N = normalize(pin.Normal);
+
+        //return float4(N,1);
     }
-    
+    //roughness *= 0.5;
     // Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
 
@@ -121,8 +123,8 @@ float4 main(VertexOut pin) : SV_Target
         pin.SsaoPosH /= pin.SsaoPosH.w;
         ambientAccess = gSsaoMap.Sample(gsamLinearWrap, pin.SsaoPosH.xy).r;
     }
- 
-  
+    
+    
     // Direct lighting calculation for analytical lights.
     float3 directLighting = 0.0;
     {
@@ -178,23 +180,25 @@ float4 main(VertexOut pin) : SV_Target
         // Irradiance map contains exitant radiance assuming Lambertian BRDF, no need to scale by 1/PI here either.
         float3 diffuseIBL = kd * albedo * irradiance;
              
-        // Sample pre-filtered specular reflection environment at correct mipmap level.
-        uint specularTextureLevels = querySpecularTextureLevels();
-        float3 specularIrradiance = gSpecularMap.SampleLevel(gsamAnisotropicWrap, Lr, roughness * specularTextureLevels).rgb;
-
-		// Split-sum approximation factors for Cook-Torrance specular BRDF.
-        float2 specularBRDF = gLUTMap.Sample(gsamAnisotropicWrap, float2(roughness, cosLo)).rg;
+        float3 specularIBL = 0;
         
-		// Total specular IBL contribution.
-        float3 specularIBL = (1 - kd) *
-        (F0 * specularBRDF.x + specularBRDF.y) * specularIrradiance;
+            // Sample pre-filtered specular reflection environment at correct mipmap level.
+            uint specularTextureLevels = querySpecularTextureLevels();
+            float3 specularIrradiance = gSpecularMap.SampleLevel(gsamAnisotropicWrap, Lr, roughness * specularTextureLevels).rgb;
+
+		    // Split-sum approximation factors for Cook-Torrance specular BRDF.
+            float2 specularBRDF = gLUTMap.Sample(gsamAnisotropicWrap, float2(roughness, cosLo)).rg;
+            
+		    // Total specular IBL contribution.
+            specularIBL = (1 - kd) *
+            (F0 * specularBRDF.x + specularBRDF.y) * specularIrradiance;
         
         ambientLighting = diffuseIBL + specularIBL;
 
     }
        
     
-    float3 color = directLighting * shadowFactor + ambientLighting * ambientAccess;
+    float3 color =ambientLighting * ambientAccess + directLighting*shadowFactor;
 
   
     return float4(color, 1.0);

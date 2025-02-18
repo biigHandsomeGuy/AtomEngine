@@ -16,7 +16,6 @@ struct VertexOut
     float3 NormalW : NORMAL;
 };
 
-
 float4 main(VertexOut pin) : SV_Target
 {
 	// Interpolating normal can unnormalize it, so renormalize it.

@@ -70,7 +70,7 @@ float OcclusionFunction(float distZ)
 	//        0     Eps          z0            z1        
 	//
 	
-    //float attenuation = 1.0 / (1.0 + distZ * distZ); // 平滑的反比衰减
+    //float attenuation = 1.0 / (1.0 + distZ * distZ); // ??????·?±?????
     //return attenuation;
 	
     float occlusion = 0.0f;
@@ -106,7 +106,7 @@ float4 main(VertexOut pin) : SV_Target
 	// Get viewspace normal and z-coord of this pixel.  
     float3 n = normalize(gNormalMap.SampleLevel(gsamPointClamp, pin.TexC, 0.0f).xyz);
     float pz = gDepthMap.SampleLevel(gsamDepthMap, pin.TexC, 0.0f).r;
-    //return pz;
+    
     pz = NdcDepthToViewDepth(pz);
 
 	//

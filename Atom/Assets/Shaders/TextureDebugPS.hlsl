@@ -11,7 +11,7 @@ struct VertexOut
 
 float4 main(VertexOut pin) : SV_Target
 {
-    float color = gSsaoMap.Sample(gsamAnisotropicClamp, pin.TexC).x;
-    return float4(color.xxx, 1);
+    float2 color = gLUTMap.Sample(gsamAnisotropicClamp, pin.TexC);
+    return float4(color,0, 1);
 }
 

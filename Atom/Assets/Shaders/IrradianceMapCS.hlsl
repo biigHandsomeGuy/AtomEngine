@@ -1,18 +1,23 @@
+// Physically Based Rendering
+// Copyright (c) 2017-2018 Micha? Siejak
+
+// Computes diffuse irradiance cubemap convolution for image-based lighting.
+// Uses quasi Monte Carlo sampling with Hammersley sequence.
 
 static const float PI = 3.141592;
 static const float TwoPI = 2 * PI;
 static const float Epsilon = 0.00001;
 
-static const uint NumSamples = 64 * 64;
+static const uint NumSamples = 64 * 1024;
 static const float InvNumSamples = 1.0 / float(NumSamples);
-
 
 TextureCube inputTexture : register(t0);
 RWTexture2DArray<float4> outputTexture : register(u0);
-SamplerState gsamAnisotropicWrap : register(s4);
 
+SamplerState defaultSampler : register(s0);
 
-
+// Compute Van der Corput radical inverse
+// See: http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
 float radicalInverse_VdC(uint bits)
 {
 	bits = (bits << 16u) | (bits >> 16u);
@@ -80,29 +85,28 @@ float3 tangentToWorld(const float3 v, const float3 N, const float3 S, const floa
 {
 	return S * v.x + T * v.y + N * v.z;
 }
+
 [numthreads(32, 32, 1)]
 void main(uint3 ThreadID : SV_DispatchThreadID)
 {
-    float3 N = getSamplingVector(ThreadID);
+	float3 N = getSamplingVector(ThreadID);
 	
-    float3 S, T;
-    computeBasisVectors(N, S, T);
+	float3 S, T;
+	computeBasisVectors(N, S, T);
 
-	 // Monte Carlo integration of hemispherical irradiance.
-	 // As a small optimization this also includes Lambertian BRDF assuming perfectly white surface (albedo of 1.0)
-	 // so we don't need to normalize in PBR fragment shader (so technically it encodes exitant radiance rather than irradiance).
-    float3 irradiance = 0.0;
-    for (uint i = 0; i < NumSamples; ++i)
-    {
-        float2 u = sampleHammersley(i);
-        float3 Li = tangentToWorld(sampleHemisphere(u.x, u.y), N, S, T);
-        float cosTheta = max(0.0, dot(Li, N));
-	
+	// Monte Carlo integration of hemispherical irradiance.
+	// As a small optimization this also includes Lambertian BRDF assuming perfectly white surface (albedo of 1.0)
+	// so we don't need to normalize in PBR fragment shader (so technically it encodes exitant radiance rather than irradiance).
+	float3 irradiance = 0.0;
+	for(uint i=0; i<NumSamples; ++i) {
+		float2 u  = sampleHammersley(i);
+		float3 Li = tangentToWorld(sampleHemisphere(u.x, u.y), N, S, T);
+		float cosTheta = max(0.0, dot(Li, N));
+
 		// PIs here cancel out because of division by pdf.
-        irradiance += 2.0 * inputTexture.SampleLevel(gsamAnisotropicWrap, Li, 0).rgb * cosTheta;
-    }
-    irradiance /= float(NumSamples);
-	
+		irradiance += 2.0 * inputTexture.SampleLevel(defaultSampler, Li, 0).rgb * cosTheta;
+	}
+	irradiance /= float(NumSamples);
 
-    outputTexture[ThreadID] = float4(irradiance, 1.0);
+	outputTexture[ThreadID] = float4(irradiance, 1.0);
 }
