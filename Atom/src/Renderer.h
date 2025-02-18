@@ -1,6 +1,7 @@
+#pragma once
+
 #include "Atom.h"
 #include "MathHelper.h"
-#include "UploadBuffer.h" 
 #include "GeometryGenerator.h"
 #include "Camera.h"
 #include "ShadowMap.h"
@@ -14,7 +15,7 @@
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
-enum class DescriptorHeapLayout : UINT8
+enum class DescriptorHeapLayout : int
 {
     ShpereMaterialHeap,
     ShpereMapHeap = 8,
@@ -41,7 +42,8 @@ enum class DescriptorHeapLayout : UINT8
     EnvirUavHeapMipMap5,
     LUTsrv,
     LUTuav,
-    ColorBufferSrv
+    ColorBufferSrv,
+    ColorBufferBrightSrv
 
 };
 
@@ -92,18 +94,12 @@ private:
     void DrawNormalsAndDepth();
     void CreateColorBufferView();
     void CreateCubeMap();
-    void CreateIBL();
     D3D12_CPU_DESCRIPTOR_HANDLE CreateTextureUav(ID3D12Resource* res, UINT mipSlice);
-
-
 
     std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> GetStaticSamplers();
 
 private:
-
-    
     ComPtr<ID3D12RootSignature> m_RootSignature = nullptr;
-
     ComPtr<ID3D12DescriptorHeap> m_SrvDescriptorHeap = nullptr;
 
 
@@ -118,7 +114,6 @@ private:
     Camera m_Camera;
 
     std::unique_ptr<ShadowMap> mShadowMap;
-
 
     DirectX::BoundingSphere mSceneBounds;
 
@@ -140,9 +135,10 @@ private:
     // 1 srv with 1 rtv
     ComPtr<ID3D12Resource> m_ColorBuffer;
     D3D12_CPU_DESCRIPTOR_HANDLE m_ColorBufferRtvHandle;
+    
+    ComPtr<ID3D12Resource> m_ColorBufferBright;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_ColorBufferBrightRtvHandle;
 
-    ComPtr<ID3D12Resource> m_PosBuffer;
-    D3D12_CPU_DESCRIPTOR_HANDLE m_PosBufferRtvHandle;
 
 
     Model m_PbrModel;
@@ -159,6 +155,10 @@ private:
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
     PostProcess::RenderAttribs m_ppAttribs;
+
+
+    ComPtr<ID3D12Resource> m_GlobalConstantsBuffer;
+    GlobalConstants m_GlobalConstants = {};
 };
 
 namespace

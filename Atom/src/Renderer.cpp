@@ -3,7 +3,7 @@
 #include "stb_image/stb_image.h"
 #include "ConstantBuffers.h"
 #include "GraphicsCore.h"
-
+// #include "ImGuizmo/ImGuizmo.h"
 
 namespace VS
 {
@@ -13,6 +13,7 @@ namespace VS
 #include "../CompiledShaders/ShadowVS.h"
 #include "../CompiledShaders/DrawNormalsVS.h"
 #include "../CompiledShaders/PostProcessVS.h"
+#include "../CompiledShaders/BloomVS.h"
 }
 
 namespace PS
@@ -23,6 +24,7 @@ namespace PS
 #include "../CompiledShaders/ShadowPS.h"
 #include "../CompiledShaders/DrawNormalsPS.h"
 #include "../CompiledShaders/PostProcessPS.h"
+#include "../CompiledShaders/BloomPS.h"
 }
 
 namespace CS
@@ -33,11 +35,21 @@ namespace CS
 #include "../CompiledShaders/EquirectToCubeCS.h"
 }
 
+namespace
+{
+    ComPtr<ID3D12RootSignature> computeRS;
+    ComPtr<ID3D12PipelineState> cubePso;
+    ComPtr<ID3D12PipelineState> irMapPso;
+    ComPtr<ID3D12PipelineState> spMapPso;
+    ComPtr<ID3D12PipelineState> lutPso;
+}
+
 using namespace Graphics;
 using namespace Microsoft::WRL;
 using namespace VS;
 using namespace PS;
 using namespace CS;
+
 SsaoConstants ssaoCB; 
 
 Application* CreateApplication(HINSTANCE hInstance)
@@ -48,12 +60,7 @@ Application* CreateApplication(HINSTANCE hInstance)
 
 Renderer::Renderer(HINSTANCE hInstance)
     : Application(hInstance)
-{
-    
-    // Estimate the scene bounding sphere manually since we know how the scene was constructed.
-    // The grid is the "widest object" with a width of 20 and depth of 30.0f, and centered at
-    // the world space origin.  In general, you need to loop over every world space vertex
-    // position and compute the bounding sphere.
+{    
     mSceneBounds.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
     mSceneBounds.Radius = 15;
 }
@@ -70,13 +77,14 @@ Renderer::~Renderer()
 
 bool Renderer::Initialize()
 {
+    ATOM_INFO("Render Initialize");
+    
     if(!Application::Initialize())
         return false;
 
-    // Reset the command list to prep for initialization commands.
     ThrowIfFailed(m_CommandList->Reset(m_CommandAllocator.Get(), nullptr));
 
-	m_Camera.SetPosition(0.0f, 8.0f, -15.0f);
+	m_Camera.SetPosition(0.0f, 2.0f, -5.0f);
     XMVECTOR lightPos = XMLoadFloat4(&XMFLOAT4{ 0.0f, 5.0f, 2.0f, 1.0f });
     XMStoreFloat4(&mLightPosW, lightPos);
     mShadowMap = std::make_unique<ShadowMap>(m_Device.Get(),
@@ -87,18 +95,17 @@ bool Renderer::Initialize()
         m_CommandList.Get(),
         mClientWidth, mClientHeight);
     mSsao->Initialize();
-    m_pbrModelMatrix = XMMatrixScaling(10, 10, 10);
    
-
-
-    m_GroundModelMatrix = XMMatrixScaling(30,1,30);
-    m_GroundModelMatrix *= XMMatrixTranslation(0, -8, 0);
+    m_pbrModelMatrix = XMMatrixScaling(1, 1, 1);
+    m_pbrModelMatrix *= XMMatrixTranslation(0, 1, 0);  
+    m_GroundModelMatrix = XMMatrixTranslation(0, 0, 0);
 
 	LoadTextures();
     BuildRootSignature();
 	BuildDescriptorHeaps();
     BuildInputLayout();
     BuildShapeGeometry();
+
     CreateCubeMap();
    
     BuildPSOs();
@@ -110,6 +117,14 @@ bool Renderer::Initialize()
 
     // Wait until initialization is complete.
     FlushCommandQueue();
+
+    {
+        computeRS.Reset();   
+        cubePso.Reset();
+        irMapPso.Reset();
+        spMapPso.Reset();
+        lutPso.Reset();
+    }
 
 
     // Setup Dear ImGui context
@@ -136,16 +151,16 @@ bool Renderer::Initialize()
 
 void Renderer::CreateRtvAndDsvDescriptorHeaps()
 {
-    //2 swap chain buffer + 1 backend buffer + 1 position buffer
+    //2 swap chain buffer + 1 backend buffer + bloom buffer
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
-    rtvHeapDesc.NumDescriptors = SwapChainBufferCount + 1;
+    rtvHeapDesc.NumDescriptors = SwapChainBufferCount + 2;
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     rtvHeapDesc.NodeMask = 0;
     ThrowIfFailed(m_Device->CreateDescriptorHeap(
         &rtvHeapDesc, IID_PPV_ARGS(m_RtvHeap.GetAddressOf())));
 
-    // Add +1 DSV for shadow map.
+    // Add 1 DSV for shadow map.
     D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc;
     dsvHeapDesc.NumDescriptors = 2;
     dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
@@ -153,8 +168,6 @@ void Renderer::CreateRtvAndDsvDescriptorHeaps()
     dsvHeapDesc.NodeMask = 0;
     ThrowIfFailed(m_Device->CreateDescriptorHeap(
         &dsvHeapDesc, IID_PPV_ARGS(m_DsvHeap.GetAddressOf())));
-
-
 }
  
 void Renderer::OnResize()
@@ -171,7 +184,6 @@ void Renderer::OnResize()
    {
        mSsao->OnResize(mClientWidth, mClientHeight);
    
-       // Resources changed, so need to rebuild descriptors.
        mSsao->RebuildDescriptors(m_DepthStencilBuffer.Get());
 
        UINT descriptorRangeSize = 1;
@@ -194,22 +206,13 @@ void Renderer::Update(const GameTimer& gt)
     m_Camera.Update(gt.DeltaTime());
     
 
-    //
-    // Animate the lights (and hence shadows).
-    //
-
     UpdateSsaoCB(gt);
 }
 
 void Renderer::Draw(const GameTimer& gt)
 {
-
-    // Reuse the memory associated with command recording.
-    // We can only reset when the associated command lists have finished execution on the GPU.
     ThrowIfFailed(m_CommandAllocator->Reset());
 
-    // A command list can be reset after it has been added to the command queue via ExecuteCommandList.
-    // Reusing the command list reuses memory.
     ThrowIfFailed(m_CommandList->Reset(m_CommandAllocator.Get(), m_PSOs["opaque"].Get()));
 
 
@@ -217,23 +220,11 @@ void Renderer::Draw(const GameTimer& gt)
     m_CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
-   
-    
+      
 	//
 	// Shadow map pass.
 	//
 
-    // Bind all the materials used in this scene.  For structured buffers, we can bypass the heap and 
-    // set as a root descriptor.
-   
-    // Bind null SRV for shadow map pass.
-    // m_CommandList->SetGraphicsRootDescriptorTable(kCommonSRVs, mNullSrv);	 
-
-    // Bind all the textures used in this scene.  Observe
-    // that we only have to specify the first descriptor in the table.  
-    // The root signature knows how many descriptors are expected in the table.
-    
-    // 生成光源角度的 shadow map
     DrawSceneToShadowMap();
 
 	//
@@ -250,7 +241,6 @@ void Renderer::Draw(const GameTimer& gt)
 
     m_CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
     m_CommandList->SetGraphicsRootDescriptorTable(kMaterialSRVs, m_SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
@@ -258,11 +248,6 @@ void Renderer::Draw(const GameTimer& gt)
 	// Main rendering pass.
 	//
 	
-    // Rebind state whenever graphics root signature changes.
-
-    // Bind all the materials used in this scene.  For structured buffers, we can bypass the heap and 
-    // set as a root descriptor.
-    
     // Indicate a state transition on the resource usage.
     m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
         D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
@@ -271,25 +256,14 @@ void Renderer::Draw(const GameTimer& gt)
     m_CommandList->ClearRenderTargetView(CurrentBackBufferView(), &color.x, 0, nullptr);
     m_CommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
-    // WE ALREADY WROTE THE DEPTH INFO TO THE DEPTH BUFFER IN DrawNormalsAndDepth,
-    // SO DO NOT CLEAR DEPTH.
-
-    // Specify the buffers we are going to render to.
     m_CommandList->OMSetRenderTargets(1, &m_ColorBufferRtvHandle, true, &DepthStencilView());
 
     m_CommandList->RSSetViewports(1, &m_ScreenViewport);
     m_CommandList->RSSetScissorRects(1, &m_ScissorRect);
 
-	// Bind all the textures used in this scene.  Observe
-    // that we only have to specify the first descriptor in the table.  
-    // The root signature knows how many descriptors are expected in the table.
-    // m_CommandList->SetGraphicsRootDescriptorTable(kCommonSRVs, m_SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-	
-	
     // Create Global Constant Buffer
-    ComPtr<ID3D12Resource> globalCbuffer;
-    {        
-        GlobalConstants globalBuffer = {};
+    
+    {                
         const UINT64 bufferSize = sizeof(GlobalConstants);
 
         ThrowIfFailed(m_Device->CreateCommittedResource(
@@ -298,39 +272,32 @@ void Renderer::Draw(const GameTimer& gt)
             &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
-            IID_PPV_ARGS(globalCbuffer.GetAddressOf())
+            IID_PPV_ARGS(m_GlobalConstantsBuffer.GetAddressOf())
         ));
         BYTE* data = nullptr;
-        globalCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+        m_GlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
         XMMATRIX view = m_Camera.GetView();
         XMMATRIX proj = m_Camera.GetProj();
         XMMATRIX viewProj = XMMatrixMultiply(view, proj);
 
-        XMStoreFloat4x4(&globalBuffer.ViewMatrix, view);
-        XMStoreFloat4x4(&globalBuffer.ProjMatrix, proj);
-        XMStoreFloat4x4(&globalBuffer.ViewProjMatrix, viewProj);
-        globalBuffer.SunShadowMatrix = mShadowTransform;
-        globalBuffer.CameraPos = m_Camera.GetPosition3f();
-        globalBuffer.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z};
+        XMStoreFloat4x4(&m_GlobalConstants.ViewMatrix, view);
+        XMStoreFloat4x4(&m_GlobalConstants.ProjMatrix, proj);
+        XMStoreFloat4x4(&m_GlobalConstants.ViewProjMatrix, viewProj);
+        m_GlobalConstants.SunShadowMatrix = mShadowTransform;
+        m_GlobalConstants.CameraPos = m_Camera.GetPosition3f();
+        m_GlobalConstants.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z};
 
 
-        memcpy(data, &globalBuffer, bufferSize);
-        globalCbuffer->Unmap(0, nullptr);
+        memcpy(data, &m_GlobalConstants, bufferSize);
+        m_GlobalConstantsBuffer->Unmap(0, nullptr);
     }
 
-    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, globalCbuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_GlobalConstantsBuffer->GetGPUVirtualAddress());
 
-
-    // Bind the sky cube map.  For our demos, we just use one "world" cube map representing the environment
-    // from far away, so all objects will use the same cube map and we only need to set it once per-frame.  
-    // If we wanted to use "local" cube maps, we would have to change them per-object, or dynamically
-    // index into an array of cube maps.
 
     auto skyTexDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::ShpereMapHeap));
     m_CommandList->SetGraphicsRootDescriptorTable(kCommonSRVs, skyTexDescriptor);
-
-    
 
     auto cubeMapDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::EnvirSrvHeap));
     m_CommandList->SetGraphicsRootDescriptorTable(kCubemapSrv, cubeMapDescriptor);
@@ -345,7 +312,6 @@ void Renderer::Draw(const GameTimer& gt)
     m_CommandList->SetGraphicsRootDescriptorTable(kLUT, lutMapDescriptor);
     
     
-   
     m_CommandList->SetPipelineState(m_PSOs["opaque"].Get());
 
     ComPtr<ID3D12Resource> meshCbuffer;
@@ -419,36 +385,90 @@ void Renderer::Draw(const GameTimer& gt)
         ));
         BYTE* data = nullptr;
         shaderParamsCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+        //m_ShaderAttribs.roughness *= 0.5;
+        memcpy(data, &m_ShaderAttribs, bufferSize);
+        shaderParamsCbuffer->Unmap(0, nullptr);
+    }
+    m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, materialCbuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshCbuffer->GetGPUVirtualAddress());
+    m_PbrModel.Draw(m_CommandList.Get());
+
+    {
+        __declspec(align(256)) struct MeshConstants
+        {
+            DirectX::XMFLOAT4X4 World;
+            DirectX::XMFLOAT4X4 ViewProjTex;
+        } meshConstants;
+
+        XMStoreFloat4x4(&meshConstants.World, m_GroundModelMatrix);
+        XMMATRIX T(
+            0.5f, 0.0f, 0.0f, 0.0f,
+            0.0f, -0.5f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.5f, 0.5f, 0.0f, 1.0f);
+        XMMATRIX viewProjTex = m_Camera.GetView() * m_Camera.GetProj() * T;
+        XMStoreFloat4x4(&meshConstants.ViewProjTex, viewProjTex);
+
+        const UINT64 bufferSize = sizeof(MeshConstants);
+
+        ThrowIfFailed(m_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(meshCbuffer.GetAddressOf())
+        ));
+        BYTE* data = nullptr;
+        meshCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+
+        memcpy(data, &meshConstants, bufferSize);
+        meshCbuffer->Unmap(0, nullptr);
+    }
+
+    {
+        MaterialConstants materialBuffer = {};
+        const UINT64 bufferSize = sizeof(MaterialConstants);
+
+        ThrowIfFailed(m_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(materialCbuffer.GetAddressOf())
+        ));
+        BYTE* data = nullptr;
+        materialCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+
+        materialBuffer.gMatIndex = 1;
+        memcpy(data, &materialBuffer, bufferSize);
+        materialCbuffer->Unmap(0, nullptr);
+    }
+
+    {
+        const UINT64 bufferSize = sizeof(ShaderParams);
+
+        ThrowIfFailed(m_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(shaderParamsCbuffer.GetAddressOf())
+        ));
+        BYTE* data = nullptr;
+        shaderParamsCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
         memcpy(data, &m_ShaderAttribs, bufferSize);
         shaderParamsCbuffer->Unmap(0, nullptr);
     }
     m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, materialCbuffer->GetGPUVirtualAddress());
     m_CommandList->SetGraphicsRootConstantBufferView(kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshCbuffer->GetGPUVirtualAddress());
+    m_Ground.Draw(m_CommandList.Get());
 
-    {
-        for (uint32_t meshIndex = 0; meshIndex < m_PbrModel.meshes.size(); meshIndex++)
-        {
-            m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshCbuffer->GetGPUVirtualAddress());
-            m_CommandList->IASetVertexBuffers(0, 1, &m_PbrModel.meshes[meshIndex].vbv);
-            m_CommandList->IASetIndexBuffer(&m_PbrModel.meshes[meshIndex].ibv);
-            m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            m_CommandList->DrawIndexedInstanced(m_PbrModel.meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
-        }
-
-        
-    }
-
-
-    //XMStoreFloat4x4(&groundOC.World, m_GroundModelMatrix);
-    //res->CopyData(1, groundOC);
-    //
-    //m_CommandList->SetGraphicsRoot32BitConstant(10, 1, 0);
-    //m_CommandList->SetGraphicsRootConstantBufferView(0, res->Resource()->GetGPUVirtualAddress() + ocSize);
-    //m_CommandList->IASetVertexBuffers(0, 1, &m_Ground.vbv);
-    //m_CommandList->IASetIndexBuffer(&m_Ground.ibv);
-    //m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    //m_CommandList->DrawIndexedInstanced(m_Ground.numElements, 1, 0, 0, 0);
 
     // material cbuffer
     ComPtr<ID3D12Resource> envMapBuffer;
@@ -472,16 +492,24 @@ void Renderer::Draw(const GameTimer& gt)
     m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
    
     m_CommandList->SetPipelineState(m_PSOs["sky"].Get());
-    m_CommandList->IASetVertexBuffers(0, 1, &m_SkyBox.meshes[0].vbv);
-    m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_CommandList->IASetIndexBuffer(&m_SkyBox.meshes[0].ibv);
-    m_CommandList->DrawIndexedInstanced(m_SkyBox.meshes[0].Indices.size(), 1, 0, 0, 0);
+    m_SkyBox.Draw(m_CommandList.Get());
+
+    // pick bright
+    {
+        m_CommandList->OMSetRenderTargets(1, &m_ColorBufferBrightRtvHandle, true, &DepthStencilView());
+
+        auto bloomHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::ColorBufferSrv);
+        m_CommandList->SetGraphicsRootDescriptorTable(kPostProcess, bloomHandle);
+        m_CommandList->SetPipelineState(m_PSOs["bloom"].Get());
+        m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+        m_CommandList->DrawInstanced(4, 1, 0, 0);
+    }
+
 
     m_CommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
-
     // Post Process
-
     ComPtr<ID3D12Resource> ppBuffer;
     {
         const UINT64 bufferSize = sizeof(EnvMapRenderer::RenderAttribs);
@@ -507,7 +535,7 @@ void Renderer::Draw(const GameTimer& gt)
     m_CommandList->SetPipelineState(m_PSOs["postprocess"].Get());
     m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
-    m_CommandList->DrawInstanced(4, 1, 0, 0); // 绘制 4 个顶祦E
+    m_CommandList->DrawInstanced(4, 1, 0, 0); 
 
 
     //// Texture Debug
@@ -522,11 +550,8 @@ void Renderer::Draw(const GameTimer& gt)
     m_CommandList->DrawInstanced(4, 1, 0, 0);
     
 
-
-
     // RenderingF
     ImGui::Render();
-    // //m_CommandList->SetDescriptorHeaps(1, &m_SrvDescriptorHeap);
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_CommandList.Get());
 
     // Indicate a state transition on the resource usage.
@@ -544,26 +569,7 @@ void Renderer::Draw(const GameTimer& gt)
     ThrowIfFailed(m_SwapChain->Present(0, 0));
 	mCurrBackBuffer = (mCurrBackBuffer + 1) % SwapChainBufferCount;
 
-    // Advance the fence value to mark commands up to this fence point.
-    mCurrentFence++;
-
-    // Add an instruction to the command queue to set a new fence point. 
-    // Because we are on the GPU timeline, the new fence point won't be 
-    // set until the GPU finishes processing all the commands prior to this Signal().
-
-    const UINT64 fence = mCurrentFence;
-
-    ThrowIfFailed(m_CommandQueue->Signal(m_Fence.Get(), fence));
-
-    // Has the GPU finished processing the commands of the current frame resource?
-    // If not, wait until the GPU has completed commands up to this fence point.
-    if (m_Fence->GetCompletedValue() < fence)
-    {
-        HANDLE eventHandle = CreateEventEx(nullptr, false, false, EVENT_ALL_ACCESS);
-        ThrowIfFailed(m_Fence->SetEventOnCompletion(fence, eventHandle));
-        WaitForSingleObject(eventHandle, INFINITE);
-        CloseHandle(eventHandle);
-    }
+    FlushCommandQueue();
 }
 
 void Renderer::UpdateSsaoCB(const GameTimer& gt)
@@ -604,33 +610,29 @@ void Renderer::UpdateUI()
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-
-
     static bool show_demo_window = false;
     static bool show_another_window = false;
-
-   
+ 
     if (show_demo_window)
         ImGui::ShowDemoWindow(&show_demo_window);
     static int b = 0;
     
-    
-
     {
         static float f = 0.0f;
         static int counter = 0;
 
         ImGui::Begin("DEBUG");                          // Create a window called "Hello, world!" and append into it.
-
+ 
         ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
         ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
         ImGui::Checkbox("Another Window", &show_another_window);
-         //Edit 1 float using a slider from 0.0f to 1.0f
-        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);   
 
         ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
         ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
        
+        ImGui::DragFloat4("LightPosition", &mLightPosW.x,0.3f,-90,90);
+        ImGui::DragFloat4("CameraPosition", &m_Camera.GetPosition3f().x);
+
         ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
         ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);       
         ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);       
@@ -639,6 +641,8 @@ void Renderer::UpdateUI()
             ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
             ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
             ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+
+           
         }
         if (m_ShaderAttribs.UseSSAO == true)
         {
@@ -685,25 +689,20 @@ void Renderer::LoadTextures()
 	
     std::vector<std::string> texFilenames =
     {
+        "D:/Atom/Atom/Assets/Textures/silver/albedo.png",
         "D:/Atom/Atom/Assets/Textures/wood/albedo.png",
 
-        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/albedo.tga",
+        "D:/Atom/Atom/Assets/Textures/silver/normal.png",
         "D:/Atom/Atom/Assets/Textures/wood/normal.png",
 
-        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/normal.tga",
-           
+        "D:/Atom/Atom/Assets/Textures/silver/metallic.png",
         "D:/Atom/Atom/Assets/Textures/wood/metallic.png",
-        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/metallic.tga",
-        
 
+         "D:/Atom/Atom/Assets/Textures/silver/roughness.png",
          "D:/Atom/Atom/Assets/Textures/wood/roughness.png",
-        "D:/Atom/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/roughness.tga",
-            
-        
-             
-        "D:/Atom/Atom/Assets/Textures/EnvirMap/marry.hdr"
+                   
+        "D:/Atom/Atom/Assets/Textures/EnvirMap/environment.hdr"
     };
-    //stbi_set_flip_vertically_on_load(true);
 	for(int i = 0; i < (int)texNames.size() - 1; ++i)
 	{
         auto texMap = std::make_unique<Texture>();
@@ -717,22 +716,22 @@ void Renderer::LoadTextures()
             ATOM_ERROR("Failed to load material texture");
         }
         D3D12_RESOURCE_DESC textureDesc = {};
-        textureDesc.MipLevels = 1;                     // mip 级眮E
-        textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // 纹历择式
-        textureDesc.Width = width;                     // 纹历埴胰
-        textureDesc.Height = height;                   // 纹历赃度
+        textureDesc.MipLevels = 1;                     
+        textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        textureDesc.Width = width;                     
+        textureDesc.Height = height;                  
         textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-        textureDesc.DepthOrArraySize = 1;              // 单层纹纴E
-        textureDesc.SampleDesc.Count = 1;              // 不使用多重采褋E
+        textureDesc.DepthOrArraySize = 1;              
+        textureDesc.SampleDesc.Count = 1;              
         textureDesc.SampleDesc.Quality = 0;
-        textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; // 2D 纹纴E
+        textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; 
 
 
         ThrowIfFailed(m_Device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE,
             &textureDesc,
-            D3D12_RESOURCE_STATE_COPY_DEST,   // 初始状态为 COPY_DEST
+            D3D12_RESOURCE_STATE_COPY_DEST,  
             nullptr,
             IID_PPV_ARGS(&texMap->Resource)
         ));
@@ -747,16 +746,12 @@ void Renderer::LoadTextures()
             IID_PPV_ARGS(&texMap->UploadHeap)
         ));
         
-
-        // 复制数据到上传堆
         D3D12_SUBRESOURCE_DATA textureData = {};
-        textureData.pData = imageData;       // 图像数据
-        textureData.RowPitch = width * 4;    // 每行字节数
+        textureData.pData = imageData;       
+        textureData.RowPitch = width * 4;    
         textureData.SlicePitch = textureData.RowPitch * height;
 
-        // 将数据从上传堆复制到默认堆
         UpdateSubresources(m_CommandList.Get(), texMap->Resource.Get(), texMap->UploadHeap.Get(), 0, 0, 1, &textureData);
-
 		
 		m_Textures[texMap->Name] = std::move(texMap);
 	}		
@@ -772,11 +767,6 @@ void Renderer::LoadTextures()
    
         float* imageData = stbi_loadf(texMap->Filename.c_str(), &width, &height, &channels, 4);
 
-        //unsigned short* imageData = stbi_load_16(texMap->Filename.c_str(), &width, &height, &channels, 4);
-        
-        // DXGI_FORMAT_R16G16B16A16_FLOAT
-        // DXGI_FORMAT_R32G32B32A32_FLOAT
-        
         D3D12_RESOURCE_DESC textureDesc = {};
         textureDesc.MipLevels = 1;                     
         textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -792,7 +782,7 @@ void Renderer::LoadTextures()
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE,
             &textureDesc,
-            D3D12_RESOURCE_STATE_COPY_DEST,   // 初始状态为 COPY_DEST
+            D3D12_RESOURCE_STATE_COPY_DEST,  
             nullptr,
             IID_PPV_ARGS(&texMap->Resource)
         ));
@@ -801,11 +791,11 @@ void Renderer::LoadTextures()
         D3D12_RESOURCE_DESC uploadDesc = {};
         uploadDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
         uploadDesc.Alignment = 0;
-        uploadDesc.Width = uploadBufferSize;  // 数据总字节数（RGBA，每竵Efloat 占 4 字节）
+        uploadDesc.Width = uploadBufferSize;  
         uploadDesc.Height = 1;
         uploadDesc.DepthOrArraySize = 1;
         uploadDesc.MipLevels = 1;
-        uploadDesc.Format = DXGI_FORMAT_UNKNOWN; // 不需要格式
+        uploadDesc.Format = DXGI_FORMAT_UNKNOWN; 
         uploadDesc.SampleDesc.Count = 1;
         uploadDesc.SampleDesc.Quality = 0;
         uploadDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -820,13 +810,12 @@ void Renderer::LoadTextures()
             IID_PPV_ARGS(&texMap->UploadHeap)
         ));
 
-        // 复制数据到上传堆
+
         D3D12_SUBRESOURCE_DATA textureData = {};
-        textureData.pData = imageData;       // 图像数据
-        textureData.RowPitch = width * 4 * 4;    // 每行字节数
+        textureData.pData = imageData;      
+        textureData.RowPitch = width * 4 * 4;    
         textureData.SlicePitch = textureData.RowPitch * height;
 
-        // 将数据从上传堆复制到默认堆
         ATOM_INFO(UpdateSubresources(m_CommandList.Get(), texMap->Resource.Get(), texMap->UploadHeap.Get(), 0, 0, 1, &textureData));
 
         m_Textures[texMap->Name] = std::move(texMap);
@@ -854,7 +843,7 @@ void Renderer::BuildRootSignature()
      lutRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 16, 0);
 
      CD3DX12_DESCRIPTOR_RANGE postRange;
-     postRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 17, 0);
+     postRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 17, 0);
 
     // Root parameter can be a table, root descriptor or root constants.
     CD3DX12_ROOT_PARAMETER slotRootParameter[kNumRootBindings];
@@ -871,7 +860,7 @@ void Renderer::BuildRootSignature()
     slotRootParameter[kSpecularSrv].InitAsDescriptorTable(1, &specularRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kLUT].InitAsDescriptorTable(1, &lutRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kPostProcess].InitAsDescriptorTable(1, &postRange, D3D12_SHADER_VISIBILITY_PIXEL);
-
+  
     
 
 	auto staticSamplers = GetStaticSamplers();
@@ -1188,9 +1177,9 @@ void Renderer::BuildInputLayout()
 
 void Renderer::BuildShapeGeometry()
 {  
-    m_SkyBox.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),m_Device.Get(),m_CommandList.Get());
-    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/happy1.obj"),m_Device.Get(),m_CommandList.Get());
-    m_Ground.Load(std::string("D:/Atom/Atom/Assets/Models/cube.fbx"),m_Device.Get(),m_CommandList.Get());
+    m_SkyBox.Load(std::string("D:/Atom/Atom/Assets/Models/cube.obj"),m_Device.Get(),m_CommandList.Get());
+    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/ball.obj"),m_Device.Get(),m_CommandList.Get());
+    m_Ground.Load(std::string("D:/Atom/Atom/Assets/Models/plane.obj"),m_Device.Get(),m_CommandList.Get());
 
 }
 
@@ -1321,18 +1310,10 @@ void Renderer::BuildPSOs()
     // PSO for post process.
     //
     D3D12_GRAPHICS_PIPELINE_STATE_DESC ppPsoDesc = basePsoDesc;
-
-    // The camera is inside the sky sphere, so just turn off culling.
     ppPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-
-    // Make sure the depth function is LESS_EQUAL and not just LESS.  
-    // Otherwise, the normalized depth values at z = 1 (NDC) will 
-    // fail the depth test if the depth buffer was cleared to 1.
     ppPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     ppPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     ppPsoDesc.pRootSignature = m_RootSignature.Get();
-    //skyPsoDesc.InputLayout.NumElements = (UINT)mInputLayout_Pos_UV.size();
-    //skyPsoDesc.InputLayout.pInputElementDescs = mInputLayout_Pos_UV.data();
     ppPsoDesc.VS =
     {
         g_pPostProcessVS,sizeof(g_pPostProcessVS)
@@ -1344,6 +1325,20 @@ void Renderer::BuildPSOs()
     ThrowIfFailed(m_Device->CreateGraphicsPipelineState(&ppPsoDesc, IID_PPV_ARGS(&m_PSOs["postprocess"])));
 
 
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC bloomPsoDesc = basePsoDesc;
+    bloomPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    bloomPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    bloomPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    bloomPsoDesc.pRootSignature = m_RootSignature.Get();
+    bloomPsoDesc.VS =
+    {
+        g_pBloomVS,sizeof(g_pBloomVS)
+    };
+    bloomPsoDesc.PS =
+    {
+        g_pBloomPS,sizeof(g_pBloomPS)
+    };
+    ThrowIfFailed(m_Device->CreateGraphicsPipelineState(&bloomPsoDesc, IID_PPV_ARGS(&m_PSOs["bloom"])));
 
 }
 
@@ -1363,8 +1358,6 @@ void Renderer::DrawSceneToShadowMap()
     
     // Specify the buffers we are going to render to.
     m_CommandList->OMSetRenderTargets(0, nullptr, false, &mShadowMap->Dsv());
-
-        
 
     {
         __declspec(align(256)) struct
@@ -1436,35 +1429,85 @@ void Renderer::DrawSceneToShadowMap()
     m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
 
 
-    for (uint32_t meshIndex = 0; meshIndex < m_PbrModel.meshes.size(); meshIndex++)
+    m_PbrModel.Draw(m_CommandList.Get());
+
+
     {
-        m_CommandList->IASetVertexBuffers(0, 1, &m_PbrModel.meshes[meshIndex].vbv);
-        m_CommandList->IASetIndexBuffer(&m_PbrModel.meshes[meshIndex].ibv);
-        m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        m_CommandList->DrawIndexedInstanced(m_PbrModel.meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+        __declspec(align(256)) struct
+        {
+            XMFLOAT4X4 MVP;
+        } vsConstants;
+
+        const UINT64 bufferSize = sizeof(vsConstants);
+
+        ThrowIfFailed(m_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(meshBuffer.GetAddressOf())
+        ));
+
+        XMVECTOR lightPos = XMLoadFloat4(&mLightPosW);
+        // Only the first "main" light casts a shadow.
+        XMVECTOR targetPos = XMLoadFloat3(&mSceneBounds.Center);
+        targetPos = XMVectorSetW(targetPos, 1);
+        XMVECTOR lightUp = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+        XMMATRIX lightView = XMMatrixLookAtLH(lightPos, targetPos, lightUp);
+
+
+        // Transform bounding sphere to light space.
+        XMFLOAT3 sphereCenterLS;
+        XMStoreFloat3(&sphereCenterLS, XMVector3TransformCoord(targetPos, lightView));
+
+        // Ortho frustum in light space encloses scene.
+        float l = sphereCenterLS.x - mSceneBounds.Radius;
+        float b = sphereCenterLS.y - mSceneBounds.Radius;
+        float n = sphereCenterLS.z - mSceneBounds.Radius;
+        float r = sphereCenterLS.x + mSceneBounds.Radius;
+        float t = sphereCenterLS.y + mSceneBounds.Radius;
+        float f = sphereCenterLS.z + mSceneBounds.Radius;
+
+        XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
+
+        XMMATRIX viewProj = XMMatrixMultiply(lightView, lightProj);
+        XMMATRIX mvp = XMMatrixMultiply(m_GroundModelMatrix, viewProj);
+        XMStoreFloat4x4(&vsConstants.MVP, mvp);
+
+        // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
+        XMMATRIX T(
+            0.5f, 0.0f, 0.0f, 0.0f,
+            0.0f, -0.5f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.5f, 0.5f, 0.0f, 1.0f);
+
+        XMMATRIX S = lightView * lightProj * T;
+
+
+        XMStoreFloat4x4(&mShadowTransform, S);
+
+        BYTE* data = nullptr;
+        ThrowIfFailed(meshBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+
+
+        memcpy(data, &vsConstants, bufferSize);
+        meshBuffer->Unmap(0, nullptr);
     }
 
-    //// Draw Ground
-    //ObjectConstants groundOC;
-    //
-    //UINT ocSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-    //XMStoreFloat4x4(&groundOC.World, m_GroundModelMatrix);
-    //res->CopyData(1, groundOC);
-    //m_CommandList->SetGraphicsRoot32BitConstant(10, 1, 0);
-    //
-    //m_CommandList->SetGraphicsRootConstantBufferView(0, res->Resource()->GetGPUVirtualAddress() + ocSize);
-    //m_CommandList->IASetVertexBuffers(0, 1, &m_Ground.vbv);
-    //m_CommandList->IASetIndexBuffer(&m_Ground.ibv);
-    //m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    //m_CommandList->DrawIndexedInstanced(m_Ground.numElements, 1, 0, 0, 0);
-    
+
+    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
+
+
+    m_Ground.Draw(m_CommandList.Get());
+
     
     
     // Change back to GENERIC_READ so we can read the texture in a shader.
     m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mShadowMap->Resource(),
         D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_GENERIC_READ));
 }
-ComPtr<ID3D12Resource> globalCbuffer;
+
 void Renderer::DrawNormalsAndDepth()
 {
 	m_CommandList->RSSetViewports(1, &m_ScreenViewport);
@@ -1517,7 +1560,6 @@ void Renderer::DrawNormalsAndDepth()
     // Create Global Constant Buffer
     
     {
-        GlobalConstants globalBuffer = {};
         const UINT64 bufferSize = sizeof(GlobalConstants);
 
         ThrowIfFailed(m_Device->CreateCommittedResource(
@@ -1526,51 +1568,62 @@ void Renderer::DrawNormalsAndDepth()
             &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
-            IID_PPV_ARGS(globalCbuffer.GetAddressOf())
+            IID_PPV_ARGS(m_GlobalConstantsBuffer.GetAddressOf())
         ));
         BYTE* data = nullptr;
-        globalCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+        m_GlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
         XMMATRIX view = m_Camera.GetView();
         XMMATRIX proj = m_Camera.GetProj();
         XMMATRIX viewProj = XMMatrixMultiply(view, proj);
 
-        XMStoreFloat4x4(&globalBuffer.ViewMatrix, view);
-        XMStoreFloat4x4(&globalBuffer.ProjMatrix, proj);
-        XMStoreFloat4x4(&globalBuffer.ViewProjMatrix, viewProj);
-        globalBuffer.SunShadowMatrix = mShadowTransform;
-        globalBuffer.CameraPos = m_Camera.GetPosition3f();
-        globalBuffer.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z };
-        memcpy(data, &globalBuffer, bufferSize);
-        globalCbuffer->Unmap(0, nullptr);
+        XMStoreFloat4x4(&m_GlobalConstants.ViewMatrix, view);
+        XMStoreFloat4x4(&m_GlobalConstants.ProjMatrix, proj);
+        XMStoreFloat4x4(&m_GlobalConstants.ViewProjMatrix, viewProj);
+        m_GlobalConstants.SunShadowMatrix = mShadowTransform;
+        m_GlobalConstants.CameraPos = m_Camera.GetPosition3f();
+        m_GlobalConstants.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z };
+        memcpy(data, &m_GlobalConstants, bufferSize);
+        m_GlobalConstantsBuffer->Unmap(0, nullptr);
     }
 
 
-    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, globalCbuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_GlobalConstantsBuffer->GetGPUVirtualAddress());
     m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
  
-    for (uint32_t meshIndex = 0; meshIndex < m_PbrModel.meshes.size(); meshIndex++)
+    m_PbrModel.Draw(m_CommandList.Get());
+
+
     {
-        m_CommandList->IASetVertexBuffers(0, 1, &m_PbrModel.meshes[meshIndex].vbv);
-        m_CommandList->IASetIndexBuffer(&m_PbrModel.meshes[meshIndex].ibv);
-        m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        m_CommandList->DrawIndexedInstanced(m_PbrModel.meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+        __declspec(align(256)) struct
+        {
+            XMFLOAT4X4 model;
+        } vsConstants;
+
+        const UINT64 bufferSize = sizeof(vsConstants);
+
+        ThrowIfFailed(m_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(meshBuffer.GetAddressOf())
+        ));
+
+        XMStoreFloat4x4(&vsConstants.model, m_GroundModelMatrix);
+
+        BYTE* data = nullptr;
+        ThrowIfFailed(meshBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+
+
+        memcpy(data, &vsConstants, bufferSize);
+        meshBuffer->Unmap(0, nullptr);
     }
+    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_GlobalConstantsBuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
 
-    // // Draw Ground
-    // ObjectConstants groundOC;
-    // 
-    // UINT ocSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-    // XMStoreFloat4x4(&groundOC.World, m_GroundModelMatrix);
-    // res->CopyData(1, groundOC);
-    // m_CommandList->SetGraphicsRoot32BitConstant(10, 1, 0);
-    // 
-    // m_CommandList->SetGraphicsRootConstantBufferView(0, res->Resource()->GetGPUVirtualAddress() + ocSize);
-    // m_CommandList->IASetVertexBuffers(0, 1, &m_Ground.vbv);
-    // m_CommandList->IASetIndexBuffer(&m_Ground.ibv);
-    // m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    // m_CommandList->DrawIndexedInstanced(m_Ground.numElements, 1, 0, 0, 0);
-
+    m_Ground.Draw(m_CommandList.Get());
 
 
     // Change back to GENERIC_READ so we can read the texture in a shader.
@@ -1589,7 +1642,7 @@ void Renderer::CreateColorBufferView()
     desc.Format = mBackBufferFormat;
     desc.MipLevels = 1;
     desc.DepthOrArraySize = 1;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET; // 允喧楝时作为 RTV 和 SRV;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET; 
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
 
@@ -1601,6 +1654,14 @@ void Renderer::CreateColorBufferView()
         nullptr,
         IID_PPV_ARGS(&m_ColorBuffer)));
 
+    ThrowIfFailed(m_Device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        D3D12_HEAP_FLAG_NONE,
+        &desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_ColorBufferBright)));
+
     // Create rtv
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
     rtvDesc.Format = mBackBufferFormat;
@@ -1609,11 +1670,18 @@ void Renderer::CreateColorBufferView()
     rtvDesc.Texture2D.PlaneSlice = 0;
 
     m_ColorBufferRtvHandle = GetCpuHandle(m_RtvHeap.Get(), 2);
+    m_ColorBufferBrightRtvHandle = GetCpuHandle(m_RtvHeap.Get(), 3);
 
     m_Device->CreateRenderTargetView(
         m_ColorBuffer.Get(),
         &rtvDesc,
         m_ColorBufferRtvHandle
+    );
+
+    m_Device->CreateRenderTargetView(
+        m_ColorBufferBright.Get(),
+        &rtvDesc,
+        m_ColorBufferBrightRtvHandle
     );
 
     // Create srv
@@ -1631,13 +1699,13 @@ void Renderer::CreateColorBufferView()
         m_ColorBuffer.Get(),
         &srvDesc,
         srvHandle);
-
+    srvHandle.Offset(Graphics::CbvSrvUavDescriptorSize);
+    m_Device->CreateShaderResourceView(
+        m_ColorBufferBright.Get(),
+        &srvDesc,
+        srvHandle);
 }
-ComPtr<ID3D12RootSignature> computeRS;
-ComPtr<ID3D12PipelineState> cubePso;
-ComPtr<ID3D12PipelineState> irMapPso;
-ComPtr<ID3D12PipelineState> spMapPso;
-ComPtr<ID3D12PipelineState> lutPso;
+
 
 void Renderer::CreateCubeMap()
 {
@@ -1826,12 +1894,6 @@ void Renderer::CreateCubeMap()
     }
 }
 
-void Renderer::CreateIBL()
-{
-
-    
-
-}
 
 D3D12_CPU_DESCRIPTOR_HANDLE Renderer::CreateTextureUav(ID3D12Resource* res, UINT mipSlice)
 {
