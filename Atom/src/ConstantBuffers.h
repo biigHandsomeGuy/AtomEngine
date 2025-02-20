@@ -16,7 +16,6 @@ __declspec(align(256)) struct GlobalConstants
     DirectX::XMFLOAT3 CameraPos = { 0.0f, 0.0f, 0.0f };
     float pad0 = 0;
     DirectX::XMFLOAT3 SunPos = { 0.0f, 0.0f, 0.0f };
-    
 };
 
 __declspec(align(256)) struct SsaoConstants
@@ -64,6 +63,6 @@ namespace PostProcess
 {
     __declspec(align(256)) struct RenderAttribs
     {
-        float exposure = 0.5f;
+        float exposure = 2.0f;
     };
 }
