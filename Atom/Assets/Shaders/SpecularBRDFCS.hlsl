@@ -1,10 +1,3 @@
-
-// Copyright (c) 2017-2018 Micha? Siejak
-
-// Pre-integrates Cook-Torrance specular BRDF for varying roughness and viewing directions.
-// Results are saved into 2D LUT texture in the form of DFG1 and DFG2 split-sum approximation terms,
-// which act as a scale and bias to F0 (Fresnel reflectance at normal incidence) during rendering.
-
 static const float PI = 3.141592;
 static const float TwoPI = 2 * PI;
 static const float Epsilon = 0.001; // This program needs larger eps.
@@ -14,8 +7,6 @@ static const float InvNumSamples = 1.0 / float(NumSamples);
 
 RWTexture2D<float2> LUT : register(u0);
 
-// Compute Van der Corput radical inverse
-// See: http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
 float radicalInverse_VdC(uint bits)
 {
 	bits = (bits << 16u) | (bits >> 16u);
@@ -26,7 +17,6 @@ float radicalInverse_VdC(uint bits)
 	return float(bits) * 2.3283064365386963e-10; // / 0x100000000
 }
 
-// Sample i-th point from Hammersley point set of NumSamples points total.
 float2 sampleHammersley(uint i)
 {
 	return float2(i * InvNumSamples, radicalInverse_VdC(i));

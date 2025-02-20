@@ -1,9 +1,3 @@
-// Physically Based Rendering
-// Copyright (c) 2017-2018 Micha? Siejak
-
-// Computes diffuse irradiance cubemap convolution for image-based lighting.
-// Uses quasi Monte Carlo sampling with Hammersley sequence.
-
 static const float PI = 3.141592;
 static const float TwoPI = 2 * PI;
 static const float Epsilon = 0.00001;
@@ -16,8 +10,7 @@ RWTexture2DArray<float4> outputTexture : register(u0);
 
 SamplerState defaultSampler : register(s0);
 
-// Compute Van der Corput radical inverse
-// See: http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
+
 float radicalInverse_VdC(uint bits)
 {
 	bits = (bits << 16u) | (bits >> 16u);
@@ -28,25 +21,17 @@ float radicalInverse_VdC(uint bits)
 	return float(bits) * 2.3283064365386963e-10; // / 0x100000000
 }
 
-// Sample i-th point from Hammersley point set of NumSamples points total.
 float2 sampleHammersley(uint i)
 {
 	return float2(i * InvNumSamples, radicalInverse_VdC(i));
 }
 
-// Uniformly sample point on a hemisphere.
-// Cosine-weighted sampling would be a better fit for Lambertian BRDF but since this
-// compute shader runs only once as a pre-processing step performance is not *that* important.
-// See: "Physically Based Rendering" 2nd ed., section 13.6.1.
 float3 sampleHemisphere(float u1, float u2)
 {
 	const float u1p = sqrt(max(0.0, 1.0 - u1*u1));
 	return float3(cos(TwoPI*u2) * u1p, sin(TwoPI*u2) * u1p, u1);
 }
 
-// Calculate normalized sampling direction vector based on current fragment coordinates.
-// This is essentially "inverse-sampling": we reconstruct what the sampling vector would be if we wanted it to "hit"
-// this particular fragment in a cubemap.
 float3 getSamplingVector(uint3 ThreadID)
 {
 	float outputWidth, outputHeight, outputDepth;
