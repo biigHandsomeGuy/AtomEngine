@@ -1,6 +1,7 @@
 cbuffer VSConstant : register(b0)
 {
     float4x4 gModel;
+    float4x4 gNormalMatrix;
 }
 
 cbuffer GlobalConstants : register(b1)
@@ -33,7 +34,7 @@ VertexOut main(VertexIn vin)
 
     // Assumes nonuniform scaling; otherwise, need to use inverse-transpose of world matrix.
     // vout.NormalW = mul((float3x3)gWorld, vin.NormalL);
-    vout.NormalW = vin.NormalL;
+    vout.NormalW = mul(gNormalMatrix, vin.NormalL);
     
     // Transform to homogeneous clip space.
 

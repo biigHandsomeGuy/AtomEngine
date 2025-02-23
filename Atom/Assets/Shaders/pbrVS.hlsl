@@ -4,6 +4,7 @@
 cbuffer MeshConstants : register(b0)
 {
     float4x4 gWorldMatrix;
+    float4x4 gNormalMatrix;
     float4x4 gViewProjTex;
 };
 
@@ -61,7 +62,7 @@ VertexOut main(VertexIn vin)
 	// Output vertex attributes for interpolation across triangle.
     vout.TexC = float2(vin.TexC.x, 1 - vin.TexC.y);
 
-    vout.Normal = vin.NormalL;
+    vout.Normal = mul(gNormalMatrix, vin.NormalL);
     vout.Tangent = vin.Tangent;
     // Generate projective tex-coords to project shadow map onto scene.
     vout.ShadowPosH = mul(gSunShadowMatrix, posW);

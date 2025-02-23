@@ -6,9 +6,10 @@
 #include "Camera.h"
 #include "ShadowMap.h"
 #include "Ssao.h"
-#include "Mesh.h"
+
 #include "d3dUtil.h"
-#include "Texture.h"
+#include "Scene.h"
+#include "SkyBox.h"
 #include <DirectXCollision.h>
 
 
@@ -84,6 +85,8 @@ private:
     void UpdateSsaoCB(const GameTimer& gt);
     void UpdateUI();
 
+    void InitConstantBuffer();
+
     void LoadTextures();
     void BuildRootSignature();
     void BuildDescriptorHeaps();
@@ -103,10 +106,10 @@ private:
     ComPtr<ID3D12DescriptorHeap> m_SrvDescriptorHeap = nullptr;
 
 
-    std::unordered_map<std::string, std::unique_ptr<Texture>> m_Textures;
     std::unordered_map<std::string, ComPtr<ID3DBlob>> m_Shaders;
     std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> m_PSOs;
-
+    std::unordered_map<std::string, std::unique_ptr<Texture>> m_Textures;
+    
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
     CD3DX12_GPU_DESCRIPTOR_HANDLE mNullSrv;
@@ -140,15 +143,9 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_ColorBufferBrightRtvHandle;
 
 
-
-    Model m_PbrModel;
-    Model m_SkyBox;
-    Model m_Ground;
-
     BYTE* data = nullptr;
 
-    XMMATRIX m_pbrModelMatrix;
-    XMMATRIX m_GroundModelMatrix;
+
     bool isColorBufferInit = false;
     std::unique_ptr<Ssao> mSsao;
 
@@ -157,8 +154,23 @@ private:
     PostProcess::RenderAttribs m_ppAttribs;
 
 
-    ComPtr<ID3D12Resource> m_GlobalConstantsBuffer;
-    GlobalConstants m_GlobalConstants = {};
+    ComPtr<ID3D12Resource> m_ShadowPassGlobalConstantsBuffer;
+    ComPtr<ID3D12Resource> m_LightPassGlobalConstantsBuffer;
+    std::vector < ComPtr<ID3D12Resource>> m_MaterialConstantsBuffers;
+    GlobalConstants m_ShadowPassGlobalConstants = {};
+    GlobalConstants m_LightPassGlobalConstants = {};
+    std::vector<MeshConstants> m_MeshConstants;
+    std::vector<ComPtr<ID3D12Resource>> m_MeshConstantsBuffers;
+
+    std::vector < MaterialConstants> m_MaterialConstants;
+
+    const UINT64 GlobalConstantsBufferSize = sizeof(GlobalConstants);
+    const UINT64 MeshConstantsBufferSize = sizeof(MeshConstants);
+    const UINT64 MaterialConstantsBufferSize = sizeof(MaterialConstants);
+
+
+    Scene m_Scene;
+    SkyBox m_SkyBox;
 };
 
 namespace

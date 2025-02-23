@@ -165,7 +165,7 @@ float4 main(VertexOut pin) : SV_Target
      
     if (UseShadow)
     {
-        shadowFactor = CalcShadowFactor(pin.ShadowPosH);
+        shadowFactor = CalcShadowFactorPCSS(pin.ShadowPosH);
     }
 
     float3 ambientLighting = 1;
@@ -230,7 +230,7 @@ float GeometrySchlickGGX(float NdotV, float roughness)
 }
 // ----------------------------------------------------------------------------
 float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
-{
+{ 
     float NdotV = max(dot(N, V), 0.0);
     float NdotL = max(dot(N, L), 0.0);
     float ggx2 = GeometrySchlickGGX(NdotV, roughness);

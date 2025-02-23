@@ -1,21 +1,19 @@
 #include "pch.h"
-#include "Mesh.h"
+#include "Model.h"
+
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
-
-
 #include "d3dUtil.h"
+#include <Atom/Log.h>
 
 using namespace DirectX;
 
 namespace
 {
-    const unsigned int ImportFlags =
-        aiProcess_CalcTangentSpace | aiProcess_Triangulate;
+	const unsigned int ImportFlags =
+		aiProcess_CalcTangentSpace | aiProcess_Triangulate;
 }
-
-
 void Model::Load(const std::string& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
 {
 	Assimp::Importer importer;
@@ -32,19 +30,16 @@ void Model::Load(const std::string& filepath, ID3D12Device* device, ID3D12Graphi
 	ProcessNode(scene->mRootNode, scene, XMMatrixIdentity(), device, commandList);
 }
 
-//void Model::Render(ID3D12GraphicsCommandList* commandList)
-//{
-//	for (const auto& mesh : meshes) {
-//		// 设置变换矩阵到常量缓冲区（此部分根据你的实现设置变换）
-//		SetTransform(mesh.Transform, commandList);
-//
-//		// 绑定缓冲区并绘制
-//		commandList->IASetVertexBuffers(0, 1, &mesh.VertexBufferView);
-//		commandList->IASetIndexBuffer(&mesh.IndexBufferView);
-//		commandList->DrawIndexedInstanced(static_cast<UINT>(mesh.Indices.size()), 1, 0, 0, 0);
-//	}
-//
-//}
+void Model::Draw(ID3D12GraphicsCommandList* commandList)
+{
+	for (uint32_t meshIndex = 0; meshIndex < meshes.size(); meshIndex++)
+	{
+		commandList->IASetVertexBuffers(0, 1, &meshes[meshIndex].vbv);
+		commandList->IASetIndexBuffer(&meshes[meshIndex].ibv);
+		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		commandList->DrawIndexedInstanced(meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+	}
+}
 
 void Model::ProcessNode(aiNode* node, const aiScene* scene, const XMMATRIX& parentTransform, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
 {
@@ -56,8 +51,13 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const XMMATRIX& pare
 		aiTransform.a4, aiTransform.b4, aiTransform.c4, aiTransform.d4));
 	XMMATRIX globalTransform = XMMatrixMultiply(localTransform, parentTransform);
 
+
+
 	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+		aiMaterial* material = scene->mMaterials[node->mMeshes[i]];
 		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+		auto matname = material->GetName();
+		ATOM_INFO(matname.C_Str());
 		meshes.push_back(ProcessMesh(mesh, globalTransform, device, commandList));
 	}
 
@@ -137,4 +137,5 @@ Mesh Model::ProcessMesh(aiMesh* mesh, const XMMATRIX& transform, ID3D12Device* d
 
 	return newMesh;
 }
+
 

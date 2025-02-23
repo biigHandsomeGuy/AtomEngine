@@ -49,7 +49,7 @@ using namespace Microsoft::WRL;
 using namespace VS;
 using namespace PS;
 using namespace CS;
-
+using namespace DirectX;
 SsaoConstants ssaoCB; 
 
 Application* CreateApplication(HINSTANCE hInstance)
@@ -61,30 +61,14 @@ Application* CreateApplication(HINSTANCE hInstance)
 Renderer::Renderer(HINSTANCE hInstance)
     : Application(hInstance)
 {    
-    mSceneBounds.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
-    mSceneBounds.Radius = 15;
-}
-
-Renderer::~Renderer()
-{
-    if(m_Device != nullptr)
-        FlushCommandQueue();
-
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
-}
-
-bool Renderer::Initialize()
-{
     ATOM_INFO("Render Initialize");
-    
-    if(!Application::Initialize())
-        return false;
+
+    Application::Initialize();
+
 
     ThrowIfFailed(m_CommandList->Reset(m_CommandAllocator.Get(), nullptr));
 
-	m_Camera.SetPosition(0.0f, 2.0f, -5.0f);
+    m_Camera.SetPosition(0.0f, 2.0f, -5.0f);
     XMVECTOR lightPos = XMLoadFloat4(&XMFLOAT4{ 0.0f, 5.0f, 2.0f, 1.0f });
     XMStoreFloat4(&mLightPosW, lightPos);
     mShadowMap = std::make_unique<ShadowMap>(m_Device.Get(),
@@ -95,19 +79,16 @@ bool Renderer::Initialize()
         m_CommandList.Get(),
         mClientWidth, mClientHeight);
     mSsao->Initialize();
-   
-    m_pbrModelMatrix = XMMatrixScaling(1, 1, 1);
-    m_pbrModelMatrix *= XMMatrixTranslation(0, 1, 0);  
-    m_GroundModelMatrix = XMMatrixTranslation(0, 0, 0);
 
-	LoadTextures();
+   
+    LoadTextures();
     BuildRootSignature();
-	BuildDescriptorHeaps();
+    BuildDescriptorHeaps();
     BuildInputLayout();
     BuildShapeGeometry();
-
+    
     CreateCubeMap();
-   
+
     BuildPSOs();
 
     // Execute the initialization commands.
@@ -119,7 +100,7 @@ bool Renderer::Initialize()
     FlushCommandQueue();
 
     {
-        computeRS.Reset();   
+        computeRS.Reset();
         cubePso.Reset();
         irMapPso.Reset();
         spMapPso.Reset();
@@ -146,6 +127,46 @@ bool Renderer::Initialize()
         handle,
         GpuHandle);
 
+
+    Model skyBox, pbrModel, ground;
+
+    skyBox.Load(std::string("D:/Atom/Atom/Assets/Models/cube.obj"), m_Device.Get(), m_CommandList.Get());
+    pbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/ball.obj"), m_Device.Get(), m_CommandList.Get());
+    ground.Load(std::string("D:/Atom/Atom/Assets/Models/plane.obj"), m_Device.Get(), m_CommandList.Get());
+
+    //pbrModel.modelMatrix = XMMatrixScaling(1, 1, 1);
+    pbrModel.modelMatrix = XMMatrixTranslation(0, 1, 0);
+    ground.modelMatrix = XMMatrixTranslation(0, 0, 0);
+
+    pbrModel.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel.modelMatrix));
+    ground.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, ground.modelMatrix));
+  
+    m_SkyBox.model = std::move(skyBox);
+    m_Scene.Models.push_back(std::move(pbrModel));
+    m_Scene.Models.push_back(std::move(ground));
+
+    m_MeshConstants.resize(m_Scene.Models.size());
+    m_MeshConstantsBuffers.resize(m_Scene.Models.size());
+    m_MaterialConstants.resize(m_Scene.Models.size());
+    m_MaterialConstantsBuffers.resize(m_Scene.Models.size());
+    InitConstantBuffer();
+    mSceneBounds.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
+    mSceneBounds.Radius = 15;
+}
+
+Renderer::~Renderer()
+{
+    if(m_Device != nullptr)
+        FlushCommandQueue();
+
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+}
+
+bool Renderer::Initialize()
+{
+    
     return true;
 }
 
@@ -263,37 +284,9 @@ void Renderer::Draw(const GameTimer& gt)
 
     // Create Global Constant Buffer
     
-    {                
-        const UINT64 bufferSize = sizeof(GlobalConstants);
+   
 
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(m_GlobalConstantsBuffer.GetAddressOf())
-        ));
-        BYTE* data = nullptr;
-        m_GlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-        XMMATRIX view = m_Camera.GetView();
-        XMMATRIX proj = m_Camera.GetProj();
-        XMMATRIX viewProj = XMMatrixMultiply(view, proj);
-
-        XMStoreFloat4x4(&m_GlobalConstants.ViewMatrix, view);
-        XMStoreFloat4x4(&m_GlobalConstants.ProjMatrix, proj);
-        XMStoreFloat4x4(&m_GlobalConstants.ViewProjMatrix, viewProj);
-        m_GlobalConstants.SunShadowMatrix = mShadowTransform;
-        m_GlobalConstants.CameraPos = m_Camera.GetPosition3f();
-        m_GlobalConstants.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z};
-
-
-        memcpy(data, &m_GlobalConstants, bufferSize);
-        m_GlobalConstantsBuffer->Unmap(0, nullptr);
-    }
-
-    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_GlobalConstantsBuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
 
 
     auto skyTexDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::ShpereMapHeap));
@@ -314,61 +307,9 @@ void Renderer::Draw(const GameTimer& gt)
     
     m_CommandList->SetPipelineState(m_PSOs["opaque"].Get());
 
-    ComPtr<ID3D12Resource> meshCbuffer;
-    {
-        __declspec(align(256)) struct MeshConstants
-        {
-            DirectX::XMFLOAT4X4 World;
-            DirectX::XMFLOAT4X4 ViewProjTex;
-        } meshConstants;
 
-        XMStoreFloat4x4(&meshConstants.World, m_pbrModelMatrix);
-        XMMATRIX T(
-            0.5f, 0.0f, 0.0f, 0.0f,
-            0.0f, -0.5f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.5f, 0.5f, 0.0f, 1.0f);
-        XMMATRIX viewProjTex = m_Camera.GetView() * m_Camera.GetProj() * T;
-        XMStoreFloat4x4(&meshConstants.ViewProjTex, viewProjTex);
-       
-        const UINT64 bufferSize = sizeof(MeshConstants);
+    
 
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(meshCbuffer.GetAddressOf())
-        ));
-        BYTE* data = nullptr;
-        meshCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-        memcpy(data, &meshConstants, bufferSize);
-        meshCbuffer->Unmap(0, nullptr);
-    }
-
-    // material cbuffer
-    ComPtr<ID3D12Resource> materialCbuffer;
-    {
-        MaterialConstants materialBuffer = {};
-        const UINT64 bufferSize = sizeof(MaterialConstants);
-
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(materialCbuffer.GetAddressOf())
-        ));
-        BYTE* data = nullptr;
-        materialCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-        materialBuffer.gMatIndex = 0;
-        memcpy(data, &materialBuffer, bufferSize);
-        materialCbuffer->Unmap(0, nullptr);
-    }
     
     // shaderParameter cbuffer
     ComPtr<ID3D12Resource> shaderParamsCbuffer;
@@ -389,86 +330,41 @@ void Renderer::Draw(const GameTimer& gt)
         memcpy(data, &m_ShaderAttribs, bufferSize);
         shaderParamsCbuffer->Unmap(0, nullptr);
     }
-    m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, materialCbuffer->GetGPUVirtualAddress());
     m_CommandList->SetGraphicsRootConstantBufferView(kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
-    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshCbuffer->GetGPUVirtualAddress());
-    m_PbrModel.Draw(m_CommandList.Get());
 
+    for (int i = 0; i < m_Scene.Models.size(); i++)
     {
-        __declspec(align(256)) struct MeshConstants
         {
-            DirectX::XMFLOAT4X4 World;
-            DirectX::XMFLOAT4X4 ViewProjTex;
-        } meshConstants;
+            BYTE* data = nullptr;
+            m_MaterialConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
-        XMStoreFloat4x4(&meshConstants.World, m_GroundModelMatrix);
-        XMMATRIX T(
-            0.5f, 0.0f, 0.0f, 0.0f,
-            0.0f, -0.5f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.5f, 0.5f, 0.0f, 1.0f);
-        XMMATRIX viewProjTex = m_Camera.GetView() * m_Camera.GetProj() * T;
-        XMStoreFloat4x4(&meshConstants.ViewProjTex, viewProjTex);
+            m_MaterialConstants[i].gMatIndex = i;
+            memcpy(data, &m_MaterialConstants[i].gMatIndex, MaterialConstantsBufferSize);
+            m_MaterialConstantsBuffers[i]->Unmap(0, nullptr);
 
-        const UINT64 bufferSize = sizeof(MeshConstants);
+        }
+        {
+            XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
+            XMStoreFloat4x4(&m_MeshConstants[i].NormalMatrix, m_Scene.Models[i].normalMatrix);
+            XMMATRIX T(
+                0.5f, 0.0f, 0.0f, 0.0f,
+                0.0f, -0.5f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f,
+                0.5f, 0.5f, 0.0f, 1.0f);
+            XMMATRIX viewProjTex = m_Camera.GetView() * m_Camera.GetProj() * T;
+            XMStoreFloat4x4(&m_MeshConstants[i].ViewProjTex, viewProjTex);
 
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(meshCbuffer.GetAddressOf())
-        ));
-        BYTE* data = nullptr;
-        meshCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+            BYTE* data = nullptr;
+            m_MeshConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
-        memcpy(data, &meshConstants, bufferSize);
-        meshCbuffer->Unmap(0, nullptr);
-    }
+            memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
+            m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
+        }
+        m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
+        m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, m_MaterialConstantsBuffers[i]->GetGPUVirtualAddress());
 
-    {
-        MaterialConstants materialBuffer = {};
-        const UINT64 bufferSize = sizeof(MaterialConstants);
-
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(materialCbuffer.GetAddressOf())
-        ));
-        BYTE* data = nullptr;
-        materialCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-        materialBuffer.gMatIndex = 1;
-        memcpy(data, &materialBuffer, bufferSize);
-        materialCbuffer->Unmap(0, nullptr);
-    }
-
-    {
-        const UINT64 bufferSize = sizeof(ShaderParams);
-
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(shaderParamsCbuffer.GetAddressOf())
-        ));
-        BYTE* data = nullptr;
-        shaderParamsCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-        memcpy(data, &m_ShaderAttribs, bufferSize);
-        shaderParamsCbuffer->Unmap(0, nullptr);
-    }
-    m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, materialCbuffer->GetGPUVirtualAddress());
-    m_CommandList->SetGraphicsRootConstantBufferView(kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
-    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshCbuffer->GetGPUVirtualAddress());
-    m_Ground.Draw(m_CommandList.Get());
-
+        m_Scene.Models[i].Draw(m_CommandList.Get());
+    }   
 
     // material cbuffer
     ComPtr<ID3D12Resource> envMapBuffer;
@@ -492,7 +388,7 @@ void Renderer::Draw(const GameTimer& gt)
     m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
    
     m_CommandList->SetPipelineState(m_PSOs["sky"].Get());
-    m_SkyBox.Draw(m_CommandList.Get());
+    m_SkyBox.model.Draw(m_CommandList.Get());
 
     // pick bright
     {
@@ -668,6 +564,52 @@ void Renderer::UpdateUI()
 
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
         ImGui::End();
+    }
+}
+
+void Renderer::InitConstantBuffer()
+{
+    ThrowIfFailed(m_Device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(GlobalConstantsBufferSize),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(m_LightPassGlobalConstantsBuffer.GetAddressOf())
+    ));
+
+    ThrowIfFailed(m_Device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(GlobalConstantsBufferSize),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(m_ShadowPassGlobalConstantsBuffer.GetAddressOf())
+    ));
+
+    for (int i = 0; i < m_Scene.Models.size(); i++)
+    {
+        ThrowIfFailed(m_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(MeshConstantsBufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(m_MeshConstantsBuffers[i].GetAddressOf())
+        ));
+    }
+
+    
+    for (int i = 0; i < m_Scene.Models.size(); i++)
+    {
+        ThrowIfFailed(m_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(MaterialConstantsBufferSize),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(m_MaterialConstantsBuffers[i].GetAddressOf())
+        ));
     }
 }
 
@@ -1177,10 +1119,7 @@ void Renderer::BuildInputLayout()
 
 void Renderer::BuildShapeGeometry()
 {  
-    m_SkyBox.Load(std::string("D:/Atom/Atom/Assets/Models/cube.obj"),m_Device.Get(),m_CommandList.Get());
-    m_PbrModel.Load(std::string("D:/Atom/Atom/Assets/Models/ball.obj"),m_Device.Get(),m_CommandList.Get());
-    m_Ground.Load(std::string("D:/Atom/Atom/Assets/Models/plane.obj"),m_Device.Get(),m_CommandList.Get());
-
+    
 }
 
 void Renderer::BuildPSOs()
@@ -1342,7 +1281,6 @@ void Renderer::BuildPSOs()
 
 }
 
-ComPtr<ID3D12Resource> meshBuffer;
 void Renderer::DrawSceneToShadowMap()
 {
     m_CommandList->RSSetViewports(1, &mShadowMap->Viewport());
@@ -1359,31 +1297,16 @@ void Renderer::DrawSceneToShadowMap()
     // Specify the buffers we are going to render to.
     m_CommandList->OMSetRenderTargets(0, nullptr, false, &mShadowMap->Dsv());
 
-    {
-        __declspec(align(256)) struct
-        {
-            XMFLOAT4X4 MVP;
-        } vsConstants;
-
-        const UINT64 bufferSize = sizeof(vsConstants);
-
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(meshBuffer.GetAddressOf())
-        ));
-        
+    
+    {        
         XMVECTOR lightPos = XMLoadFloat4(&mLightPosW);
         // Only the first "main" light casts a shadow.
         XMVECTOR targetPos = XMLoadFloat3(&mSceneBounds.Center);
         targetPos = XMVectorSetW(targetPos, 1);
         XMVECTOR lightUp = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
         XMMATRIX lightView = XMMatrixLookAtLH(lightPos, targetPos, lightUp);
-       
-       
+        XMStoreFloat4x4(&m_ShadowPassGlobalConstants.ViewMatrix, lightView);
+      
         // Transform bounding sphere to light space.
         XMFLOAT3 sphereCenterLS;
         XMStoreFloat3(&sphereCenterLS, XMVector3TransformCoord(targetPos, lightView));
@@ -1397,111 +1320,40 @@ void Renderer::DrawSceneToShadowMap()
         float f = sphereCenterLS.z + mSceneBounds.Radius;
 
         XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
+        XMStoreFloat4x4(&m_ShadowPassGlobalConstants.ProjMatrix, lightProj);
+
         
-        XMMATRIX viewProj = XMMatrixMultiply(lightView, lightProj);
-        XMMATRIX mvp = XMMatrixMultiply(m_pbrModelMatrix, viewProj);
-        XMStoreFloat4x4(&vsConstants.MVP, mvp);
-        
-		     // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
-        XMMATRIX T(
-         0.5f, 0.0f, 0.0f, 0.0f,
-         0.0f, -0.5f, 0.0f, 0.0f,
-         0.0f, 0.0f, 1.0f, 0.0f,
-         0.5f, 0.5f, 0.0f, 1.0f);
-
-        XMMATRIX S = lightView * lightProj * T;
-
-
-        XMStoreFloat4x4(&mShadowTransform, S);
-
         BYTE* data = nullptr;
-        ThrowIfFailed(meshBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+        ThrowIfFailed(m_ShadowPassGlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
 
-
-        memcpy(data, &vsConstants, bufferSize);
-        meshBuffer->Unmap(0, nullptr);
+        memcpy(data, &m_ShadowPassGlobalConstants, GlobalConstantsBufferSize);
+        m_ShadowPassGlobalConstantsBuffer->Unmap(0, nullptr);
     }
 
     m_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
 
     m_CommandList->SetPipelineState(m_PSOs["shadow_opaque"].Get());
     
-    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
+    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_ShadowPassGlobalConstantsBuffer->GetGPUVirtualAddress());
 
-
-    m_PbrModel.Draw(m_CommandList.Get());
-
-
+    for (int i = 0; i < m_Scene.Models.size(); i++)
     {
-        __declspec(align(256)) struct
         {
-            XMFLOAT4X4 MVP;
-        } vsConstants;
+            XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
 
-        const UINT64 bufferSize = sizeof(vsConstants);
+            BYTE* data = nullptr;
+            m_MeshConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(meshBuffer.GetAddressOf())
-        ));
+            memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
+            m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
+        }
 
-        XMVECTOR lightPos = XMLoadFloat4(&mLightPosW);
-        // Only the first "main" light casts a shadow.
-        XMVECTOR targetPos = XMLoadFloat3(&mSceneBounds.Center);
-        targetPos = XMVectorSetW(targetPos, 1);
-        XMVECTOR lightUp = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-        XMMATRIX lightView = XMMatrixLookAtLH(lightPos, targetPos, lightUp);
+        m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
+        m_Scene.Models[i].Draw(m_CommandList.Get());
 
-
-        // Transform bounding sphere to light space.
-        XMFLOAT3 sphereCenterLS;
-        XMStoreFloat3(&sphereCenterLS, XMVector3TransformCoord(targetPos, lightView));
-
-        // Ortho frustum in light space encloses scene.
-        float l = sphereCenterLS.x - mSceneBounds.Radius;
-        float b = sphereCenterLS.y - mSceneBounds.Radius;
-        float n = sphereCenterLS.z - mSceneBounds.Radius;
-        float r = sphereCenterLS.x + mSceneBounds.Radius;
-        float t = sphereCenterLS.y + mSceneBounds.Radius;
-        float f = sphereCenterLS.z + mSceneBounds.Radius;
-
-        XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
-
-        XMMATRIX viewProj = XMMatrixMultiply(lightView, lightProj);
-        XMMATRIX mvp = XMMatrixMultiply(m_GroundModelMatrix, viewProj);
-        XMStoreFloat4x4(&vsConstants.MVP, mvp);
-
-        // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
-        XMMATRIX T(
-            0.5f, 0.0f, 0.0f, 0.0f,
-            0.0f, -0.5f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.5f, 0.5f, 0.0f, 1.0f);
-
-        XMMATRIX S = lightView * lightProj * T;
-
-
-        XMStoreFloat4x4(&mShadowTransform, S);
-
-        BYTE* data = nullptr;
-        ThrowIfFailed(meshBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
-
-
-        memcpy(data, &vsConstants, bufferSize);
-        meshBuffer->Unmap(0, nullptr);
     }
 
-
-    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
-
-
-    m_Ground.Draw(m_CommandList.Get());
-
-    
+   
     
     // Change back to GENERIC_READ so we can read the texture in a shader.
     m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mShadowMap->Resource(),
@@ -1532,99 +1384,43 @@ void Renderer::DrawNormalsAndDepth()
     m_CommandList->SetPipelineState(m_PSOs["drawNormals"].Get());
     
     {
-        __declspec(align(256)) struct
-        {
-            XMFLOAT4X4 model;
-        } vsConstants;
-
-        const UINT64 bufferSize = sizeof(vsConstants);
-
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(meshBuffer.GetAddressOf())
-        ));
-
-        XMStoreFloat4x4(&vsConstants.model, m_pbrModelMatrix);
-
         BYTE* data = nullptr;
-        ThrowIfFailed(meshBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
-
-
-        memcpy(data, &vsConstants, bufferSize);
-        meshBuffer->Unmap(0, nullptr);
-    }
-    // Create Global Constant Buffer
-    
-    {
-        const UINT64 bufferSize = sizeof(GlobalConstants);
-
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(m_GlobalConstantsBuffer.GetAddressOf())
-        ));
-        BYTE* data = nullptr;
-        m_GlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+        m_LightPassGlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
         XMMATRIX view = m_Camera.GetView();
         XMMATRIX proj = m_Camera.GetProj();
         XMMATRIX viewProj = XMMatrixMultiply(view, proj);
 
-        XMStoreFloat4x4(&m_GlobalConstants.ViewMatrix, view);
-        XMStoreFloat4x4(&m_GlobalConstants.ProjMatrix, proj);
-        XMStoreFloat4x4(&m_GlobalConstants.ViewProjMatrix, viewProj);
-        m_GlobalConstants.SunShadowMatrix = mShadowTransform;
-        m_GlobalConstants.CameraPos = m_Camera.GetPosition3f();
-        m_GlobalConstants.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z };
-        memcpy(data, &m_GlobalConstants, bufferSize);
-        m_GlobalConstantsBuffer->Unmap(0, nullptr);
+        XMStoreFloat4x4(&m_LightPassGlobalConstants.ViewMatrix, view);
+        XMStoreFloat4x4(&m_LightPassGlobalConstants.ProjMatrix, proj);
+        XMStoreFloat4x4(&m_LightPassGlobalConstants.ViewProjMatrix, viewProj);
+        m_LightPassGlobalConstants.SunShadowMatrix = mShadowTransform;
+        m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition3f();
+        m_LightPassGlobalConstants.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z };
+
+
+        memcpy(data, &m_LightPassGlobalConstants, GlobalConstantsBufferSize);
+        m_LightPassGlobalConstantsBuffer->Unmap(0, nullptr);
     }
 
+    
+    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
 
-    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_GlobalConstantsBuffer->GetGPUVirtualAddress());
-    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
- 
-    m_PbrModel.Draw(m_CommandList.Get());
-
-
+    for (int i = 0; i < m_Scene.Models.size(); i++)
     {
-        __declspec(align(256)) struct
         {
-            XMFLOAT4X4 model;
-        } vsConstants;
+            XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
+            XMStoreFloat4x4(&m_MeshConstants[i].NormalMatrix, m_Scene.Models[i].normalMatrix);
 
-        const UINT64 bufferSize = sizeof(vsConstants);
+            BYTE* data = nullptr;
+            m_MeshConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
-        ThrowIfFailed(m_Device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(meshBuffer.GetAddressOf())
-        ));
-
-        XMStoreFloat4x4(&vsConstants.model, m_GroundModelMatrix);
-
-        BYTE* data = nullptr;
-        ThrowIfFailed(meshBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
-
-
-        memcpy(data, &vsConstants, bufferSize);
-        meshBuffer->Unmap(0, nullptr);
+            memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
+            m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
+        }
+        m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
+        m_Scene.Models[i].Draw(m_CommandList.Get());
     }
-    m_CommandList->SetGraphicsRootConstantBufferView(kCommonCBV, m_GlobalConstantsBuffer->GetGPUVirtualAddress());
-    m_CommandList->SetGraphicsRootConstantBufferView(kMeshConstants, meshBuffer->GetGPUVirtualAddress());
-
-    m_Ground.Draw(m_CommandList.Get());
-
 
     // Change back to GENERIC_READ so we can read the texture in a shader.
     m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(normalMap,

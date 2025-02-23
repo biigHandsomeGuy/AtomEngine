@@ -1,9 +1,14 @@
 
-cbuffer VSConstants : register(b0)
+cbuffer MeshConstants : register(b0)
 {
-    float4x4 gMVP;
+    float4x4 gModelMatrix;
 };
 
+cbuffer GlobalConstants : register(b1)
+{
+    float4x4 gView;
+    float4x4 gProj;
+};
 
 struct VertexIn
 {
@@ -22,7 +27,7 @@ VertexOut main(VertexIn vin)
 	VertexOut vout = (VertexOut)0.0f;
 
     // Transform to homogeneous clip space.
-    vout.PosH = mul(gMVP, float4(vin.PosL, 1.0f));
+    vout.PosH = mul(gProj,(mul(gView,(mul(gModelMatrix, float4(vin.PosL, 1.0f))))));
 	
 	// Output vertex attributes for interpolation across triangle.
     vout.TexC = vin.TexC;

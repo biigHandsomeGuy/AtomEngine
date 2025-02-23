@@ -14,5 +14,4 @@ struct Texture
 	ComPtr<ID3D12Resource> Resource;
 
 	ComPtr<ID3D12Resource> UploadHeap;
-
 };
