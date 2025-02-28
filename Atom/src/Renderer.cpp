@@ -92,7 +92,7 @@ Renderer::Renderer(HINSTANCE hInstance)
     BuildPSOs();
 
     // Execute the initialization commands.
-    ThrowIfFailed(m_CommandList->Close());
+    ThrowIfFailed(m_CommandList->Close()); 
     ID3D12CommandList* cmdsLists[] = { m_CommandList.Get() };
     m_CommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
@@ -292,13 +292,13 @@ void Renderer::Draw(const GameTimer& gt)
     auto skyTexDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::ShpereMapHeap));
     m_CommandList->SetGraphicsRootDescriptorTable(kCommonSRVs, skyTexDescriptor);
 
-    auto cubeMapDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::EnvirSrvHeap));
+    auto cubeMapDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::PrefilteredEnvirSrvHeap));
     m_CommandList->SetGraphicsRootDescriptorTable(kCubemapSrv, cubeMapDescriptor);
 
     auto irradianceMapDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::IrradianceMapSrvHeap));
     m_CommandList->SetGraphicsRootDescriptorTable(kIrradianceSrv, irradianceMapDescriptor);
        
-    auto spMapDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::EnvirSrvHeap));
+    auto spMapDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::PrefilteredEnvirSrvHeap));
     m_CommandList->SetGraphicsRootDescriptorTable(kSpecularSrv, spMapDescriptor);
      
     auto lutMapDescriptor = GetGpuHandle(m_SrvDescriptorHeap.Get(), int(DescriptorHeapLayout::LUTsrv));
@@ -917,63 +917,14 @@ void Renderer::BuildDescriptorHeaps()
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
     );
 
-    // Create environment Map unfilter
+    // Create environment Map
     {
         D3D12_RESOURCE_DESC desc = {};
-        desc.Width = 1024;
-        desc.Height = 1024;
+        desc.Width = 256;
+        desc.Height = 256;
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         desc.Format = skyCubeMap->GetDesc().Format;
-        desc.MipLevels = 6;
-        desc.DepthOrArraySize = 6;
-        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-        desc.SampleDesc.Count = 1;
-        desc.SampleDesc.Quality = 0;
-
-        ThrowIfFailed(m_Device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-            D3D12_HEAP_FLAG_NONE,
-            &desc,
-            D3D12_RESOURCE_STATE_COMMON,
-            nullptr,
-            IID_PPV_ARGS(&m_EnvirMapUnfiltered)));
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Format = skyCubeMap->GetDesc().Format;
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-        srvDesc.TextureCube.MipLevels = -1;
-        srvDesc.TextureCube.MostDetailedMip = 0;
-        srvDesc.TextureCube.ResourceMinLODClamp = 0;
-
-        auto envirSrv = GetCpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::EnvirUnfilterSrvHeap);
-
-        m_Device->CreateShaderResourceView(m_EnvirMapUnfiltered.Get(), &srvDesc, envirSrv);
-
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.Format = skyCubeMap->GetDesc().Format;
-        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-        for (int i = 0; i < 6; i++)
-        {
-            uavDesc.Texture2DArray.ArraySize = 6;
-            uavDesc.Texture2DArray.FirstArraySlice = 0;
-            uavDesc.Texture2DArray.MipSlice = i;
-            uavDesc.Texture2DArray.PlaneSlice = 0;
-            auto envirUav = GetCpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::EnvirUnfilterUavHeap + i);
-
-            m_Device->CreateUnorderedAccessView(m_EnvirMapUnfiltered.Get(), nullptr, &uavDesc, envirUav);
-
-        }
-    }
-
-
-    // Create environment Map 
-    {
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Width = 1024;
-        desc.Height = 1024;
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Format = skyCubeMap->GetDesc().Format;
-        desc.MipLevels = 6;
+        desc.MipLevels = 9;
         desc.DepthOrArraySize = 6;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         desc.SampleDesc.Count = 1;
@@ -1001,21 +952,73 @@ void Renderer::BuildDescriptorHeaps()
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.Format = skyCubeMap->GetDesc().Format;
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-        uavDesc.Texture2DArray.ArraySize = 6;
-        uavDesc.Texture2DArray.FirstArraySlice = 0;
-        uavDesc.Texture2DArray.MipSlice = 0;
-        uavDesc.Texture2DArray.PlaneSlice = 0;
-        auto envirUav = GetCpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::EnvirUavHeap);
+        for (int i = 0; i < 9; i++)
+        {
+            uavDesc.Texture2DArray.ArraySize = 6;
+            uavDesc.Texture2DArray.FirstArraySlice = 0;
+            uavDesc.Texture2DArray.MipSlice = i;
+            uavDesc.Texture2DArray.PlaneSlice = 0;
+            auto envirUav = GetCpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::EnvirUavHeap + i);
 
-        m_Device->CreateUnorderedAccessView(m_EnvirMap.Get(), nullptr, &uavDesc, envirUav);
+            m_Device->CreateUnorderedAccessView(m_EnvirMap.Get(), nullptr, &uavDesc, envirUav);
 
+        }
+    }
+
+
+    // Create prefiltered environment Map 
+    {
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Width = 256;
+        desc.Height = 256;
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Format = skyCubeMap->GetDesc().Format;
+        desc.MipLevels = 9;
+        desc.DepthOrArraySize = 6;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+
+        ThrowIfFailed(m_Device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_PPV_ARGS(&m_PrefilteredEnvirMap)));
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format = skyCubeMap->GetDesc().Format;
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+        srvDesc.TextureCube.MipLevels = -1;
+        srvDesc.TextureCube.MostDetailedMip = 0;
+        srvDesc.TextureCube.ResourceMinLODClamp = 0;
+
+        auto envirSrv = GetCpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::PrefilteredEnvirSrvHeap);
+
+        m_Device->CreateShaderResourceView(m_PrefilteredEnvirMap.Get(), &srvDesc, envirSrv);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.Format = skyCubeMap->GetDesc().Format;
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+        for (int i = 0; i < 9; i++)
+        {
+            uavDesc.Texture2DArray.ArraySize = 6;
+            uavDesc.Texture2DArray.FirstArraySlice = 0;
+            uavDesc.Texture2DArray.MipSlice = i;
+            uavDesc.Texture2DArray.PlaneSlice = 0;
+            auto envirUav = GetCpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::PrefilteredEnvirUavHeap + i);
+
+            m_Device->CreateUnorderedAccessView(m_PrefilteredEnvirMap.Get(), nullptr, &uavDesc, envirUav);
+        }
+        
     }
 
     // Create irradiance Map 
     {
         D3D12_RESOURCE_DESC irMapDesc = {};
-        irMapDesc.Width = 32;
-        irMapDesc.Height = 32;
+        irMapDesc.Width = 64;
+        irMapDesc.Height = 64;
         irMapDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         irMapDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         irMapDesc.MipLevels = 1;
@@ -1564,11 +1567,11 @@ void Renderer::CreateCubeMap()
         m_CommandList->SetComputeRootDescriptorTable(0, srvHandle);
         
         m_CommandList->SetComputeRoot32BitConstant(2, 0, 0);
-        m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMapUnfiltered.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+        m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMap.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
-        for (UINT level = 0, size = 1024; level < 6; ++level, size /= 2)
+        for (UINT level = 0, size = 256; level < 10; ++level, size /= 2)
         {
-            auto uavHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::EnvirUnfilterUavHeap + level);
+            auto uavHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::EnvirUavHeap + level);
             m_CommandList->SetComputeRootDescriptorTable(1, uavHandle);
             const UINT numGroups = std::max<UINT>(1, size / 32);
  
@@ -1578,7 +1581,7 @@ void Renderer::CreateCubeMap()
         
         
 
-        m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMapUnfiltered.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+        m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMap.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
 
     }
 
@@ -1598,48 +1601,47 @@ void Renderer::CreateCubeMap()
         // copy 0th mipMap level into destination environmentMap
         const D3D12_RESOURCE_BARRIER preCopyBarriers[] =
         {
-            CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMap.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST),
-            CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMapUnfiltered.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE)
+            CD3DX12_RESOURCE_BARRIER::Transition(m_PrefilteredEnvirMap.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMap.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE)
         };
         const D3D12_RESOURCE_BARRIER postCopyBarriers[] = 
         {
-            CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-            CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMapUnfiltered.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+            CD3DX12_RESOURCE_BARRIER::Transition(m_PrefilteredEnvirMap.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+            CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMap.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
         };
 
         m_CommandList->ResourceBarrier(2, preCopyBarriers);
-        for (UINT mipLevel = 0; mipLevel < 6; mipLevel++)
+        for (UINT mipLevel = 0; mipLevel < 9; mipLevel++)
         {
             for (UINT arraySlice = 0; arraySlice < 6; ++arraySlice)
             {
                 const UINT subresourceIndex = D3D12CalcSubresource(mipLevel, arraySlice, 0, m_EnvirMap.Get()->GetDesc().MipLevels, 6);
-                m_CommandList->CopyTextureRegion(&CD3DX12_TEXTURE_COPY_LOCATION{ m_EnvirMap.Get(), subresourceIndex }, 0, 0, 0, &CD3DX12_TEXTURE_COPY_LOCATION{ m_EnvirMapUnfiltered.Get(), subresourceIndex }, nullptr);
+                m_CommandList->CopyTextureRegion(&CD3DX12_TEXTURE_COPY_LOCATION{ m_PrefilteredEnvirMap.Get(), subresourceIndex }, 0, 0, 0, &CD3DX12_TEXTURE_COPY_LOCATION{ m_EnvirMap.Get(), subresourceIndex }, nullptr);
             }
         }
         m_CommandList->ResourceBarrier(2, postCopyBarriers);
 
 
         m_CommandList->SetPipelineState(spMapPso.Get());
-        auto srvHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::EnvirSrvHeap);
+        auto srvHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::PrefilteredEnvirSrvHeap);
         m_CommandList->SetComputeRootDescriptorTable(0, srvHandle);
         
         
-        const UINT levels = m_EnvirMap.Get()->GetDesc().MipLevels;
+        const UINT levels = m_PrefilteredEnvirMap.Get()->GetDesc().MipLevels;
         const float deltaRoughness = 1.0f / max(float(levels - 1), 1);
-        for (UINT level = 1, size = 512; level < levels; ++level, size /= 2)
+        for (UINT level = 0, size = 256; level < levels; ++level, size /= 2)
         {
             
             const UINT numGroups = std::max<UINT>(1, size / 32);
             const float spmapRoughness = level * deltaRoughness;
-            auto descriptor = CreateTextureUav(m_EnvirMap.Get(), level);
-
-            auto uavHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::IrradianceMapUavHeap + level);
+        
+            auto uavHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::PrefilteredEnvirUavHeap + level);
             m_CommandList->SetComputeRootDescriptorTable(1, uavHandle);
 
             m_CommandList->SetComputeRoot32BitConstants(2, 1, &spmapRoughness, 0);
             m_CommandList->Dispatch(numGroups, numGroups, 6);
         }
-        m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_EnvirMap.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+        m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_PrefilteredEnvirMap.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
     }
 
     
@@ -1663,7 +1665,7 @@ void Renderer::CreateCubeMap()
         auto uavHandle = GetGpuHandle(m_SrvDescriptorHeap.Get(), (int)DescriptorHeapLayout::IrradianceMapUavHeap);
         m_CommandList->SetComputeRootDescriptorTable(1, uavHandle);
         m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_IrradianceMap.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-        m_CommandList->Dispatch(1, 1, 6);
+        m_CommandList->Dispatch(2, 2, 6);
         m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_IrradianceMap.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
     }
 

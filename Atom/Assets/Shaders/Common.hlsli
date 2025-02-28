@@ -22,9 +22,6 @@ SamplerState gsamAnisotropicClamp : register(s5);
 
 // Constant data that varies per material.
 
-
-
-
 //---------------------------------------------------------------------------------------
 // Transforms a normal map sample to world space.
 //---------------------------------------------------------------------------------------

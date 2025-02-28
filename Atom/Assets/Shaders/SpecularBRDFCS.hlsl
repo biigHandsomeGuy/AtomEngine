@@ -59,8 +59,8 @@ void main(uint2 ThreadID : SV_DispatchThreadID)
 	LUT.GetDimensions(outputWidth, outputHeight);
 
 	// Get integration parameters.
-	float cosLo = ThreadID.x / outputWidth;
-	float roughness = ThreadID.y / outputHeight;
+	float cosLo = (ThreadID.x + 0.5) / outputWidth;
+	float roughness = (ThreadID.y+0.5) / outputHeight;
 
 	// Make sure viewing angle is non-zero to avoid divisions by zero (and subsequently NaNs).
 	cosLo = max(cosLo, Epsilon);

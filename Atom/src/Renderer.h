@@ -25,22 +25,12 @@ enum class DescriptorHeapLayout : int
     NullCubeCbvHeap = 11,
     NullTexSrvHeap1,
     NullTexSrvHeap2, 
-    EnvirUnfilterSrvHeap,
-    EnvirUnfilterUavHeap ,
-    EnvirUnfilterMipMap1,
-    EnvirUnfilterMipMap2,
-    EnvirUnfilterMipMap3,
-    EnvirUnfilterMipMap4,
-    EnvirUnfilterMipMap5,
     EnvirSrvHeap,
-    EnvirUavHeap,
-    IrradianceMapSrvHeap,
+    EnvirUavHeap ,
+    PrefilteredEnvirSrvHeap = EnvirUavHeap + 9,
+    PrefilteredEnvirUavHeap,    
+    IrradianceMapSrvHeap = PrefilteredEnvirUavHeap + 9,
     IrradianceMapUavHeap,
-    EnvirUavHeapMipMap1,
-    EnvirUavHeapMipMap2,
-    EnvirUavHeapMipMap3,
-    EnvirUavHeapMipMap4,
-    EnvirUavHeapMipMap5,
     LUTsrv,
     LUTuav,
     ColorBufferSrv,
@@ -129,8 +119,8 @@ private:
     XMFLOAT3 mRotatedLightDirections[3];
 
     
-    ComPtr<ID3D12Resource> m_EnvirMap; // cube map with different roughness mip maps
-    ComPtr<ID3D12Resource> m_EnvirMapUnfiltered; // cube map with different mip maps
+    ComPtr<ID3D12Resource> m_PrefilteredEnvirMap; // cube map with different roughness mip maps
+    ComPtr<ID3D12Resource> m_EnvirMap; // cube map with different mip maps
     ComPtr<ID3D12Resource> m_IrradianceMap;
     ComPtr<ID3D12Resource> m_LUT;
 

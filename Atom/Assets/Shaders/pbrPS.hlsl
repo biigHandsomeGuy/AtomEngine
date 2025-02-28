@@ -102,7 +102,6 @@ float4 main(VertexOut pin) : SV_Target
 
         //return float4(N,1);
     }
-    //roughness *= 0.5;
     // Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
 
