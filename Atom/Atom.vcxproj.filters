@@ -19,95 +19,81 @@
     <Filter Include="src">
       <UniqueIdentifier>{2DAB880B-99B4-887C-2230-9F7C8E38947C}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\Atom">
-      <UniqueIdentifier>{CDCF1BCF-B99C-76DA-E2B5-6482CEE1AB68}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\Atom\Events">
-      <UniqueIdentifier>{11130A9A-7D9E-775E-86AF-FA52F2B9D35E}</UniqueIdentifier>
+    <Filter Include="include">
+      <UniqueIdentifier>{116228e3-5234-4809-b870-791070093e82}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h">
       <Filter>Vendor\stb_image\stb_image</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\Application.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\Application.h">
-      <Filter>src\Atom</Filter>
+    <ClInclude Include="include\Camera.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\Core.h">
-      <Filter>src\Atom</Filter>
+    <ClInclude Include="include\ConstantBuffers.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\EntryPoint.h">
-      <Filter>src\Atom</Filter>
+    <ClInclude Include="include\d3dUtil.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\Events\ApplicationEvent.h">
-      <Filter>src\Atom\Events</Filter>
+    <ClInclude Include="include\d3dx12.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\Events\Event.h">
-      <Filter>src\Atom\Events</Filter>
+    <ClInclude Include="include\DDSTextureLoader.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\Events\KeyEvent.h">
-      <Filter>src\Atom\Events</Filter>
+    <ClInclude Include="include\demo.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\Events\MouseEvent.h">
-      <Filter>src\Atom\Events</Filter>
+    <ClInclude Include="include\GameTimer.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Atom\Log.h">
-      <Filter>src\Atom</Filter>
+    <ClInclude Include="include\GeometryGenerator.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Camera.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\GraphicsCore.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\ConstantBuffers.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\Material.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\GameTimer.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\MathHelper.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\MathHelper.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\Mesh.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Mesh.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\Model.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\ShadowMap.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\pch.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Ssao.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\Scene.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Texture.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\ShadowMap.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\UploadBuffer.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\SkyBox.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\Renderer.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\Ssao.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\d3dUtil.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\Texture.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\d3dx12.h">
-      <Filter>src</Filter>
+    <ClInclude Include="include\UploadBuffer.h">
+      <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\pch.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ColorBuffer.h" />
-    <ClInclude Include="src\GraphicsCore.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
       <Filter>Vendor\stb_image\stb_image</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Atom\Application.cpp">
-      <Filter>src\Atom</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Atom\Log.cpp">
-      <Filter>src\Atom</Filter>
     </ClCompile>
     <ClCompile Include="src\Camera.cpp">
       <Filter>src</Filter>
@@ -118,16 +104,10 @@
     <ClCompile Include="src\MathHelper.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\Mesh.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\ShadowMap.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\Ssao.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Renderer.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\d3dUtil.cpp">
@@ -136,10 +116,15 @@
     <ClCompile Include="src\pch.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\test.cpp">
+    <ClCompile Include="src\Model.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\ColorBuffer.cpp" />
+    <ClCompile Include="src\Application.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">
@@ -194,6 +179,18 @@
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\pbrVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\BloomPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\BloomVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\PostProcessPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\PostProcessVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
   </ItemGroup>

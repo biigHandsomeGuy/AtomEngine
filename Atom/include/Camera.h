@@ -25,7 +25,7 @@ public:
 
 	// Get/Set world camera position.
 	DirectX::XMVECTOR GetPosition()const;
-	DirectX::XMFLOAT3 GetPosition3f()const;
+	DirectX::XMFLOAT3& GetPosition3f();
 	void SetPosition(float x, float y, float z);
 	void SetPosition(const DirectX::XMFLOAT3& v);
 	

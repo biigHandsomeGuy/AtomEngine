@@ -3,7 +3,7 @@
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <DirectXPackedVector.h>
-
+#include <d3dcompiler.h>
 #include <WindowsX.h>
 #include <wrl/client.h>
 
@@ -11,8 +11,5 @@
 #include <array>
 #include <comdef.h>
 #include <fstream>
-#include <d3dcompiler.h>
+#include <unordered_map>
 
-#include "Imgui/imgui.h"
-#include "Imgui/backends/imgui_impl_dx12.h"
-#include "Imgui/backends/imgui_impl_win32.h"

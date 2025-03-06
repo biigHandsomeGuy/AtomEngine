@@ -9,8 +9,8 @@
 #include <crtdbg.h>
 #endif
 
-#include "../d3dUtil.h"
-#include "../GameTimer.h"
+#include "d3dUtil.h"
+#include "GameTimer.h"
 
 // Link necessary d3d12 libraries.
 #pragma comment(lib,"d3dcompiler.lib")
@@ -18,9 +18,8 @@
 #pragma comment(lib, "dxgi.lib")
 
 
-#include "Core.h"
-#include "ColorBuffer.h"
-class ATOM_API Application
+
+class Application
 {
 public:
 
@@ -123,9 +122,9 @@ protected:
 	// Derived class should set these in derived constructor to customize starting values.
 	std::wstring mMainWndCaption = L"d3d App";
 	D3D_DRIVER_TYPE md3dDriverType = D3D_DRIVER_TYPE_HARDWARE;
-    DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    //DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
     //DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-    //DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     
     DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	int mClientWidth = 800;

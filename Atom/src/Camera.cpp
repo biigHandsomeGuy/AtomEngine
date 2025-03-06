@@ -3,7 +3,6 @@
 //***************************************************************************************
 #include "pch.h"
 #include "Camera.h"
-#include <Atom/Log.h>
 
 using namespace DirectX;
 
@@ -83,7 +82,7 @@ XMVECTOR Camera::GetPosition()const
 	return XMLoadFloat3(&mPosition);
 }
 
-XMFLOAT3 Camera::GetPosition3f()const
+XMFLOAT3& Camera::GetPosition3f()
 {
 	return mPosition;
 }

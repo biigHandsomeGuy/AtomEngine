@@ -1,9 +1,9 @@
-//***************************************************************************************
-// Application.cpp by Frank Luna (C) 2015 All Rights Reserved.
-//***************************************************************************************
 #include "pch.h"
 #include "Application.h"
 #include "GraphicsCore.h"
+#include "imgui/imgui.h"
+#include "imgui/backends/imgui_impl_dx12.h"
+#include "imgui/backends/imgui_impl_win32.h"
 
 
 using Microsoft::WRL::ComPtr;
@@ -159,7 +159,7 @@ void Application::OnResize()
     ThrowIfFailed(m_SwapChain->ResizeBuffers(
 		SwapChainBufferCount, 
 		mClientWidth, mClientHeight, 
-		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
 		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	mCurrBackBuffer = 0;
@@ -516,7 +516,7 @@ void Application::CreateSwapChain()
     sd.BufferDesc.Height = mClientHeight;
     sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
     sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
     sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
     sd.SampleDesc.Count = m4xMsaaState ? 4 : 1;

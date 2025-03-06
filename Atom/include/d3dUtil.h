@@ -10,7 +10,6 @@
 #include <string>
 #include <wrl/client.h>
 #include "d3dx12.h"
-#include "Atom/Core.h"
 
 extern const int gNumFrameResources;
 

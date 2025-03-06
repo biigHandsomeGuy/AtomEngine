@@ -1,11 +1,9 @@
-#pragma once
-#define _CRT_SECURE_NO_WARNINGS 1
+#include "pch.h"
+
 #define FMT_UNICODE 0
 #include "Application.h"
-#include <Windows.h>
-#include <crtdbg.h>
-#include "../d3dUtil.h"
-#include <iostream>
+
+#include "d3dUtil.h"
 extern Application* CreateApplication(HINSTANCE hInstance);
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
@@ -15,9 +13,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 #if defined(DEBUG) | defined(_DEBUG)
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
-
-    ::AllocConsole();
-    Atom::Log::Init();
 
     auto app = CreateApplication(hInstance);
     try

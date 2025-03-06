@@ -5,7 +5,6 @@
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
 #include "d3dUtil.h"
-#include <Atom/Log.h>
 
 using namespace DirectX;
 
@@ -57,7 +56,6 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const XMMATRIX& pare
 		aiMaterial* material = scene->mMaterials[node->mMeshes[i]];
 		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
 		auto matname = material->GetName();
-		ATOM_INFO(matname.C_Str());
 		meshes.push_back(ProcessMesh(mesh, globalTransform, device, commandList));
 	}
 

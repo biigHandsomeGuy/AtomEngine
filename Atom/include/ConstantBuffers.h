@@ -2,6 +2,12 @@
 
 #include <DirectXMath.h>
 
+__declspec(align(256)) struct MeshConstants
+{
+    DirectX::XMFLOAT4X4 ModelMatrix;
+    DirectX::XMFLOAT4X4 NormalMatrix;
+    DirectX::XMFLOAT4X4 ViewProjTex;
+};
 __declspec(align(256)) struct MaterialConstants
 {
     UINT gMatIndex;
