@@ -11,3 +11,6 @@
 [submodule "Atom/Vendor/ImGuizmo"]
 	path = Atom/Vendor/ImGuizmo
 	url = https://github.com/biigHandsomeGuy/ImGuizmo.git
+[submodule "Atom/Vendor/tinyobjloader"]
+	path = Atom/Vendor/tinyobjloader
+	url = https://github.com/biigHandsomeGuy/tinyobjloader.git
