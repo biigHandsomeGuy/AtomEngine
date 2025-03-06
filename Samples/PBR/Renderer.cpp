@@ -36,6 +36,7 @@ namespace CS
 #include "../CompiledShaders/IrradianceMapCS.h"
 #include "../CompiledShaders/SpecularMapCS.h"
 #include "../CompiledShaders/EquirectToCubeCS.h"
+using namespace DirectX::PackedVector;
 }
 
 namespace
@@ -60,6 +61,18 @@ Application* CreateApplication(HINSTANCE hInstance)
     return new Renderer(hInstance);
 }
 
+std::vector<XMHALF4> ConvertToHalf(const float* floatData, int pixelCount) {
+    std::vector<XMHALF4> halfData(pixelCount);
+    for (int i = 0; i < pixelCount; i++) {
+        halfData[i] = XMHALF4(
+            floatData[i * 4 + 0],  // R
+            floatData[i * 4 + 1],  // G
+            floatData[i * 4 + 2],  // B
+            floatData[i * 4 + 3]   // A
+        );
+    }
+    return halfData;
+}
 
 Renderer::Renderer(HINSTANCE hInstance)
     : Application(hInstance)
@@ -132,12 +145,12 @@ Renderer::Renderer(HINSTANCE hInstance)
 
     Model skyBox, pbrModel, ground;
 
-    skyBox.Load(std::string("D:/AtomEngine/Atom/Assets/Models/cube.fbx"), m_Device.Get(), m_CommandList.Get());
-    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/happy1.obj"), m_Device.Get(), m_CommandList.Get());
+    skyBox.Load(std::string("D:/AtomEngine/Atom/Assets/Models/cube.obj"), m_Device.Get(), m_CommandList.Get());
+    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/sphere.obj"), m_Device.Get(), m_CommandList.Get());
     ground.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), m_Device.Get(), m_CommandList.Get());
 
-    pbrModel.modelMatrix = XMMatrixScaling(10, 10, 10);
-    //pbrModel.modelMatrix = XMMatrixTranslation(0, 1, 0);
+    pbrModel.modelMatrix = XMMatrixScaling(2, 5, 2);
+    pbrModel.modelMatrix *= XMMatrixTranslation(5, 3, 0);
     ground.modelMatrix = XMMatrixTranslation(0, 0, 0);
 
     pbrModel.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel.modelMatrix));
@@ -496,7 +509,7 @@ void Renderer::UpdateSsaoCB(const GameTimer& gt)
 
     ssaoCB.InvRenderTargetSize = XMFLOAT2(1.0f / mSsao->SsaoMapWidth(), 1.0f / mSsao->SsaoMapHeight());
 
-   
+    
     
 
 }
@@ -633,17 +646,17 @@ void Renderer::LoadTextures()
 	
     std::vector<std::string> texFilenames =
     {
-        "D:/AtomEngine/Atom/Assets/Textures/wood/albedo.png",
-        "D:/AtomEngine/Atom/Assets/Textures/wood/albedo.png",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/albedo.png",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/albedo.png",
 
-        "D:/AtomEngine/Atom/Assets/Textures/wood/normal.png",
-        "D:/AtomEngine/Atom/Assets/Textures/wood/normal.png",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/normal.png",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/normal.png",
 
-        "D:/AtomEngine/Atom/Assets/Textures/wood/metallic.png",
-        "D:/AtomEngine/Atom/Assets/Textures/wood/metallic.png",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/metallic.png",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/metallic.png",
 
-         "D:/AtomEngine/Atom/Assets/Textures/wood/roughness.png",
-         "D:/AtomEngine/Atom/Assets/Textures/wood/roughness.png",
+         "D:/AtomEngine/Atom/Assets/Textures/silver/roughness.png",
+         "D:/AtomEngine/Atom/Assets/Textures/silver/roughness.png",
                    
         "D:/AtomEngine/Atom/Assets/Textures/EnvirMap/marry.hdr"
     };
@@ -707,11 +720,11 @@ void Renderer::LoadTextures()
 
         int width = 0, height = 0, channels = 0;
    
-        float* imageData = stbi_loadf(texMap->Filename.c_str(), &width, &height, &channels, 4);
-
+        auto imageData = stbi_loadf(texMap->Filename.c_str(), &width, &height, &channels, 4);
+        std::vector<XMHALF4> halfData = ConvertToHalf(imageData, width*height);
         D3D12_RESOURCE_DESC textureDesc = {};
         textureDesc.MipLevels = 1;                     
-        textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        textureDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
         textureDesc.Width = width;                    
         textureDesc.Height = height;                   
         textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -754,8 +767,8 @@ void Renderer::LoadTextures()
 
 
         D3D12_SUBRESOURCE_DATA textureData = {};
-        textureData.pData = imageData;      
-        textureData.RowPitch = width * 4 * 4;    
+        textureData.pData = halfData.data();
+        textureData.RowPitch = width * 4 * 2;    
         textureData.SlicePitch = textureData.RowPitch * height;
 
         UpdateSubresources(m_CommandList.Get(), texMap->Resource.Get(), texMap->UploadHeap.Get(), 0, 0, 1, &textureData);

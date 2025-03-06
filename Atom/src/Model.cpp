@@ -1,139 +1,192 @@
+
 #include "pch.h"
 #include "Model.h"
 
-#include "assimp/Importer.hpp"
-#include "assimp/scene.h"
-#include "assimp/postprocess.h"
+
 #include "d3dUtil.h"
 
 using namespace DirectX;
-
-namespace
-{
-	const unsigned int ImportFlags =
-		aiProcess_CalcTangentSpace | aiProcess_Triangulate;
-}
+void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
 void Model::Load(const std::string& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
 {
-	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFile(filepath, ImportFlags);
-	std::string extensions;
-	importer.GetExtensionList(extensions);
-	OutputDebugStringA(extensions.c_str());
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
 
-	if (!scene || !scene->HasMeshes()) {
-		throw std::runtime_error("Failed to load model: " + filepath);
-	}
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str());
 
-	meshes.clear();
-	ProcessNode(scene->mRootNode, scene, XMMatrixIdentity(), device, commandList);
+    if (!warn.empty()) {
+        OutputDebugStringA(warn.c_str());
+    }
+    if (!err.empty()) {
+        throw std::runtime_error("Failed to load model: " + err);
+    }
+    if (!ret) {
+        throw std::runtime_error("Failed to load model: " + filepath);
+    }
+
+    meshes.clear();
+    for (const auto& shape : shapes) {
+        meshes.push_back(ProcessMesh(attrib, shape, device, commandList));
+    }
+
+   
 }
 
 void Model::Draw(ID3D12GraphicsCommandList* commandList)
 {
-	for (uint32_t meshIndex = 0; meshIndex < meshes.size(); meshIndex++)
-	{
-		commandList->IASetVertexBuffers(0, 1, &meshes[meshIndex].vbv);
-		commandList->IASetIndexBuffer(&meshes[meshIndex].ibv);
-		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		commandList->DrawIndexedInstanced(meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
-	}
+    for (uint32_t meshIndex = 0; meshIndex < meshes.size(); meshIndex++)
+    {
+        commandList->IASetVertexBuffers(0, 1, &meshes[meshIndex].vbv);
+        commandList->IASetIndexBuffer(&meshes[meshIndex].ibv);
+        commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        commandList->DrawIndexedInstanced(meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+    }
 }
 
-void Model::ProcessNode(aiNode* node, const aiScene* scene, const XMMATRIX& parentTransform, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
+Mesh Model::ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t& shape, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
 {
-	aiMatrix4x4 aiTransform = node->mTransformation;
-	XMMATRIX localTransform = XMMatrixTranspose(XMMATRIX(
-		aiTransform.a1, aiTransform.b1, aiTransform.c1, aiTransform.d1,
-		aiTransform.a2, aiTransform.b2, aiTransform.c2, aiTransform.d2,
-		aiTransform.a3, aiTransform.b3, aiTransform.c3, aiTransform.d3,
-		aiTransform.a4, aiTransform.b4, aiTransform.c4, aiTransform.d4));
-	XMMATRIX globalTransform = XMMatrixMultiply(localTransform, parentTransform);
+    Mesh newMesh;
 
+    // 提取顶点数据
+    for (const auto& index : shape.mesh.indices) {
+        Vertex vertex;
 
+        // 位置
+        vertex.Position = {
+            attrib.vertices[3 * index.vertex_index + 0],
+            attrib.vertices[3 * index.vertex_index + 1],
+            attrib.vertices[3 * index.vertex_index + 2]
+        };
 
-	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
-		aiMaterial* material = scene->mMaterials[node->mMeshes[i]];
-		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		auto matname = material->GetName();
-		meshes.push_back(ProcessMesh(mesh, globalTransform, device, commandList));
-	}
+        // 法线
+        if (!attrib.normals.empty()) {
+            vertex.Normal = {
+                attrib.normals[3 * index.normal_index + 0],
+                attrib.normals[3 * index.normal_index + 1],
+                attrib.normals[3 * index.normal_index + 2]
+            };
+        }
 
-	for (unsigned int i = 0; i < node->mNumChildren; ++i) {
-		ProcessNode(node->mChildren[i], scene, globalTransform, device, commandList);
-	}
+        // 纹理坐标
+        if (!attrib.texcoords.empty()) {
+            vertex.TexCoords = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                attrib.texcoords[2 * index.texcoord_index + 1] // 反转 V 轴
+            };
+        }
+        
+
+        newMesh.Vertices.push_back(vertex);
+        newMesh.Indices.push_back(static_cast<UINT>(newMesh.Vertices.size()) - 1);
+    }
+    ComputeTangents(newMesh.Vertices, newMesh.Indices);
+    const size_t vertexDataSize = newMesh.Vertices.size() * sizeof(Vertex);
+    const size_t indexDataSize = newMesh.Indices.size() * sizeof(UINT);
+
+    // 创建 GPU 资源 - 顶点缓冲区
+    ThrowIfFailed(device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(vertexDataSize),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&newMesh.vertexBuffer)));
+
+    newMesh.vbv.BufferLocation = newMesh.vertexBuffer->GetGPUVirtualAddress();
+    newMesh.vbv.SizeInBytes = static_cast<UINT>(vertexDataSize);
+    newMesh.vbv.StrideInBytes = sizeof(Vertex);
+
+    // 创建 GPU 资源 - 索引缓冲区
+    ThrowIfFailed(device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_UPLOAD },
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(indexDataSize),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&newMesh.indexBuffer)));
+
+    newMesh.ibv.BufferLocation = newMesh.indexBuffer->GetGPUVirtualAddress();
+    newMesh.ibv.SizeInBytes = static_cast<UINT>(indexDataSize);
+    newMesh.ibv.Format = DXGI_FORMAT_R32_UINT;
+
+    // 复制顶点数据
+    UINT8* data = nullptr;
+    ThrowIfFailed(newMesh.vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+    memcpy(data, newMesh.Vertices.data(), vertexDataSize);
+    newMesh.vertexBuffer->Unmap(0, nullptr);
+
+    // 复制索引数据
+    ThrowIfFailed(newMesh.indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+    memcpy(data, newMesh.Indices.data(), indexDataSize);
+    newMesh.indexBuffer->Unmap(0, nullptr);
+
+    return newMesh;
 }
-
-Mesh Model::ProcessMesh(aiMesh* mesh, const XMMATRIX& transform, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
+void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
 {
-	Mesh newMesh;
-	//newMesh.Transform = transform;
+    for (size_t i = 0; i < indices.size(); i += 3)
+    {
+        Vertex& v0 = vertices[indices[i + 0]];
+        Vertex& v1 = vertices[indices[i + 1]];
+        Vertex& v2 = vertices[indices[i + 2]];
 
-	// 提取顶点数据
-	for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-		Vertex vertex;
-		vertex.Position = XMFLOAT3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
-		vertex.Normal = XMFLOAT3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
-		if (mesh->HasTangentsAndBitangents()) {
-			vertex.Tangent = { mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z };
-			vertex.BiTangent = { mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z };
-		}
-		if (mesh->HasTextureCoords(0)) {
-			vertex.TexCoords = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
-		}
-		newMesh.Vertices.push_back(vertex);
-	}
+        // 顶点坐标
+        XMVECTOR pos0 = XMLoadFloat3(&v0.Position);
+        XMVECTOR pos1 = XMLoadFloat3(&v1.Position);
+        XMVECTOR pos2 = XMLoadFloat3(&v2.Position);
 
-	// 提取索引数据
-	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
-		const aiFace& face = mesh->mFaces[i];
-		for (unsigned int j = 0; j < face.mNumIndices; ++j) {
-			newMesh.Indices.push_back(face.mIndices[j]);
-		}
-	}
+        // 计算两个边
+        XMVECTOR edge1 = XMVectorSubtract(pos1, pos0);
+        XMVECTOR edge2 = XMVectorSubtract(pos2, pos0);
 
-	const size_t vertexDataSize = newMesh.Vertices.size() * sizeof(Vertex);
-	const size_t indexDataSize = newMesh.Indices.size() * sizeof(UINT);
+        // UV 坐标
+        XMFLOAT2 uv0 = v0.TexCoords;
+        XMFLOAT2 uv1 = v1.TexCoords;
+        XMFLOAT2 uv2 = v2.TexCoords;
 
-	// create GPU resource
-	ThrowIfFailed(device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(vertexDataSize),
-		D3D12_RESOURCE_STATE_COMMON,
-		nullptr,
-		IID_PPV_ARGS(&newMesh.vertexBuffer)
-	));
+        float deltaU1 = uv1.x - uv0.x;
+        float deltaV1 = uv1.y - uv0.y;
+        float deltaU2 = uv2.x - uv0.x;
+        float deltaV2 = uv2.y - uv0.y;
 
+        // 计算 TBN 矩阵的逆矩阵分母
+        float determinant = (deltaU1 * deltaV2 - deltaU2 * deltaV1);
+        float f = (determinant == 0.0f) ? 1.0f : (1.0f / determinant);
 
-	newMesh.vbv.BufferLocation = newMesh.vertexBuffer->GetGPUVirtualAddress();
-	newMesh.vbv.SizeInBytes = static_cast<UINT>(vertexDataSize);
-	newMesh.vbv.StrideInBytes = sizeof(Vertex);
+        // 计算 Tangent 和 Bitangent
+        XMVECTOR tangent = XMVectorScale(XMVectorSubtract(
+            XMVectorScale(edge1, deltaV2),
+            XMVectorScale(edge2, deltaV1)), f);
 
-	ThrowIfFailed(device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_UPLOAD },
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(indexDataSize),
-		D3D12_RESOURCE_STATE_COMMON,
-		nullptr,
-		IID_PPV_ARGS(&newMesh.indexBuffer)));
+        XMVECTOR bitangent = XMVectorScale(XMVectorSubtract(
+            XMVectorScale(edge2, deltaU1),
+            XMVectorScale(edge1, deltaU2)), f);
 
-	newMesh.ibv.BufferLocation = newMesh.indexBuffer->GetGPUVirtualAddress();
-	newMesh.ibv.SizeInBytes = static_cast<UINT>(indexDataSize);
-	newMesh.ibv.Format = DXGI_FORMAT_R32_UINT;
+        // 累加到顶点数据
+        XMFLOAT3 t, b;
+        XMStoreFloat3(&t, tangent);
+        XMStoreFloat3(&b, bitangent);
 
-	UINT8* data = nullptr;
-	// copy vertex
-	ThrowIfFailed(newMesh.vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
-	memcpy(data, newMesh.Vertices.data(), vertexDataSize);
-	newMesh.vertexBuffer->Unmap(0, nullptr);
+        v0.Tangent = t;
+        v1.Tangent = t;
+        v2.Tangent = t;
 
-	// copy index
-	newMesh.indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-	memcpy(data, newMesh.Indices.data(), indexDataSize);
-	newMesh.indexBuffer->Unmap(0, nullptr);
+        v0.BiTangent = b;
+        v1.BiTangent = b;
+        v2.BiTangent = b;
+    }
 
-	return newMesh;
+    // 归一化 Tangent
+    for (auto& vertex : vertices)
+    {
+        XMVECTOR t = XMLoadFloat3(&vertex.Tangent);
+        XMVECTOR n = XMLoadFloat3(&vertex.Normal);
+
+        // 正交化 Tangent
+        t = XMVector3Normalize(XMVectorSubtract(t, XMVectorScale(n, XMVector3Dot(n, t).m128_f32[0])));
+
+        XMStoreFloat3(&vertex.Tangent, t);
+    }
 }
-
-

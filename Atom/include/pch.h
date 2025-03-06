@@ -6,9 +6,12 @@
 #include <d3dcompiler.h>
 #include <WindowsX.h>
 #include <wrl/client.h>
-
+#include "d3dx12.h"
 #include <vector>
+
+
 #include <array>
+#include <string>
 #include <comdef.h>
 #include <fstream>
 #include <unordered_map>

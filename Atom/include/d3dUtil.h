@@ -1,15 +1,5 @@
-//***************************************************************************************
-// d3dUtil.h by Frank Luna (C) 2015 All Rights Reserved.
-//
-// General helper code.
-//***************************************************************************************
-
 #pragma once
-#include <dxgi1_4.h>
-#include <d3d12.h>
-#include <string>
-#include <wrl/client.h>
-#include "d3dx12.h"
+
 
 extern const int gNumFrameResources;
 

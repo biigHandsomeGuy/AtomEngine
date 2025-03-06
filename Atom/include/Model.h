@@ -1,10 +1,11 @@
 #pragma once
 
+#include "tinyobjloader/tiny_obj_loader.h"
+
 #include "Mesh.h"
 
-struct aiMesh;
-struct aiNode;
-struct aiScene;
+struct tinyobj::attrib_t;
+struct tinyobj::shape_t;
 
 class Model
 {
@@ -16,6 +17,5 @@ public:
 	DirectX::XMMATRIX normalMatrix;
 private:
 
-	Mesh ProcessMesh(aiMesh* mesh, const DirectX::XMMATRIX& transform, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
-	void ProcessNode(aiNode* node, const aiScene* scene, const DirectX::XMMATRIX& parentTransform, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
+	Mesh ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t& shape, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
 };

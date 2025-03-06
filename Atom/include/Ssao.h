@@ -1,15 +1,7 @@
- //***************************************************************************************
- // Ssao.h by Frank Luna (C) 2015 All Rights Reserved.
- //***************************************************************************************
- 
- #ifndef SSAO_H
- #define SSAO_H
- 
- #pragma once
+#pragma once
  
 #include "d3dUtil.h"
 #include "ConstantBuffers.h"
-#include <vector>
  
  
 enum SrvHeapLayout : uint32_t
@@ -121,4 +113,3 @@ public:
  	D3D12_RECT m_ScissorRect;
  };
  
- #endif // SSAO_H

@@ -22,6 +22,9 @@
     <Filter Include="include">
       <UniqueIdentifier>{116228e3-5234-4809-b870-791070093e82}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Vendor\TinyObjLoader">
+      <UniqueIdentifier>{44fee6a4-88c7-40ec-854f-d2995df78022}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h">
@@ -90,6 +93,9 @@
     <ClInclude Include="include\UploadBuffer.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h">
+      <Filter>Vendor\TinyObjLoader</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -124,6 +130,9 @@
     </ClCompile>
     <ClCompile Include="src\main.cpp">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Vendor\tinyobjloader\tiny_obj_loader.cc">
+      <Filter>Vendor\TinyObjLoader</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

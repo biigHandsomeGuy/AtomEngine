@@ -1,9 +1,4 @@
-//***************************************************************************************
-// GameTimer.h by Frank Luna (C) 2011 All Rights Reserved.
-//***************************************************************************************
-
-#ifndef GAMETIMER_H
-#define GAMETIMER_H
+#pragma once
 
 class GameTimer
 {
@@ -31,4 +26,3 @@ private:
 	bool mStopped;
 };
 
-#endif // GAMETIMER_H

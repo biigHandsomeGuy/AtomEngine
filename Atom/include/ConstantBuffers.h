@@ -1,6 +1,5 @@
 #pragma once
 
-#include <DirectXMath.h>
 
 __declspec(align(256)) struct MeshConstants
 {

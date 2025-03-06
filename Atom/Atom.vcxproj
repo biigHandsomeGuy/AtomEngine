@@ -45,14 +45,14 @@
     <OutDir>$(SolutionDir)bin\Debug-windows-x86_64\Atom\</OutDir>
     <IntDir>$(SolutionDir)bin-int\Debug-windows-x86_64\Atom\</IntDir>
     <TargetName>Atom</TargetName>
-    <TargetExt>.exe</TargetExt>
+    <TargetExt>.lib</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)bin\Release-windows-x86_64\Atom\</OutDir>
     <IntDir>$(SolutionDir)bin-int\Release-windows-x86_64\Atom\</IntDir>
     <TargetName>Atom</TargetName>
-    <TargetExt>.exe</TargetExt>
+    <TargetExt>.lib</TargetExt>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -60,7 +60,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>DX_BUILD_DLL;ATOM_PLATFORM_WINDOWS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;include;Vendor\assimp\include;Vendor\assimp\build\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;include;Vendor\tinyobjloader;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -79,7 +79,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>DX_BUILD_DLL;ATOM_PLATFORM_WINDOWS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;include;Vendor\assimp\build\include;Vendor\assimp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;include;Vendor\assimp\build\include;Vendor\tinyobjloader;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>MaxSpeed</Optimization>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -115,6 +115,7 @@
     <ClInclude Include="include\Texture.h" />
     <ClInclude Include="include\UploadBuffer.h" />
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h" />
+    <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Model.cpp" />
@@ -131,6 +132,7 @@
     <ClCompile Include="src\Ssao.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\d3dUtil.cpp" />
+    <ClCompile Include="Vendor\tinyobjloader\tiny_obj_loader.cc" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\BloomPS.hlsl">
@@ -446,10 +448,7 @@
     <None Include="Assets\Shaders\Common.hlsli" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="Vendor\assimp\build\code\assimp.vcxproj">
-      <Project>{7e909e52-364d-34ae-8fc4-f1f3aa452ad8}</Project>
-    </ProjectReference>
-    <ProjectReference Include="Vendor\Imgui\Imgui.vcxproj">
+    <ProjectReference Include="Vendor\imgui\Imgui.vcxproj">
       <Project>{e087650d-4c9c-8dbe-151e-311e81f189ef}</Project>
     </ProjectReference>
   </ItemGroup>
