@@ -146,11 +146,11 @@ Renderer::Renderer(HINSTANCE hInstance)
     Model skyBox, pbrModel, ground;
 
     skyBox.Load(std::string("D:/AtomEngine/Atom/Assets/Models/cube.obj"), m_Device.Get(), m_CommandList.Get());
-    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/sphere.obj"), m_Device.Get(), m_CommandList.Get());
+    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/happy1.obj"), m_Device.Get(), m_CommandList.Get());
     ground.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), m_Device.Get(), m_CommandList.Get());
 
-    pbrModel.modelMatrix = XMMatrixScaling(2, 5, 2);
-    pbrModel.modelMatrix *= XMMatrixTranslation(5, 3, 0);
+    pbrModel.modelMatrix = XMMatrixScaling(10, 10, 10);
+    //pbrModel.modelMatrix *= XMMatrixTranslation(5, 3, 0);
     ground.modelMatrix = XMMatrixTranslation(0, 0, 0);
 
     pbrModel.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel.modelMatrix));
