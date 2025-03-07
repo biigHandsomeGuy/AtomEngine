@@ -88,7 +88,7 @@ float4 main(VertexOut pin) : SV_Target
         roughness = gRoughnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
     
         // Get current fragment's normal and transform to world space.
-        N = normalize(2 * gNormalTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1);
+        N = normalize(2*gNormalTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb-1);
         N = normalize(mul(pin.tangentBasis, N));
     
     }
@@ -102,6 +102,7 @@ float4 main(VertexOut pin) : SV_Target
 
         //return float4(N,1);
     }
+    //return float4(N,1);
     // Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
 
