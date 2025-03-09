@@ -1,6 +1,6 @@
 
 #include "Common.hlsli"
-Texture2D<float2> gLUTMap : register(t16);
+Texture2D<float2> tex : register(t0);
 
 
 struct VertexOut
@@ -11,7 +11,7 @@ struct VertexOut
 
 float4 main(VertexOut pin) : SV_Target
 {
-    float2 color = gLUTMap.Sample(gsamAnisotropicClamp, pin.TexC);
+    float2 color = tex.Sample(gsamAnisotropicClamp, pin.TexC);
     return float4(color,0, 1);
 }
 

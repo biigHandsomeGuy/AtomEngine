@@ -25,6 +25,9 @@
     <Filter Include="Vendor\TinyObjLoader">
       <UniqueIdentifier>{44fee6a4-88c7-40ec-854f-d2995df78022}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Assets\Shaders\ShadingModel">
+      <UniqueIdentifier>{df1c5dd0-cbc1-4bdd-a7ae-dc589bb7e67e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h">
@@ -201,6 +204,12 @@
     </FxCompile>
     <FxCompile Include="Assets\Shaders\PostProcessVS.hlsl">
       <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\LambertModelVS.hlsl">
+      <Filter>Assets\Shaders\ShadingModel</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\LambertModelPS.hlsl">
+      <Filter>Assets\Shaders\ShadingModel</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

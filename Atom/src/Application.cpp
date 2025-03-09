@@ -368,7 +368,7 @@ bool Application::InitMainWindow()
 	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
 	wc.lpszMenuName  = 0;
 	wc.lpszClassName = L"MainWnd";
-
+	
 	if( !RegisterClass(&wc) )
 	{
 		MessageBox(0, L"RegisterClass Failed.", 0, 0);

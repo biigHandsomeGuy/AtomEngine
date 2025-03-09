@@ -42,7 +42,7 @@ enum RootBindings
     kMeshConstants,       // for VS
     kMaterialConstants,   // for PS
     kMaterialSRVs,        // material texture 
-    kCommonSRVs,          // cubemap?
+    kCommonSRVs,          // sphere map / shadow map / ssao map 
     kCommonCBV,           // global cbv
     kShaderParams,
     kCubemapSrv,
@@ -52,7 +52,18 @@ enum RootBindings
     kPostProcess,
     kNumRootBindings      
 };
-
+__declspec(align(256)) struct ShaderParams
+{
+    bool UseSSAO = false;
+    char pad0[3]{ 0,0,0 };
+    bool UseShadow = false;
+    char pad1[3]{ 0,0,0 };
+    bool UseTexture = false;
+    char pad2[3]{ 0,0,0 };
+    float roughness = 0;
+    float albedo[3] = { 0,0,0 };
+    float metallic = 0;
+};
 
 class Renderer : public Application
 {
