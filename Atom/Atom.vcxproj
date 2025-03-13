@@ -93,16 +93,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="include\Application.h" />
+    <ClInclude Include="include\BufferManager.h" />
+    <ClInclude Include="include\GameCore.h" />
     <ClInclude Include="include\Camera.h" />
+    <ClInclude Include="include\CommandAllocatorPool.h" />
+    <ClInclude Include="include\CommandListManager.h" />
     <ClInclude Include="include\ConstantBuffers.h" />
     <ClInclude Include="include\d3dUtil.h" />
     <ClInclude Include="include\d3dx12.h" />
     <ClInclude Include="include\DDSTextureLoader.h" />
     <ClInclude Include="include\demo.h" />
+    <ClInclude Include="include\Display.h" />
     <ClInclude Include="include\GameTimer.h" />
     <ClInclude Include="include\GeometryGenerator.h" />
     <ClInclude Include="include\GraphicsCore.h" />
+    <ClInclude Include="include\Log.h" />
     <ClInclude Include="include\Material.h" />
     <ClInclude Include="include\MathHelper.h" />
     <ClInclude Include="include\Mesh.h" />
@@ -114,23 +119,27 @@
     <ClInclude Include="include\Ssao.h" />
     <ClInclude Include="include\Texture.h" />
     <ClInclude Include="include\UploadBuffer.h" />
+    <ClCompile Include="src\BufferManager.cpp" />
+    <ClCompile Include="src\Display.cpp" />
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h" />
     <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\CommandAllocatorPool.cpp" />
+    <ClCompile Include="src\CommandListManager.cpp" />
+    <ClCompile Include="src\GraphicsCore.cpp" />
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp" />
-    <ClCompile Include="src\Application.cpp" />
+    <ClCompile Include="src\GameCore.cpp" />
     <ClCompile Include="src\Camera.cpp" />
     <ClCompile Include="src\GameTimer.cpp" />
     <ClCompile Include="src\MathHelper.cpp" />
     <ClCompile Include="src\ShadowMap.cpp" />
     <ClCompile Include="src\Ssao.cpp" />
-    <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\d3dUtil.cpp" />
     <ClCompile Include="Vendor\tinyobjloader\tiny_obj_loader.cc" />
   </ItemGroup>

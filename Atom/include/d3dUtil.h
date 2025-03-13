@@ -1,6 +1,5 @@
 #pragma once
 
-
 extern const int gNumFrameResources;
 
 inline void d3dSetDebugName(IDXGIObject* obj, const char* name)
@@ -117,12 +116,19 @@ public:
 
 
 #ifndef ThrowIfFailed
+#ifdef _DEBUG
 #define ThrowIfFailed(x)                                              \
 {                                                                     \
     HRESULT hr__ = (x);                                               \
     std::wstring wfn = AnsiToWString(__FILE__);                       \
     if(FAILED(hr__)) { throw DxException(hr__, L#x, wfn, __LINE__); } \
 }
+
+#else
+#define ThrowIfFailed(x) (x)
+#endif // _DEBUG
+
+
 #endif
 
 #ifndef ReleaseCom

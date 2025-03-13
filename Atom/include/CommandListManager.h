@@ -26,10 +26,12 @@ public:
 
     ID3D12CommandQueue* GetCommandQueue() { return m_CommandQueue; }
     uint64_t ExecuteCommandList(ID3D12CommandList* List);
-private:
-    
     ID3D12CommandAllocator* RequestAllocator(void);
     void DiscardAllocator(uint64_t FenceValueForReset, ID3D12CommandAllocator* Allocator);
+
+private:
+    
+    
 
 	ID3D12CommandQueue* m_CommandQueue;
 

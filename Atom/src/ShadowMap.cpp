@@ -1,9 +1,11 @@
 #include "pch.h"
 #include "ShadowMap.h"
- 
-ShadowMap::ShadowMap(ID3D12Device* device, UINT width, UINT height)
+
+#include "GraphicsCore.h"
+
+ShadowMap::ShadowMap(UINT width, UINT height)
 {
-	m_Device = device;
+	m_Device = Graphics::g_Device;
 
 	mWidth = width;
 	mHeight = height;

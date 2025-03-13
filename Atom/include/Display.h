@@ -12,11 +12,9 @@ namespace Display
 
 namespace Graphics
 {
-    extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_RtvHeap;
-    extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_DsvHeap;
+    
     extern UINT g_CurrentBuffer;
     extern Microsoft::WRL::ComPtr<ID3D12Resource> g_DisplayPlane[];
-    extern Microsoft::WRL::ComPtr<ID3D12Resource> g_DepthStencilBuffer;
     extern uint32_t g_DisplayWidth;
     extern uint32_t g_DisplayHeight;
 

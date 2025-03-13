@@ -15,8 +15,7 @@ enum class CubeMapFace : int
 class ShadowMap
 {
 public:
-	ShadowMap(ID3D12Device* device,
-		UINT width, UINT height);
+	ShadowMap(UINT width, UINT height);
 		
 	ShadowMap(const ShadowMap& rhs)=delete;
 	ShadowMap& operator=(const ShadowMap& rhs)=delete;

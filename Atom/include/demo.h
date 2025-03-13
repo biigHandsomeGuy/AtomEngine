@@ -44,7 +44,7 @@
 //	D3D12_DRAW_ARGUMENTS drawArguments;
 //};
 //
-//class Demo final : public Application
+//class Demo final : public GameCore
 //{
 //public:
 //

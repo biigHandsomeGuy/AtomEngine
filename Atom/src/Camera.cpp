@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "Camera.h"
-
+#include "imgui/imgui.h"
 using namespace DirectX;
 
 Camera::Camera()
@@ -14,64 +14,49 @@ Camera::~Camera()
 
 void Camera::Update(float deltaTime)
 {
-	POINT currentCursorPos = {};
-	GetCursorPos(&currentCursorPos);
-	float dx = XMConvertToRadians(0.25f * static_cast<float>(currentCursorPos.x - m_LastMousePos.x));
-	float dy = XMConvertToRadians(0.25f * static_cast<float>(currentCursorPos.y - m_LastMousePos.y));
-	m_LastMousePos = currentCursorPos;
+	ImGuiIO& io = ImGui::GetIO();
 
-	if (GetAsyncKeyState(VK_RBUTTON) & 0x8000)
-	{	
-		// translate
-		// ATOM_INFO("VK_RBUTTON");
-		XMVECTOR s = XMVectorReplicate(0.1);
+	float dx = 0.0f, dy = 0.0f;
+	if (ImGui::IsMouseDragging(ImGuiMouseButton_Right))
+	{
+		dx += io.MouseDelta.x*0.005;
+		dy += io.MouseDelta.y*0.005;
+		// before and after
+		int baa = (
+			(ImGui::IsKeyDown(ImGuiKey_W) ? 1 : 0) +
+			(ImGui::IsKeyDown(ImGuiKey_S) ? -1 : 0)
+			);
+		// left and right
+		int lar = (
+			(ImGui::IsKeyDown(ImGuiKey_A) ? -1 : 0) +
+			(ImGui::IsKeyDown(ImGuiKey_D) ? 1 : 0)
+			);
+		// up and down
+		int uad = (
+			(ImGui::IsKeyDown(ImGuiKey_Q) ? -1 : 0) +
+			(ImGui::IsKeyDown(ImGuiKey_E) ? 1 : 0)
+			);
+		XMVECTOR s = XMVectorReplicate(1);
 		XMVECTOR p = XMLoadFloat3(&mPosition);
-		XMVECTOR direction;
-		if (GetAsyncKeyState('W') & 0x8000)
-		{			
-			direction = XMLoadFloat3(&mLook);			
-			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, direction, p));
-		}
-		if (GetAsyncKeyState('S') & 0x8000)
+		if (baa || lar || uad)
 		{
-			direction = XMLoadFloat3(&mLook);
-			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, -direction, p));
+			XMVECTOR dir = XMLoadFloat3(&mLook) * baa
+				+ XMLoadFloat3(&mRight) * lar
+				+ XMLoadFloat3(&mUp) * uad;
+			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, dir*0.1, p));
 		}
-		if (GetAsyncKeyState('A') & 0x8000)
-		{
-			direction = XMLoadFloat3(&mRight);
-			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, -direction, p));
-		}
-		if (GetAsyncKeyState('D') & 0x8000)
-		{
-			direction = XMLoadFloat3(&mRight);
-			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, direction, p));
-		}
-		if (GetAsyncKeyState('Q') & 0x8000)
-		{
-			direction = XMLoadFloat3(&mUp);
-			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, -direction, p));
-		}		
-		if (GetAsyncKeyState('E') & 0x8000)
-		{
-			direction = XMLoadFloat3(&mUp);
-			XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(s, direction, p));
-		}
-		
-		
+
 		// rotate
 		// Make each pixel correspond to a quarter of a degree.
-		
-		
+
 		Pitch(dy);
 		RotateY(dx);
 
-		// x-axis
-
-		// y-axis
-		
 		UpdateViewMatrix();
 	}
+
+	
+	
 }
 
 XMVECTOR Camera::GetPosition()const
@@ -183,6 +168,7 @@ void Camera::SetLens(float fovY, float aspect, float zn, float zf)
 
 	XMMATRIX P = XMMatrixPerspectiveFovLH(mFovY, mAspect, mNearZ, mFarZ);
 	XMStoreFloat4x4(&mProj, P);
+	UpdateViewMatrix();
 }
 
 void Camera::LookAt(FXMVECTOR pos, FXMVECTOR target, FXMVECTOR worldUp)

@@ -33,7 +33,7 @@
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h">
       <Filter>Vendor\stb_image\stb_image</Filter>
     </ClInclude>
-    <ClInclude Include="include\Application.h">
+    <ClInclude Include="include\GameCore.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\Camera.h">
@@ -99,6 +99,21 @@
     <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h">
       <Filter>Vendor\TinyObjLoader</Filter>
     </ClInclude>
+    <ClInclude Include="include\CommandAllocatorPool.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Log.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\CommandListManager.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Display.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\BufferManager.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -128,14 +143,26 @@
     <ClCompile Include="src\Model.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\Application.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\main.cpp">
+    <ClCompile Include="src\GameCore.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="Vendor\tinyobjloader\tiny_obj_loader.cc">
       <Filter>Vendor\TinyObjLoader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\CommandAllocatorPool.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\CommandListManager.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\GraphicsCore.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Display.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\BufferManager.cpp">
+      <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

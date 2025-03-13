@@ -10,32 +10,12 @@
 #include "Scene.h"
 #include "SkyBox.h"
 #include <DirectXCollision.h>
-#include "Application.h"
+#include "GameCore.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
-enum class DescriptorHeapLayout : int
-{
-    ShpereMaterialHeap,
-    ShpereMapHeap = 8,
-    ShadowMapHeap = 9,
-    SsaoMapHeap = 10,
-    NullCubeCbvHeap = 11,
-    NullTexSrvHeap1,
-    NullTexSrvHeap2, 
-    EnvirSrvHeap,
-    EnvirUavHeap ,
-    PrefilteredEnvirSrvHeap = EnvirUavHeap + 9,
-    PrefilteredEnvirUavHeap,    
-    IrradianceMapSrvHeap = PrefilteredEnvirUavHeap + 9,
-    IrradianceMapUavHeap,
-    LUTsrv,
-    LUTuav,
-    ColorBufferSrv,
-    ColorBufferBrightSrv
 
-};
 
 enum RootBindings
 {
@@ -65,7 +45,7 @@ __declspec(align(256)) struct ShaderParams
     float metallic = 0;
 };
 
-class Renderer : public Application
+class Renderer : public GameCore::IGameApp
 {
 public:
     
@@ -74,19 +54,21 @@ public:
     Renderer& operator=(const Renderer& rhs) = delete;
     ~Renderer();
 
-    virtual bool Initialize()override;
-
+    void OnResize(uint32_t width, uint32_t height) override;
+    void Startup() override;
+    void Cleanup()override {};
+    // init all resource
+    void InitResource();
 private:
-    virtual void CreateRtvAndDsvDescriptorHeaps()override;
-    virtual void OnResize()override;
-    virtual void Update(const GameTimer& gt)override;
-    virtual void Draw(const GameTimer& gt)override;
+    virtual void Update(float gt)override;
+    virtual void RenderScene()override;
 
-    void UpdateSsaoCB(const GameTimer& gt);
+    void RenderSSAO();
+
+    void UpdateSsaoCB(float gt);
     void UpdateUI();
 
-    void InitConstantBuffer();
-
+  
     void LoadTextures();
     void BuildRootSignature();
     void BuildDescriptorHeaps();
@@ -95,7 +77,6 @@ private:
     void BuildPSOs();
     void DrawSceneToShadowMap();
     void DrawNormalsAndDepth();
-    void CreateColorBufferView();
     void CreateCubeMap();
     D3D12_CPU_DESCRIPTOR_HANDLE CreateTextureUav(ID3D12Resource* res, UINT mipSlice);
 
@@ -103,7 +84,6 @@ private:
 
 private:
     ComPtr<ID3D12RootSignature> m_RootSignature = nullptr;
-    ComPtr<ID3D12DescriptorHeap> m_SrvDescriptorHeap = nullptr;
 
 
     std::unordered_map<std::string, ComPtr<ID3DBlob>> m_Shaders;
@@ -116,7 +96,6 @@ private:
 
     Camera m_Camera;
 
-    std::unique_ptr<ShadowMap> mShadowMap;
 
     DirectX::BoundingSphere mSceneBounds;
 
@@ -134,20 +113,7 @@ private:
     ComPtr<ID3D12Resource> m_IrradianceMap;
     ComPtr<ID3D12Resource> m_LUT;
 
-    // color -> color buffer -->(postprocess) ->back buffer 
-    // 1 srv with 1 rtv
-    ComPtr<ID3D12Resource> m_ColorBuffer;
-    D3D12_CPU_DESCRIPTOR_HANDLE m_ColorBufferRtvHandle;
-    
-    ComPtr<ID3D12Resource> m_ColorBufferBright;
-    D3D12_CPU_DESCRIPTOR_HANDLE m_ColorBufferBrightRtvHandle;
-
-
     BYTE* data = nullptr;
-
-
-    bool isColorBufferInit = false;
-    std::unique_ptr<Ssao> mSsao;
 
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
@@ -167,6 +133,18 @@ private:
     const UINT64 GlobalConstantsBufferSize = sizeof(GlobalConstants);
     const UINT64 MeshConstantsBufferSize = sizeof(MeshConstants);
     const UINT64 MaterialConstantsBufferSize = sizeof(MaterialConstants);
+
+    // shaderParameter cbuffer
+    ComPtr<ID3D12Resource> shaderParamsCbuffer;
+    // Post Process
+    ComPtr<ID3D12Resource> ppBuffer;
+    // material cbuffer
+    ComPtr<ID3D12Resource> envMapBuffer;
+
+    UINT64 shaderParamBufferSize = 0;
+
+    UINT64 PostProcessBufferSize = 0;
+    UINT64 EnvMapAttribsBufferSize = 0;
 
 
     Scene m_Scene;

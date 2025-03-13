@@ -3,10 +3,10 @@
 
 #include "GraphicsCore.h"
 #include "CommandListManager.h"
+#include "BufferManager.h"
 using namespace Graphics;
 
 #define SWAP_CHAIN_BUFFER_COUNT 3
-
 
 namespace GameCore
 {
@@ -28,12 +28,8 @@ namespace Graphics
     D3D12_VIEWPORT g_ViewPort;
     D3D12_RECT g_Rect;
 
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_RtvHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_DsvHeap;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> g_DisplayPlane[SWAP_CHAIN_BUFFER_COUNT];
-    Microsoft::WRL::ComPtr<ID3D12Resource> g_DepthStencilBuffer;
-    
+    Microsoft::WRL::ComPtr<ID3D12Resource> g_DisplayPlane[SWAP_CHAIN_BUFFER_COUNT];   
 }
 
 void Display::Initialize(void)
@@ -76,62 +72,19 @@ void Display::Initialize(void)
         nullptr,
         &s_SwapChain1));
 
-    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
-    rtvHeapDesc.NumDescriptors = SWAP_CHAIN_BUFFER_COUNT + 2;
-    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    rtvHeapDesc.NodeMask = 0;
-    ThrowIfFailed(g_Device->CreateDescriptorHeap(
-        &rtvHeapDesc, IID_PPV_ARGS(&g_RtvHeap)));
-
-
-    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc;
-    dsvHeapDesc.NumDescriptors = 1 + 1;
-    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    dsvHeapDesc.NodeMask = 0;
-    ThrowIfFailed(g_Device->CreateDescriptorHeap(
-        &dsvHeapDesc, IID_PPV_ARGS(&g_DsvHeap)));
-
+    
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(g_RtvHeap->GetCPUDescriptorHandleForHeapStart());
     for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
     {
         ThrowIfFailed(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&g_DisplayPlane[i])));
+        g_DisplayPlane[i]->SetName(L"g_DisplayPlane");
         g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, rtvHeapHandle);
         rtvHeapHandle.Offset(1, Graphics::RtvDescriptorSize);
     }
 
-    // Create the depth/stencil buffer and view.
-    D3D12_RESOURCE_DESC depthStencilDesc;
-    depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    depthStencilDesc.Alignment = 0;
-    depthStencilDesc.Width = g_DisplayWidth;
-    depthStencilDesc.Height = g_DisplayHeight;
-    depthStencilDesc.DepthOrArraySize = 1;
-    depthStencilDesc.MipLevels = 1;
-    depthStencilDesc.Format = DepthStencilFormat;
-    depthStencilDesc.SampleDesc.Count = 1;
-    depthStencilDesc.SampleDesc.Quality = 0;
-    depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-    D3D12_CLEAR_VALUE optClear;
-    optClear.Format = DepthStencilFormat;
-    optClear.DepthStencil.Depth = 1.0f;
-    optClear.DepthStencil.Stencil = 0;
-    ThrowIfFailed(g_Device->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-        D3D12_HEAP_FLAG_NONE,
-        &depthStencilDesc,
-        D3D12_RESOURCE_STATE_COMMON,
-        &optClear,
-        IID_PPV_ARGS(&g_DepthStencilBuffer)));
-    g_DepthStencilBuffer->SetName(L"g_DepthStencilBuffer");
-    // Create descriptor to mip level 0 of entire resource using the format of the resource.
-    g_Device->CreateDepthStencilView(g_DepthStencilBuffer.Get(), nullptr, g_DsvHeap->GetCPUDescriptorHandleForHeapStart());
-    // Transition the resource from its initial state to be used as a depth buffer.
-    g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_DepthStencilBuffer.Get(),
-        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+    InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
+    
+    
     g_CommandManager.IdleGPU();
 }
 
@@ -173,35 +126,31 @@ void Display::Resize(uint32_t width, uint32_t height)
     for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
     {
         ThrowIfFailed(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&g_DisplayPlane[i])));
+        g_DisplayPlane[i]->SetName(L"g_DisplayPlane");
         g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, rtvHeapHandle);
         rtvHeapHandle.Offset(1, Graphics::RtvDescriptorSize);
     }
 
-    g_CommandList->RSSetViewports(1, &g_ViewPort);
-
-    g_CommandList->RSSetScissorRects(1, &g_Rect);
-
-
+    InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
     // g_CommandManager.GetGraphicsQueue().ExecuteCommandList(g_CommandList);
     g_CommandManager.IdleGPU();
 }
 
 void Display::Present(void)
 {
-   
-    g_CommandList->RSSetViewports(1, &g_ViewPort);
-   
-    g_CommandList->RSSetScissorRects(1, &g_Rect);
-
-
     // Indicate a state transition on the resource usage.
     g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_DisplayPlane[g_CurrentBuffer].Get(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 
-    g_CommandManager.GetQueue().ExecuteCommandList(g_CommandList);
+    g_CommandManager.GetQueue().ExecuteCommandList(g_CommandList.Get());
 
     s_SwapChain1->Present(1, 0);
     g_CurrentBuffer = (g_CurrentBuffer + 1) % SWAP_CHAIN_BUFFER_COUNT;
 
     g_CommandManager.IdleGPU();
+
+    // ThrowIfFailed(g_CommandAllocator->Reset());
+    // 
+    // ThrowIfFailed(g_CommandList->Reset(g_CommandAllocator, nullptr));
+
 }

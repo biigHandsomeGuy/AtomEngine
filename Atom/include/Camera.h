@@ -61,8 +61,6 @@ public:
 	void UpdateViewMatrix();
 
 private:
-	POINT m_LastMousePos;
-
 	// Camera coordinate system with coordinates relative to world space.
 	DirectX::XMFLOAT3 mPosition = { 0.0f, 0.0f, 0.0f };
 	DirectX::XMFLOAT3 mRight = { 1.0f, 0.0f, 0.0f };
@@ -81,4 +79,6 @@ private:
 	// Cache View/Proj matrices.
 	DirectX::XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	DirectX::XMFLOAT4X4 mProj = MathHelper::Identity4x4();
+
+	D3D12_VIEWPORT m_ViewPort = {};
 };
