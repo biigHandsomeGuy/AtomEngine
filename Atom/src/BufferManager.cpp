@@ -2,6 +2,7 @@
 #include "BufferManager.h"
 #include "GraphicsCore.h"
 #include "Display.h"
+#include "CommandListManager.h"
 DXGI_FORMAT BackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 DXGI_FORMAT DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 namespace Graphics
@@ -19,6 +20,9 @@ namespace Graphics
 
     void InitializeRenderingBuffers(uint32_t NativeWidth, uint32_t NativeHeight)
     {
+        // g_CommandManager.CreateNewCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT, &g_CommandList, &g_CommandAllocator);
+
+
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         D3D12_RESOURCE_DESC desc = {};
@@ -173,6 +177,12 @@ namespace Graphics
         rtvDesc.Format = DXGI_FORMAT_R8_UNORM;
         g_Device->CreateRenderTargetView(g_SSAOFullScreen.Get(), &rtvDesc, g_SSAOFullScreenRtvHandle);
 
+
+        // CommandQueue& Queue = g_CommandManager.GetQueue();
+        // 
+        // uint64_t FenceValue = Queue.ExecuteCommandList(g_CommandList.Get());
+        // Queue.DiscardAllocator(FenceValue, g_CommandAllocator.Get());
+        // g_CommandAllocator = nullptr;
     }
 
     void DestroyRenderingBuffers()

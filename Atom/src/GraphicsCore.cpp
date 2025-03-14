@@ -89,5 +89,10 @@ namespace Graphics
     }
     void Shutdown(void)
     {
+		g_CommandManager.IdleGPU();
+		
+		g_CommandManager.Shutdown();
+
+		Display::Shutdown();
     }
 }

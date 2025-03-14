@@ -20,7 +20,7 @@ void CommandAllocatorPool::Shutdown()
 {
 	for (size_t i = 0; i < m_AllocatorPool.size(); ++i)
 	{
-		//m_AllocatorPool[i]->Release();
+		m_AllocatorPool[i]->Release();
 	}
 
 	m_AllocatorPool.clear();

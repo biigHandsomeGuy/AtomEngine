@@ -96,8 +96,7 @@ void Renderer::Startup()
     XMVECTOR lightPos = XMLoadFloat4(&XMFLOAT4{ 0.0f, 5.0f, 2.0f, 1.0f });
     XMStoreFloat4(&mLightPosW, lightPos);
 
-
-
+  
     LoadTextures();
     BuildRootSignature();
     BuildDescriptorHeaps();
@@ -108,17 +107,17 @@ void Renderer::Startup()
 
     BuildPSOs();
 
-    g_CommandManager.GetQueue().ExecuteCommandList(g_CommandList.Get());
-    g_CommandManager.IdleGPU();
+    // g_CommandManager.GetQueue().ExecuteCommandList(g_CommandList.Get());
+    // g_CommandManager.IdleGPU();
 
-    {
-        computeRS.Reset();
-        cubePso.Reset();
-        irMapPso.Reset();
-        spMapPso.Reset();
-        lutPso.Reset();
-    }
-
+    // {
+    //     computeRS.Reset();
+    //     cubePso.Reset();
+    //     irMapPso.Reset();
+    //     spMapPso.Reset();
+    //     lutPso.Reset();
+    // }
+    // 
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -166,7 +165,12 @@ void Renderer::Startup()
     mSceneBounds.Radius = 15;
 
     UINT descriptorRangeSize = 1;
-    
+
+    CommandQueue& Queue = g_CommandManager.GetQueue();
+     
+    uint64_t FenceValue = Queue.ExecuteCommandList(g_CommandList.Get());
+    Queue.DiscardAllocator(FenceValue, g_CommandAllocator.Get());
+    g_CommandAllocator = nullptr;
 }
 
 void Renderer::InitResource()
@@ -269,9 +273,11 @@ void Renderer::Update(float gt)
 
 void Renderer::RenderScene()
 {
-    ThrowIfFailed(g_CommandAllocator->Reset());
-    
-    ThrowIfFailed(g_CommandList->Reset(g_CommandAllocator.Get(), nullptr));
+    g_CommandAllocator = g_CommandManager.GetQueue(D3D12_COMMAND_LIST_TYPE_DIRECT).RequestAllocator();
+    g_CommandList->Reset(g_CommandAllocator.Get(), nullptr);
+
+
+
 
     g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_DisplayPlane[g_CurrentBuffer].Get(),
         D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
@@ -444,7 +450,8 @@ void Renderer::RenderScene()
     ImGui::Render();
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), g_CommandList.Get());
 
-   
+    
+
 }
 
 void Renderer::RenderSSAO()

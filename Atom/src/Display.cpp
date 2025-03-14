@@ -132,7 +132,6 @@ void Display::Resize(uint32_t width, uint32_t height)
     }
 
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
-    // g_CommandManager.GetGraphicsQueue().ExecuteCommandList(g_CommandList);
     g_CommandManager.IdleGPU();
 }
 
@@ -141,16 +140,15 @@ void Display::Present(void)
     // Indicate a state transition on the resource usage.
     g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_DisplayPlane[g_CurrentBuffer].Get(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+    CommandQueue& Queue = g_CommandManager.GetQueue();
 
-    g_CommandManager.GetQueue().ExecuteCommandList(g_CommandList.Get());
-
+    uint64_t FenceValue = Queue.ExecuteCommandList(g_CommandList.Get());
+    Queue.DiscardAllocator(FenceValue, g_CommandAllocator.Get());
+    g_CommandAllocator = nullptr;
+    
     s_SwapChain1->Present(1, 0);
     g_CurrentBuffer = (g_CurrentBuffer + 1) % SWAP_CHAIN_BUFFER_COUNT;
 
     g_CommandManager.IdleGPU();
-
-    // ThrowIfFailed(g_CommandAllocator->Reset());
-    // 
-    // ThrowIfFailed(g_CommandList->Reset(g_CommandAllocator, nullptr));
 
 }

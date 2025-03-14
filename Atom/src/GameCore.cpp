@@ -79,6 +79,12 @@ namespace GameCore
 		Display::Present();
 		return 1;
 	}
+
+	void TerminateApplication(IGameApp& game)
+	{
+		g_CommandManager.IdleGPU();
+	}
+
 	int GameCore::RunApplication(IGameApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow)
 	{
 		// Register class
@@ -139,6 +145,8 @@ namespace GameCore
 				UpdateApplication(app);
 			}
 		}
+		TerminateApplication(app);
+		Graphics::Shutdown();
 	}
 
 }
