@@ -65,7 +65,7 @@ void Display::Initialize(void)
     fsSwapChainDesc.Windowed = TRUE;
 
     ThrowIfFailed(dxgiFactory->CreateSwapChainForHwnd(
-        g_CommandManager.GetCommandQueue(),
+        g_CommandQueue.Get(),
         GameCore::g_hWnd,
         &swapChainDesc,
         &fsSwapChainDesc,
@@ -85,16 +85,20 @@ void Display::Initialize(void)
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
     
     
-    g_CommandManager.IdleGPU();
+    FlushCommandQueue();
 }
 
 void Display::Shutdown(void)
 {
+    for (uint32_t i = 0; i < SWAP_CHAIN_BUFFER_COUNT; ++i)
+    {
+        g_DisplayPlane[i].Reset();
+    }
 }
 
 void Display::Resize(uint32_t width, uint32_t height)
 {
-    g_CommandManager.IdleGPU();
+    FlushCommandQueue();
     
     g_DisplayWidth = width;
     g_DisplayHeight = height;
@@ -132,7 +136,7 @@ void Display::Resize(uint32_t width, uint32_t height)
     }
 
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
-    g_CommandManager.IdleGPU();
+    FlushCommandQueue();
 }
 
 void Display::Present(void)
@@ -140,15 +144,18 @@ void Display::Present(void)
     // Indicate a state transition on the resource usage.
     g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_DisplayPlane[g_CurrentBuffer].Get(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-    CommandQueue& Queue = g_CommandManager.GetQueue();
 
-    uint64_t FenceValue = Queue.ExecuteCommandList(g_CommandList.Get());
-    Queue.DiscardAllocator(FenceValue, g_CommandAllocator.Get());
-    g_CommandAllocator = nullptr;
+    // Execute the initialization commands.
+    ThrowIfFailed(g_CommandList->Close());
+    ID3D12CommandList* cmdsLists[] = { g_CommandList.Get() };
+    g_CommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
+
+    // Wait until initialization is complete.
+    FlushCommandQueue();
     
     s_SwapChain1->Present(1, 0);
     g_CurrentBuffer = (g_CurrentBuffer + 1) % SWAP_CHAIN_BUFFER_COUNT;
 
-    g_CommandManager.IdleGPU();
+    FlushCommandQueue();
 
 }

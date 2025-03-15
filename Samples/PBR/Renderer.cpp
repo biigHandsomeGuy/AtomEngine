@@ -81,7 +81,7 @@ Renderer::Renderer(HINSTANCE hInstance)
 
 Renderer::~Renderer()
 {
-    g_CommandManager.IdleGPU();
+    //FlushCommandQueue();
 
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -133,7 +133,7 @@ void Renderer::Startup()
 
     // Setup Platform/Renderer backends
     ImGui_ImplWin32_Init(g_hWnd);
-    ImGui_ImplDX12_Init(g_Device, 2,
+    ImGui_ImplDX12_Init(g_Device.Get(), 2,
         DXGI_FORMAT_R16G16B16A16_FLOAT, g_SrvHeap.Get(),
         handle,
         GpuHandle);
@@ -141,9 +141,9 @@ void Renderer::Startup()
 
     Model skyBox, pbrModel, ground;
 
-    skyBox.Load(std::string("D:/AtomEngine/Atom/Assets/Models/cube.obj"), g_Device, g_CommandList.Get());
-    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/happy1.obj"), g_Device, g_CommandList.Get());
-    ground.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device, g_CommandList.Get());
+    skyBox.Load(std::string("D:/AtomEngine/Atom/Assets/Models/cube.obj"), g_Device.Get(), g_CommandList.Get());
+    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/happy1.obj"), g_Device.Get(), g_CommandList.Get());
+    ground.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device.Get(), g_CommandList.Get());
 
     pbrModel.modelMatrix = XMMatrixScaling(10, 10, 10);
     //pbrModel.modelMatrix *= XMMatrixTranslation(5, 3, 0);
@@ -166,11 +166,13 @@ void Renderer::Startup()
 
     UINT descriptorRangeSize = 1;
 
-    CommandQueue& Queue = g_CommandManager.GetQueue();
-     
-    uint64_t FenceValue = Queue.ExecuteCommandList(g_CommandList.Get());
-    Queue.DiscardAllocator(FenceValue, g_CommandAllocator.Get());
-    g_CommandAllocator = nullptr;
+    // Execute the initialization commands.
+    ThrowIfFailed(g_CommandList->Close());
+    ID3D12CommandList* cmdsLists[] = { g_CommandList.Get() };
+    g_CommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
+
+    // Wait until initialization is complete.
+    FlushCommandQueue();
 }
 
 void Renderer::InitResource()
@@ -273,10 +275,13 @@ void Renderer::Update(float gt)
 
 void Renderer::RenderScene()
 {
-    g_CommandAllocator = g_CommandManager.GetQueue(D3D12_COMMAND_LIST_TYPE_DIRECT).RequestAllocator();
-    g_CommandList->Reset(g_CommandAllocator.Get(), nullptr);
+    // Reuse the memory associated with command recording.
+   // We can only reset when the associated command lists have finished execution on the GPU.
+    ThrowIfFailed(g_CommandAllocator->Reset());
 
-
+    // A command list can be reset after it has been added to the command queue via ExecuteCommandList.
+    // Reusing the command list reuses memory.
+    ThrowIfFailed(g_CommandList->Reset(g_CommandAllocator.Get(),nullptr));
 
 
     g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_DisplayPlane[g_CurrentBuffer].Get(),
@@ -750,7 +755,6 @@ void Renderer::BuildRootSignature()
     slotRootParameter[kSpecularSrv].InitAsDescriptorTable(1, &specularRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kLUT].InitAsDescriptorTable(1, &lutRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[kPostProcess].InitAsDescriptorTable(1, &postRange, D3D12_SHADER_VISIBILITY_PIXEL);
-  
     
 
 	auto staticSamplers = GetStaticSamplers();

@@ -94,6 +94,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\BufferManager.h" />
+    <ClInclude Include="include\d3dApp.h" />
     <ClInclude Include="include\GameCore.h" />
     <ClInclude Include="include\Camera.h" />
     <ClInclude Include="include\CommandAllocatorPool.h" />
@@ -107,12 +108,16 @@
     <ClInclude Include="include\GameTimer.h" />
     <ClInclude Include="include\GeometryGenerator.h" />
     <ClInclude Include="include\GraphicsCore.h" />
+    <ClInclude Include="include\Hash.h" />
     <ClInclude Include="include\Log.h" />
     <ClInclude Include="include\Material.h" />
     <ClInclude Include="include\MathHelper.h" />
+    <ClInclude Include="include\Math\Common.h" />
     <ClInclude Include="include\Mesh.h" />
     <ClInclude Include="include\Model.h" />
     <ClInclude Include="include\pch.h" />
+    <ClInclude Include="include\PipelineState.h" />
+    <ClInclude Include="include\RootSignature.h" />
     <ClInclude Include="include\Scene.h" />
     <ClInclude Include="include\ShadowMap.h" />
     <ClInclude Include="include\SkyBox.h" />
@@ -133,6 +138,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\PipelineState.cpp" />
+    <ClCompile Include="src\RootSignature.cpp" />
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp" />
     <ClCompile Include="src\GameCore.cpp" />
     <ClCompile Include="src\Camera.cpp" />

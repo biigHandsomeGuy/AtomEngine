@@ -8,6 +8,9 @@
 #include "CommandListManager.h"
 #include "Display.h"
 
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxguid.lib")
+
 using Microsoft::WRL::ComPtr;
 using namespace std;
 using namespace Graphics;
@@ -82,7 +85,7 @@ namespace GameCore
 
 	void TerminateApplication(IGameApp& game)
 	{
-		g_CommandManager.IdleGPU();
+		
 	}
 
 	int GameCore::RunApplication(IGameApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow)

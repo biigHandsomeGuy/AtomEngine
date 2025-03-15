@@ -178,11 +178,6 @@ namespace Graphics
         g_Device->CreateRenderTargetView(g_SSAOFullScreen.Get(), &rtvDesc, g_SSAOFullScreenRtvHandle);
 
 
-        // CommandQueue& Queue = g_CommandManager.GetQueue();
-        // 
-        // uint64_t FenceValue = Queue.ExecuteCommandList(g_CommandList.Get());
-        // Queue.DiscardAllocator(FenceValue, g_CommandAllocator.Get());
-        // g_CommandAllocator = nullptr;
     }
 
     void DestroyRenderingBuffers()

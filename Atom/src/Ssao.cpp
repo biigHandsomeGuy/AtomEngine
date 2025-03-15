@@ -112,6 +112,14 @@ void SSAO::Render(SsaoConstants& ssaoConstants)
 
 }
 
+void SSAO::Shutdown()
+{
+    ssaoCbuffer.Reset();
+    s_RootSignature.Reset();
+    s_SsaoPso.Reset();
+    s_BlurPso.Reset();
+}
+
 void SSAO::Initialize()
 {
     CD3DX12_DESCRIPTOR_RANGE texTable0; // normal depth
