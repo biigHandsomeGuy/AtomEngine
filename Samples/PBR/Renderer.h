@@ -54,7 +54,7 @@ public:
     Renderer& operator=(const Renderer& rhs) = delete;
     ~Renderer();
 
-    void OnResize(uint32_t width, uint32_t height) override;
+    void OnResize() override;
     void Startup() override;
     void Cleanup()override {};
     // init all resource

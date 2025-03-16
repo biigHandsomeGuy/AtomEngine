@@ -90,13 +90,14 @@ Renderer::~Renderer()
 
 void Renderer::Startup()
 {
+
     m_Camera.SetPosition(0.0f, 2.0f, -5.0f);
     m_Camera.SetLens(0.25f * MathHelper::Pi, (float)g_DisplayWidth / g_DisplayHeight, 1.0f, 1000.0f);
 
     XMVECTOR lightPos = XMLoadFloat4(&XMFLOAT4{ 0.0f, 5.0f, 2.0f, 1.0f });
     XMStoreFloat4(&mLightPosW, lightPos);
 
-  
+    
     LoadTextures();
     BuildRootSignature();
     BuildDescriptorHeaps();
@@ -259,9 +260,9 @@ void Renderer::InitResource()
 }
 
 
-void Renderer::OnResize(uint32_t width, uint32_t height)
+void Renderer::OnResize()
 {
-	m_Camera.SetLens(0.25f*MathHelper::Pi, width / height, 1.0f, 1000.0f);
+	m_Camera.SetLens(0.25f*MathHelper::Pi, (float)g_DisplayWidth / g_DisplayHeight, 1.0f, 1000.0f);
 }
 
 void Renderer::Update(float gt)
@@ -297,7 +298,8 @@ void Renderer::RenderScene()
 	//
 
     DrawSceneToShadowMap();
-
+    g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SceneDepthBuffer.Get(),
+        D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_DEPTH_WRITE));
 	//
 	// Normal/depth pass.
 	//
@@ -311,12 +313,10 @@ void Renderer::RenderScene()
 	//
 	// Main rendering pass.
 	//
-	
+   
     static XMFLOAT4 color = XMFLOAT4(0, 0, 0, 1);
     g_CommandList->RSSetViewports(1, &g_ViewPort);
-    auto v = g_ViewPort;
     g_CommandList->RSSetScissorRects(1, &g_Rect);
-    auto s = g_Rect;
     // Clear the back buffer.
     auto rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(g_RtvHeap->GetCPUDescriptorHandleForHeapStart(), g_CurrentBuffer, Graphics::RtvDescriptorSize);
     g_CommandList->ClearRenderTargetView(rtv, &color.x, 0, nullptr);
@@ -455,7 +455,8 @@ void Renderer::RenderScene()
     ImGui::Render();
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), g_CommandList.Get());
 
-    
+    g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SceneDepthBuffer.Get(),
+        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON));
 
 }
 
