@@ -19,6 +19,7 @@ class CommandListManager;
 namespace GameCore
 {
 	extern HWND g_hWnd;
+	extern bool isResize;
 	// frame work
 	class IGameApp
 	{
@@ -30,10 +31,10 @@ namespace GameCore
 		virtual bool IsDone(void) { return false; };
 
 		virtual void Update(float deltaT) = 0;
-		virtual void OnResize(uint32_t width, uint32_t height) = 0;
+		virtual void OnResize() = 0;
 		virtual void RenderScene(void) = 0;
 	public:
-
+		
 
 		GameTimer m_Timer;
 

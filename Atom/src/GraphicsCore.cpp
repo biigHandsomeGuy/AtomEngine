@@ -3,7 +3,6 @@
 #include "Display.h"
 #include "Ssao.h"
 
-
 namespace Graphics
 {
     UINT RtvDescriptorSize = 0;
@@ -22,7 +21,6 @@ namespace Graphics
 
 	Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
 	Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
-	
 	UINT g_CurrentFence = 0;
     void Initialize(bool RequireDXRSupport)
     {
@@ -105,6 +103,8 @@ namespace Graphics
 		Graphics::RtvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		Graphics::DsvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		Graphics::CbvSrvUavDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+
 
 		Display::Initialize();
 

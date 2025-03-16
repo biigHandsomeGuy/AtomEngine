@@ -28,6 +28,7 @@ LRESULT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			// WM_SIZE is sent when the user resizes the window.  
 		case WM_SIZE:
 			Display::Resize((UINT)(UINT64)lParam & 0xFFFF, (UINT)(UINT64)lParam >> 16);
+			GameCore::isResize = true;
 			return 0;
 
 			// WM_DESTROY is sent when the window is being destroyed.
@@ -66,6 +67,8 @@ LRESULT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 // }
 namespace GameCore
 {
+	bool isResize = false;
+
 	HWND g_hWnd = nullptr;
 	void InitializeApplication(IGameApp& game)
 	{
@@ -76,6 +79,11 @@ namespace GameCore
 
 	bool UpdateApplication(IGameApp& game)
 	{
+		if (isResize)
+		{
+			game.OnResize();
+			isResize = false;
+		}
 		game.Update(1);
 		game.RenderScene();
 

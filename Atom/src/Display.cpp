@@ -80,6 +80,7 @@ void Display::Initialize(void)
         g_DisplayPlane[i]->SetName(L"g_DisplayPlane");
         g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, rtvHeapHandle);
         rtvHeapHandle.Offset(1, Graphics::RtvDescriptorSize);
+        
     }
 
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
@@ -133,6 +134,8 @@ void Display::Resize(uint32_t width, uint32_t height)
         g_DisplayPlane[i]->SetName(L"g_DisplayPlane");
         g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, rtvHeapHandle);
         rtvHeapHandle.Offset(1, Graphics::RtvDescriptorSize);
+       
+
     }
 
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);

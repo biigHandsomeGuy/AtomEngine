@@ -27,6 +27,13 @@ namespace Graphics
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         D3D12_RESOURCE_DESC desc = {};
 
+        D3D12_CLEAR_VALUE clearValue = {};
+        clearValue.Format = BackBufferFormat; // 你的RTV格式
+        clearValue.Color[0] = 0.0f;  // R
+        clearValue.Color[1] = 0.0f;  // G
+        clearValue.Color[2] = 0.0f;  // B
+        clearValue.Color[3] = 1.0f;  // A
+
         desc.Width = NativeWidth;
         desc.Height = NativeHeight;
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -42,7 +49,7 @@ namespace Graphics
             D3D12_HEAP_FLAG_NONE,
             &desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
+            &clearValue,
             IID_PPV_ARGS(&g_SceneColorBuffer)));
         g_SceneColorBuffer->SetName(L"g_SceneColorBuffer");
 
@@ -92,7 +99,7 @@ namespace Graphics
             D3D12_HEAP_FLAG_NONE,
             &desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
+            &clearValue,
             IID_PPV_ARGS(&g_SceneNormalBuffer)));
         g_SceneNormalBuffer->SetName(L"g_SceneNormalBuffer");
 
@@ -103,6 +110,11 @@ namespace Graphics
         g_SceneNormalBufferRtvHandle = GetCpuHandle(g_RtvHeap.Get(), 4);
         rtvDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
         g_Device->CreateRenderTargetView(g_SceneNormalBuffer.Get(), &rtvDesc, g_SceneNormalBufferRtvHandle);
+
+        D3D12_CLEAR_VALUE depthOptimizedClearValue = {};
+        depthOptimizedClearValue.Format = DepthStencilFormat;
+        depthOptimizedClearValue.DepthStencil.Depth = 1.0f;  // 清除深度 = 1.0（默认）
+        depthOptimizedClearValue.DepthStencil.Stencil = 0;   // 清除模板 = 0
 
         // g_DepthStencilBuffer srv + dsv
         D3D12_RESOURCE_DESC depthStencilDesc;
@@ -123,7 +135,7 @@ namespace Graphics
             D3D12_HEAP_FLAG_NONE,
             &depthStencilDesc,
             D3D12_RESOURCE_STATE_COMMON,
-            nullptr,
+            &depthOptimizedClearValue,
             IID_PPV_ARGS(&g_SceneDepthBuffer)));
         g_SceneDepthBuffer->SetName(L"g_DepthStencilBuffer");
         // Create descriptor to mip level 0 of entire resource using the format of the resource.
@@ -131,8 +143,8 @@ namespace Graphics
         srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
         srvHandle = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SceneDepthBufferSrv);
         g_Device->CreateShaderResourceView(g_SceneDepthBuffer.Get(), &srvDesc, srvHandle);
-        g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SceneDepthBuffer.Get(),
-            D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+        //g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SceneDepthBuffer.Get(),
+        //    D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 
         // g_ShadowBuffer
         ThrowIfFailed(g_Device->CreateCommittedResource(
@@ -140,16 +152,17 @@ namespace Graphics
             D3D12_HEAP_FLAG_NONE,
             &depthStencilDesc,
             D3D12_RESOURCE_STATE_COMMON,
-            nullptr,
+            &depthOptimizedClearValue,
             IID_PPV_ARGS(&g_ShadowBuffer)));
         g_ShadowBuffer->SetName(L"g_ShadowBuffer");
-
+        //g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_ShadowBuffer.Get(),
+        //    D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
         srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
         srvHandle = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::ShadowBufferSrv);
         g_Device->CreateShaderResourceView(g_ShadowBuffer.Get(), &srvDesc, srvHandle);
 
         g_Device->CreateDepthStencilView(g_ShadowBuffer.Get(), nullptr, CD3DX12_CPU_DESCRIPTOR_HANDLE(g_DsvHeap->GetCPUDescriptorHandleForHeapStart(), 1, DsvDescriptorSize));
-
+        clearValue.Format = DXGI_FORMAT_R8_UNORM;
         // g_SSAOFullScreen
         desc.Width = NativeWidth;
         desc.Height = NativeHeight;
@@ -165,7 +178,7 @@ namespace Graphics
             D3D12_HEAP_FLAG_NONE,
             &desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
+            &clearValue,
             IID_PPV_ARGS(&g_SSAOFullScreen)));
         g_SSAOFullScreen->SetName(L"g_SSAOFullScreen");
 

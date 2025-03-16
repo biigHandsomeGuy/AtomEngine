@@ -1,6 +1,5 @@
 #pragma once
 
-
 class CommandListManager;
 namespace Graphics
 {
@@ -43,6 +42,5 @@ enum class DescriptorHeapLayout : int
     LUTuav,
     SceneColorBufferSrv,
     SceneNormalBufferSrv,
-    SceneDepthBufferSrv,
-   
+    SceneDepthBufferSrv,   
 };
