@@ -13,6 +13,7 @@ namespace Graphics
     Microsoft::WRL::ComPtr<ID3D12Resource> g_SceneNormalBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> g_ShadowBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> g_SSAOFullScreen;
+    Microsoft::WRL::ComPtr<ID3D12Resource> g_RandomVectorBuffer;
 
     D3D12_CPU_DESCRIPTOR_HANDLE g_SceneColorBufferRtvHandle;
     D3D12_CPU_DESCRIPTOR_HANDLE g_SceneNormalBufferRtvHandle;

@@ -9,24 +9,27 @@
 #include "../CompiledShaders/SsaoBlurVS.h"
 #include "../CompiledShaders/SsaoBlurPS.h"
 #include "MathHelper.h"
-
+#include "Camera.h"
 
 using namespace DirectX;
 using namespace DirectX::PackedVector;
 using namespace Microsoft::WRL;
 using namespace Graphics;
 
-ComPtr<ID3D12Resource> ssaoCbuffer;
 
 namespace
 {
     ComPtr<ID3D12RootSignature> s_RootSignature;
     ComPtr<ID3D12PipelineState> s_SsaoPso;
     ComPtr<ID3D12PipelineState> s_BlurPso;
+    ComPtr<ID3D12Resource> s_RandomVectorMapUploadBuffer;
     const UINT64 bufferSize = sizeof(SsaoConstants);
+
+    SsaoConstants s_SsaoConstants = {};
+    ComPtr<ID3D12Resource> ssaoCbuffer;
 }
 
-
+void BuildOffsetVectors();
 std::vector<float> CalcGaussWeights(float sigma)
 {
     float twoSigma2 = 2.0f * sigma * sigma;
@@ -58,7 +61,7 @@ std::vector<float> CalcGaussWeights(float sigma)
     return weights;
 }
 
-void SSAO::Render(SsaoConstants& ssaoConstants)
+void SSAO::Render(const Camera& camera)
 {
     g_CommandList->RSSetViewports(1, &g_ViewPort);
     g_CommandList->RSSetScissorRects(1, &g_Rect);
@@ -80,12 +83,36 @@ void SSAO::Render(SsaoConstants& ssaoConstants)
      // material cbuffer
    
     {
-       
-       
+        XMMATRIX P = camera.GetProj();
+
+        // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
+        XMMATRIX T(
+            0.5f, 0.0f, 0.0f, 0.0f,
+            0.0f, -0.5f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.5f, 0.5f, 0.0f, 1.0f);
+
+        XMStoreFloat4x4(&s_SsaoConstants.Proj, P);
+        XMMATRIX invProj = XMMatrixInverse(nullptr, P);
+        XMStoreFloat4x4(&s_SsaoConstants.InvProj, invProj);
+
+        XMStoreFloat4x4(&s_SsaoConstants.ProjTex, P * T);
+
+        // BuildOffsetVectors();
+        // 
+        auto blurWeights = CalcGaussWeights(2.5f);
+        s_SsaoConstants.BlurWeights[0] = XMFLOAT4(&blurWeights[0]);
+        s_SsaoConstants.BlurWeights[1] = XMFLOAT4(&blurWeights[4]);
+        s_SsaoConstants.BlurWeights[2] = XMFLOAT4(&blurWeights[8]);
+        
+        s_SsaoConstants.InvRenderTargetSize = XMFLOAT2((1.0f / g_DisplayWidth), 1.0f / g_DisplayHeight);
+
+
+        
         BYTE* data = nullptr;
         ssaoCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-       
-        memcpy(data, &ssaoConstants, bufferSize);
+        
+        memcpy(data, &s_SsaoConstants, bufferSize);
         ssaoCbuffer->Unmap(0, nullptr);
     }
 
@@ -99,6 +126,10 @@ void SSAO::Render(SsaoConstants& ssaoConstants)
     // Bind the normal and depth maps.
     g_CommandList->SetGraphicsRootDescriptorTable(2, normalSrvHandle);
 
+    auto randomRtv = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::RandomVectorMapSrv);
+    // Bind the normal and depth maps.
+    g_CommandList->SetGraphicsRootDescriptorTable(3, randomRtv);
+
 
     // Draw fullscreen quad.
     g_CommandList->IASetVertexBuffers(0, 0, nullptr);
@@ -110,6 +141,84 @@ void SSAO::Render(SsaoConstants& ssaoConstants)
     g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ));
 
+}
+void BuildRandomVectorTexture()
+{
+    D3D12_RESOURCE_DESC texDesc;
+    ZeroMemory(&texDesc, sizeof(D3D12_RESOURCE_DESC));
+    texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    texDesc.Alignment = 0;
+    texDesc.Width = 256;
+    texDesc.Height = 256;
+    texDesc.DepthOrArraySize = 1;
+    texDesc.MipLevels = 1;
+    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.SampleDesc.Quality = 0;
+    texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    texDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    ThrowIfFailed(g_Device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        D3D12_HEAP_FLAG_NONE,
+        &texDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&g_RandomVectorBuffer)));
+    g_RandomVectorBuffer->SetName(L"g_RandomVectorBuffer");
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = -1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0;
+    
+    auto srvHandle = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::RandomVectorMapSrv);
+    g_Device->CreateShaderResourceView(g_RandomVectorBuffer.Get(), &srvDesc, srvHandle);
+
+
+    const UINT num2DSubresources = texDesc.DepthOrArraySize * texDesc.MipLevels;
+    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(g_RandomVectorBuffer.Get(), 0, num2DSubresources);
+
+    ThrowIfFailed(g_Device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(s_RandomVectorMapUploadBuffer.GetAddressOf())));
+
+    XMCOLOR initData[256 * 256];
+    for (int i = 0; i < 256; ++i)
+    {
+        for (int j = 0; j < 256; ++j)
+        {
+            // Random vector in [0,1].  We will decompress in shader to [-1,1].
+            XMFLOAT3 v(MathHelper::RandF(), MathHelper::RandF(), MathHelper::RandF());
+
+            initData[i * 256 + j] = XMCOLOR(v.x, v.y, v.z, 0.0f);
+        }
+    }
+
+    D3D12_SUBRESOURCE_DATA subResourceData = {};
+    subResourceData.pData = initData;
+    subResourceData.RowPitch = 256 * sizeof(XMCOLOR);
+    subResourceData.SlicePitch = subResourceData.RowPitch * 256;
+
+    //
+    // Schedule to copy the data to the default resource, and change states.
+    // Note that mCurrSol is put in the GENERIC_READ state so it can be 
+    // read by a shader.
+    //
+
+    g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Get(),
+        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST));
+    UpdateSubresources(g_CommandList.Get(), g_RandomVectorBuffer.Get(), s_RandomVectorMapUploadBuffer.Get(),
+        0, 0, num2DSubresources, &subResourceData);
+    g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
 }
 
 void SSAO::Shutdown()
@@ -123,15 +232,18 @@ void SSAO::Shutdown()
 void SSAO::Initialize()
 {
     CD3DX12_DESCRIPTOR_RANGE texTable0; // normal depth
+    CD3DX12_DESCRIPTOR_RANGE texTable1; // normal depth
     texTable0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0);
+    texTable1.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0);
 
     // Root parameter can be a table, root descriptor or root constants.
-    CD3DX12_ROOT_PARAMETER slotRootParameter[3];
+    CD3DX12_ROOT_PARAMETER slotRootParameter[4];
 
     // Perfomance TIP: Order from most frequent to least frequent.
     slotRootParameter[0].InitAsConstantBufferView(0);
     slotRootParameter[1].InitAsConstants(1, 1);
     slotRootParameter[2].InitAsDescriptorTable(1, &texTable0, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[3].InitAsDescriptorTable(1, &texTable1, D3D12_SHADER_VISIBILITY_PIXEL);
 
     const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
         0, // shaderRegister
@@ -171,7 +283,7 @@ void SSAO::Initialize()
     };
 
     // A root signature is an array of root parameters.
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, slotRootParameter,
         (UINT)staticSamplers.size(), staticSamplers.data(),
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -246,7 +358,8 @@ void SSAO::Initialize()
         nullptr,
         IID_PPV_ARGS(ssaoCbuffer.GetAddressOf())
     ));
-
+    BuildRandomVectorTexture();
+    BuildOffsetVectors();
     //ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&ssaoBlurPsoDesc, IID_PPV_ARGS(&s_BlurPso)));
 }
 
@@ -356,6 +469,6 @@ void BuildOffsetVectors()
 
         XMVECTOR v = s * XMVector4Normalize(XMLoadFloat4(&mOffsets[i]));
 
-        XMStoreFloat4(&mOffsets[i], v);
+        XMStoreFloat4(&s_SsaoConstants.OffsetVectors[i], v);
     }
 }

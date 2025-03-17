@@ -57,7 +57,7 @@ using namespace VS;
 using namespace PS;
 using namespace CS;
 using namespace DirectX;
-SsaoConstants ssaoCB; 
+
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) {
     return GameCore::RunApplication(Renderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
 }
@@ -174,6 +174,11 @@ void Renderer::Startup()
 
     // Wait until initialization is complete.
     FlushCommandQueue();
+
+    for (auto& i : m_Textures)
+    {
+        i.second->UploadHeap.Reset();
+    }
 }
 
 void Renderer::InitResource()
@@ -271,7 +276,7 @@ void Renderer::Update(float gt)
     m_Camera.Update(gt);
     
 
-    UpdateSsaoCB(gt);
+  
 }
 
 void Renderer::RenderScene()
@@ -358,6 +363,7 @@ void Renderer::RenderScene()
         //m_ShaderAttribs.roughness *= 0.5;
         memcpy(data, &m_ShaderAttribs, shaderParamBufferSize);
         shaderParamsCbuffer->Unmap(0, nullptr);
+        
     }
     g_CommandList->SetGraphicsRootConstantBufferView(kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
 
@@ -446,11 +452,13 @@ void Renderer::RenderScene()
 
     g_CommandList->DrawInstanced(4, 1, 0, 0); 
 
-   // if (ImGui::Begin("Debug"))
-   // {
-   //     ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), 10).ptr, ImVec2(256, 256));
-   // }
-   // ImGui::End();
+    if (ImGui::Begin("Debug"))
+    {
+        ImVec2 winSize = ImGui::GetWindowSize();
+        float smaller = (std::min)((winSize.x - 20) / ((float)g_DisplayWidth / g_DisplayHeight), winSize.y - 36);
+        ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), 10).ptr, ImVec2(smaller * ((float)g_DisplayWidth / g_DisplayHeight), smaller));
+    }
+    ImGui::End();
     // RenderingF
     ImGui::Render();
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), g_CommandList.Get());
@@ -465,38 +473,7 @@ void Renderer::RenderSSAO()
 
     DrawNormalsAndDepth();
     
-    SSAO::Render(ssaoCB);
-}
-
-void Renderer::UpdateSsaoCB(const float gt)
-{
-    XMMATRIX P = m_Camera.GetProj();
-
-    // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
-    XMMATRIX T(
-        0.5f, 0.0f, 0.0f, 0.0f,
-        0.0f, -0.5f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.5f, 0.5f, 0.0f, 1.0f);
-
-    XMStoreFloat4x4(&ssaoCB.Proj, P);
-    XMMATRIX invProj = XMMatrixInverse(nullptr, P);   
-    XMStoreFloat4x4(&ssaoCB.InvProj, invProj);
-
-    XMStoreFloat4x4(&ssaoCB.ProjTex, P * T);
-
-    // GetOffsetVectors(ssaoCB.OffsetVectors);
-    // 
-    // auto blurWeights = mSsao->CalcGaussWeights(2.5f);
-    // ssaoCB.BlurWeights[0] = XMFLOAT4(&blurWeights[0]);
-    // ssaoCB.BlurWeights[1] = XMFLOAT4(&blurWeights[4]);
-    // ssaoCB.BlurWeights[2] = XMFLOAT4(&blurWeights[8]);
-    // 
-    // ssaoCB.InvRenderTargetSize = XMFLOAT2(1.0f / mSsao->SsaoMapWidth(), 1.0f / mSsao->SsaoMapHeight());
-
-    
-    
-
+    SSAO::Render(m_Camera);
 }
 
 void Renderer::UpdateUI()
@@ -542,11 +519,11 @@ void Renderer::UpdateUI()
         }
         if (m_ShaderAttribs.UseSSAO == true)
         {
-            // Coordinates given in view space.
-            ImGui::SliderFloat("OcclusionRadius",&ssaoCB.OcclusionRadius, 0.0f, 1.0f);
-            ImGui::SliderFloat("OcclusionFadeStart",&ssaoCB.OcclusionFadeStart, 0.0f, 1.0f);
-            ImGui::SliderFloat("OcclusionFadeEnd",&ssaoCB.OcclusionFadeEnd, 0.0f, 1.0f);
-            ImGui::SliderFloat("SurfaceEpsilon",&ssaoCB.SurfaceEpsilon, 0.0f, 1.0f);
+            // // Coordinates given in view space.
+            // ImGui::SliderFloat("OcclusionRadius",&ssaoCB.OcclusionRadius, 0.0f, 1.0f);
+            // ImGui::SliderFloat("OcclusionFadeStart",&ssaoCB.OcclusionFadeStart, 0.0f, 1.0f);
+            // ImGui::SliderFloat("OcclusionFadeEnd",&ssaoCB.OcclusionFadeEnd, 0.0f, 1.0f);
+            // ImGui::SliderFloat("SurfaceEpsilon",&ssaoCB.SurfaceEpsilon, 0.0f, 1.0f);
         }
 
         
@@ -648,8 +625,11 @@ void Renderer::LoadTextures()
         textureData.SlicePitch = textureData.RowPitch * height;
 
         UpdateSubresources(g_CommandList.Get(), texMap->Resource.Get(), texMap->UploadHeap.Get(), 0, 0, 1, &textureData);
-		
+        
 		m_Textures[texMap->Name] = std::move(texMap);
+        stbi_image_free(imageData);
+        imageData = nullptr;
+        
 	}		
 
     {
@@ -715,6 +695,8 @@ void Renderer::LoadTextures()
         UpdateSubresources(g_CommandList.Get(), texMap->Resource.Get(), texMap->UploadHeap.Get(), 0, 0, 1, &textureData);
 
         m_Textures[texMap->Name] = std::move(texMap);
+        stbi_image_free(imageData);
+        imageData = nullptr;
     }
 }
 

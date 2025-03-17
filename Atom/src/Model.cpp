@@ -29,9 +29,7 @@ void Model::Load(const std::string& filepath, ID3D12Device* device, ID3D12Graphi
     meshes.clear();
     for (const auto& shape : shapes) {
         meshes.push_back(ProcessMesh(attrib, shape, device, commandList));
-    }
-
-   
+    }  
 }
 
 void Model::Draw(ID3D12GraphicsCommandList* commandList)

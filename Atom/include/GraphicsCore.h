@@ -43,4 +43,5 @@ enum class DescriptorHeapLayout : int
     SceneColorBufferSrv,
     SceneNormalBufferSrv,
     SceneDepthBufferSrv,   
+    RandomVectorMapSrv
 };

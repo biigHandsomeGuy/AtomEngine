@@ -20,7 +20,7 @@ float4 main(PSInput input) : SV_Target
 
     float4 sceneColor = ScreenTexture.Sample(gsamLinearWrap, input.TexCoord);
     float4 bloomColor = BloomTexture.Sample(gsamLinearWrap, input.TexCoord);
-    float4 color = sceneColor + bloomColor;
+    float4 color = sceneColor;
     
     color = color / (color + 1);
     color = 1 - exp(-color * exposure);

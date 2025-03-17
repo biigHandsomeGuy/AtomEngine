@@ -11,7 +11,7 @@ struct VertexOut
 
 float4 main(VertexOut pin) : SV_Target
 {
-    float2 color = tex.Sample(gsamAnisotropicClamp, pin.TexC);
+    float2 color = tex.Sample(gsamAnisotropicClamp, float2(pin.TexC.x, 1 - pin.TexC.y));
     return float4(color,0, 1);
 }
 

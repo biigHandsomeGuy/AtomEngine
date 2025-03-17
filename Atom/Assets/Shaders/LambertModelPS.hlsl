@@ -256,7 +256,7 @@ float4 main(VertexOut pin) : SV_Target
     else
         shadowFactor = 0;
     
-    float3 color = directLighting * (1 - shadowFactor);
+    float3 color =  directLighting * (1 - shadowFactor);
 
   
     return float4(color, 1.0);

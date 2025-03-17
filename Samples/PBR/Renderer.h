@@ -118,11 +118,11 @@ private:
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
     PostProcess::RenderAttribs m_ppAttribs;
-
+    
 
     ComPtr<ID3D12Resource> m_ShadowPassGlobalConstantsBuffer;
     ComPtr<ID3D12Resource> m_LightPassGlobalConstantsBuffer;
-    std::vector < ComPtr<ID3D12Resource>> m_MaterialConstantsBuffers;
+    std::vector<ComPtr<ID3D12Resource>> m_MaterialConstantsBuffers;
     GlobalConstants m_ShadowPassGlobalConstants = {};
     GlobalConstants m_LightPassGlobalConstants = {};
     std::vector<MeshConstants> m_MeshConstants;

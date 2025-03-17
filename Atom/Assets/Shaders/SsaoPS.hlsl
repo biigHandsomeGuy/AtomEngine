@@ -25,11 +25,11 @@ cbuffer cbRootConstants : register(b1)
 {
     bool gHorizontalBlur;
 };
- 
+
 // Nonnumeric values cannot be added to a cbuffer.
 Texture2D gNormalMap : register(t0);
 Texture2D gDepthMap : register(t1);
-Texture2D gRandomVecMap : register(t2);
+Texture2D gRandomMap : register(t2);
 
 SamplerState gsamPointClamp : register(s0);
 SamplerState gsamLinearClamp : register(s1);
@@ -46,9 +46,6 @@ struct VertexOut
     float3 PosV : POSITION;
     float2 TexC : TEXCOORD0;
 };
-
-// Determines how much the sample point q occludes the point p as a function
-// of distZ.
 float OcclusionFunction(float distZ)
 {
 	//
@@ -70,9 +67,6 @@ float OcclusionFunction(float distZ)
 	//        0     Eps          z0            z1        
 	//
 	
-    //float attenuation = 1.0 / (1.0 + distZ * distZ); // ??????¡¤?¡À?????
-    //return attenuation;
-	
     float occlusion = 0.0f;
     if (distZ > gSurfaceEpsilon)
     {
@@ -86,6 +80,7 @@ float OcclusionFunction(float distZ)
     return occlusion;
 }
 
+
 float NdcDepthToViewDepth(float z_ndc)
 {
     // z_ndc = C + D/viewZ, where gProj[2][2]=C and gProj[3][2]=D.
@@ -94,10 +89,8 @@ float NdcDepthToViewDepth(float z_ndc)
     return viewZ;
 }
 
- 
 float4 main(VertexOut pin) : SV_Target
 {
-   
 	// p -- the point we are computing the ambient occlusion for.
 	// n -- normal vector at p.
 	// q -- a random offset from p.
@@ -106,9 +99,8 @@ float4 main(VertexOut pin) : SV_Target
 	// Get viewspace normal and z-coord of this pixel.  
     float3 n = normalize(gNormalMap.SampleLevel(gsamPointClamp, pin.TexC, 0.0f).xyz);
     float pz = gDepthMap.SampleLevel(gsamDepthMap, pin.TexC, 0.0f).r;
-    
     pz = NdcDepthToViewDepth(pz);
-
+    //return float4(n, 1);
 	//
 	// Reconstruct full view space position (x,y,z).
 	// Find t such that p = t*pin.PosV.
@@ -118,8 +110,8 @@ float4 main(VertexOut pin) : SV_Target
     float3 p = (pz / pin.PosV.z) * pin.PosV;
 	
 	// Extract random vector and map from [0,1] --> [-1, +1].
-    float3 randVec = 2.0f * gRandomVecMap.SampleLevel(gsamLinearWrap, 4.0f * pin.TexC, 0.0f).rgb - 1.0f;
-
+    float3 randVec = 2.0f * gRandomMap.SampleLevel(gsamLinearWrap, 4.0f * pin.TexC, 0.0f).rgb - 1.0f;
+    
     float occlusionSum = 0.0f;
 	
 	// Sample neighboring points about p in the hemisphere oriented by n.
@@ -177,7 +169,6 @@ float4 main(VertexOut pin) : SV_Target
 	
     float access = 1.0f - occlusionSum;
 
-    
 	// Sharpen the contrast of the SSAO map to make the SSAO affect more dramatic.
     return saturate(pow(access, 6.0f));
 }
