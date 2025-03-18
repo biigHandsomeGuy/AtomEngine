@@ -65,7 +65,7 @@ void Display::Initialize(void)
     fsSwapChainDesc.Windowed = TRUE;
 
     ThrowIfFailed(dxgiFactory->CreateSwapChainForHwnd(
-        g_CommandQueue.Get(),
+        g_CommandManager.GetCommandQueue(),
         GameCore::g_hWnd,
         &swapChainDesc,
         &fsSwapChainDesc,
@@ -86,7 +86,7 @@ void Display::Initialize(void)
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
     
     
-    FlushCommandQueue();
+    
 }
 
 void Display::Shutdown(void)
@@ -99,8 +99,8 @@ void Display::Shutdown(void)
 
 void Display::Resize(uint32_t width, uint32_t height)
 {
-    FlushCommandQueue();
-    
+   
+    g_CommandManager.IdleGPU();
     g_DisplayWidth = width;
     g_DisplayHeight = height;
 
@@ -134,31 +134,19 @@ void Display::Resize(uint32_t width, uint32_t height)
         g_DisplayPlane[i]->SetName(L"g_DisplayPlane");
         g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, rtvHeapHandle);
         rtvHeapHandle.Offset(1, Graphics::RtvDescriptorSize);
-       
-
     }
 
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
-    FlushCommandQueue();
+    
 }
 
 void Display::Present(void)
 {
-    // Indicate a state transition on the resource usage.
-    g_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_DisplayPlane[g_CurrentBuffer].Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-
-    // Execute the initialization commands.
-    ThrowIfFailed(g_CommandList->Close());
-    ID3D12CommandList* cmdsLists[] = { g_CommandList.Get() };
-    g_CommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
-
-    // Wait until initialization is complete.
-    FlushCommandQueue();
+    
     
     s_SwapChain1->Present(1, 0);
     g_CurrentBuffer = (g_CurrentBuffer + 1) % SWAP_CHAIN_BUFFER_COUNT;
 
-    FlushCommandQueue();
+   
 
 }

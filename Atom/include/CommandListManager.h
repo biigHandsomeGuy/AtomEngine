@@ -1,10 +1,13 @@
 #pragma once
 
+
 #include "CommandAllocatorPool.h"
 
 class CommandQueue
 {
     friend class CommandListManager;
+    friend class CommandContext;
+
 public:
     CommandQueue(D3D12_COMMAND_LIST_TYPE Type);
     ~CommandQueue();
@@ -25,15 +28,16 @@ public:
     void WaitForIdle(void) { WaitForFence(IncrementFence()); }
 
     ID3D12CommandQueue* GetCommandQueue() { return m_CommandQueue; }
-    uint64_t ExecuteCommandList(ID3D12CommandList* List);
+
+    uint64_t GetNextFenceValue() { return m_NextFenceValue; }
+    uint64_t CommandQueue::ExecuteCommandList(ID3D12CommandList* List);
+private:
+
+    
     ID3D12CommandAllocator* RequestAllocator(void);
     void DiscardAllocator(uint64_t FenceValueForReset, ID3D12CommandAllocator* Allocator);
 
-private:
-    
-    
-
-	ID3D12CommandQueue* m_CommandQueue;
+    ID3D12CommandQueue* m_CommandQueue;
 
     const D3D12_COMMAND_LIST_TYPE m_Type;
 
@@ -46,10 +50,13 @@ private:
     uint64_t m_NextFenceValue;
     uint64_t m_LastCompletedFenceValue;
     HANDLE m_FenceEventHandle;
+
 };
 
 class CommandListManager
 {
+    friend class CommandContext;
+
 public:
     CommandListManager();
     ~CommandListManager();
@@ -61,9 +68,9 @@ public:
     CommandQueue& GetComputeQueue(void) { return m_ComputeQueue; }
     CommandQueue& GetCopyQueue(void) { return m_CopyQueue; }
 
-    CommandQueue& GetQueue(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT)
+    CommandQueue& GetQueue(D3D12_COMMAND_LIST_TYPE Type = D3D12_COMMAND_LIST_TYPE_DIRECT)
     {
-        switch (type)
+        switch (Type)
         {
         case D3D12_COMMAND_LIST_TYPE_COMPUTE: return m_ComputeQueue;
         case D3D12_COMMAND_LIST_TYPE_COPY: return m_CopyQueue;
@@ -97,7 +104,9 @@ public:
         m_ComputeQueue.WaitForIdle();
         m_CopyQueue.WaitForIdle();
     }
+
 private:
+
     ID3D12Device* m_Device;
 
     CommandQueue m_GraphicsQueue;

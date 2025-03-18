@@ -138,7 +138,7 @@ namespace Graphics
             D3D12_RESOURCE_STATE_COMMON,
             &depthOptimizedClearValue,
             IID_PPV_ARGS(&g_SceneDepthBuffer)));
-        g_SceneDepthBuffer->SetName(L"g_DepthStencilBuffer");
+        g_SceneDepthBuffer->SetName(L"g_SceneDepthBuffer");
         // Create descriptor to mip level 0 of entire resource using the format of the resource.
         g_Device->CreateDepthStencilView(g_SceneDepthBuffer.Get(), nullptr, g_DsvHeap->GetCPUDescriptorHandleForHeapStart());
         srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;

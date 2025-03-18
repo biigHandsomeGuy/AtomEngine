@@ -2,6 +2,7 @@
 #include "GraphicsCore.h"
 #include "Display.h"
 #include "Ssao.h"
+#include "CommandListManager.h"
 
 namespace Graphics
 {
@@ -10,10 +11,11 @@ namespace Graphics
     UINT CbvSrvUavDescriptorSize = 0;
 
 	Microsoft::WRL::ComPtr<ID3D12Device> g_Device;
-    // CommandListManager g_CommandManager;
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> g_CommandList;
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> g_CommandAllocator;
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> g_CommandQueue;
+    CommandListManager g_CommandManager;
+	// Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> g_CommandList;
+	// Microsoft::WRL::ComPtr<ID3D12CommandAllocator> g_CommandAllocator;
+	// Microsoft::WRL::ComPtr<ID3D12CommandQueue> g_CommandQueue;
+
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_SrvHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_RtvHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_DsvHeap;
@@ -55,24 +57,27 @@ namespace Graphics
 
 		g_Device = pDevice.Detach();
 		g_Device->SetName(L"g_Device");
-		D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT; // 直接命令队列
-		queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-		queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-		queueDesc.NodeMask = 0;
+		// D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+		// queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT; // 直接命令队列
+		// queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+		// queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+		// queueDesc.NodeMask = 0;
+		// 
+		// ThrowIfFailed(g_Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&g_CommandQueue)));
+		// g_CommandQueue->SetName(L"g_CommandQueue");
+		// ThrowIfFailed(g_Device->CreateCommandAllocator(
+		// 	D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&g_CommandAllocator)));
+		// g_CommandAllocator->SetName(L"g_CommandAllocator");
+		// ThrowIfFailed(g_Device->CreateCommandList(
+		// 	0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+		// 	g_CommandAllocator.Get(),
+		// 	nullptr, IID_PPV_ARGS(&g_CommandList)));
+		// g_CommandList->SetName(L"g_CommandList");
+		// ThrowIfFailed(g_Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&g_Fence)));
+		// g_Fence->SetName(L"g_Fence");
 
-		ThrowIfFailed(g_Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&g_CommandQueue)));
-		g_CommandQueue->SetName(L"g_CommandQueue");
-		ThrowIfFailed(g_Device->CreateCommandAllocator(
-			D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&g_CommandAllocator)));
-		g_CommandAllocator->SetName(L"g_CommandAllocator");
-		ThrowIfFailed(g_Device->CreateCommandList(
-			0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-			g_CommandAllocator.Get(),
-			nullptr, IID_PPV_ARGS(&g_CommandList)));
-		g_CommandList->SetName(L"g_CommandList");
-		ThrowIfFailed(g_Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&g_Fence)));
-		g_Fence->SetName(L"g_Fence");
+		g_CommandManager.Create(g_Device.Get());
+
 		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
 		rtvHeapDesc.NumDescriptors = 8;
 		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -108,17 +113,16 @@ namespace Graphics
 
 		Display::Initialize();
 
-		SSAO::Initialize();
-		FlushCommandQueue();
+		// SSAO::Initialize();
     }
     void Shutdown(void)
     {
 		
-		FlushCommandQueue();
+		
 		g_Device.Reset();
-		g_CommandList.Reset();
-		g_CommandAllocator.Reset();
-		g_CommandQueue.Reset();
+		// g_CommandList.Reset();
+		// g_CommandAllocator.Reset();
+		// g_CommandQueue.Reset();
 		g_SrvHeap.Reset();
 		g_RtvHeap.Reset();
 		g_DsvHeap.Reset();
@@ -134,27 +138,5 @@ namespace Graphics
 		// }
     }
 
-	void FlushCommandQueue()
-	{
-		// Advance the fence value to mark commands up to this fence point.
-		g_CurrentFence++;
-
-		// Add an instruction to the command queue to set a new fence point.  Because we 
-		// are on the GPU timeline, the new fence point won't be set until the GPU finishes
-		// processing all the commands prior to this Signal().
-		ThrowIfFailed(g_CommandQueue->Signal(g_Fence.Get(), g_CurrentFence));
-
-		// Wait until the GPU has completed commands up to this fence point.
-		if (g_Fence->GetCompletedValue() < g_CurrentFence)
-		{
-			HANDLE eventHandle = CreateEventEx(nullptr, false, false, EVENT_ALL_ACCESS);
-
-			// Fire event when GPU hits current fence.  
-			ThrowIfFailed(g_Fence->SetEventOnCompletion(g_CurrentFence, eventHandle));
-
-			// Wait until the GPU hits current fence event is fired.
-			WaitForSingleObject(eventHandle, INFINITE);
-			CloseHandle(eventHandle);
-		}
-	}
+	
 }

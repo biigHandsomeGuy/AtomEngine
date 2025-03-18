@@ -76,6 +76,36 @@ void CommandQueue::Create(ID3D12Device* pDevice)
     assert(IsReady());
 }
 
+uint64_t CommandQueue::ExecuteCommandList(ID3D12CommandList* List)
+{
+    std::lock_guard<std::mutex> LockGuard(m_FenceMutex);
+
+    ThrowIfFailed(((ID3D12GraphicsCommandList*)List)->Close());
+
+    // Kickoff the command list
+    m_CommandQueue->ExecuteCommandLists(1, &List);
+
+    // Signal the next fence value (with the GPU)
+    m_CommandQueue->Signal(m_pFence, m_NextFenceValue);
+
+    // And increment the fence value.  
+    return m_NextFenceValue++;
+}
+
+ID3D12CommandAllocator* CommandQueue::RequestAllocator()
+{
+    // 获取围栅的当前值
+    uint64_t CompletedFence = m_pFence->GetCompletedValue();
+
+    return m_AllocatorPool.RequestAllocator(CompletedFence);
+}
+
+void CommandQueue::DiscardAllocator(uint64_t FenceValue, ID3D12CommandAllocator* Allocator)
+{
+    m_AllocatorPool.DiscardAllocator(FenceValue, Allocator);
+}
+
+
 void CommandListManager::Create(ID3D12Device* pDevice)
 {
     assert(pDevice != nullptr);
@@ -102,21 +132,6 @@ void CommandListManager::CreateNewCommandList(D3D12_COMMAND_LIST_TYPE Type, ID3D
     (*List)->SetName(L"CommandList");
 }
 
-uint64_t CommandQueue::ExecuteCommandList(ID3D12CommandList* List)
-{
-    std::lock_guard<std::mutex> LockGuard(m_FenceMutex);
-
-    ThrowIfFailed(((ID3D12GraphicsCommandList*)List)->Close());
-
-    // Kickoff the command list
-    m_CommandQueue->ExecuteCommandLists(1, &List);
-
-    // Signal the next fence value (with the GPU)
-    m_CommandQueue->Signal(m_pFence, m_NextFenceValue);
-
-    // And increment the fence value.  
-    return m_NextFenceValue++;
-}
 
 uint64_t CommandQueue::IncrementFence(void)
 {
@@ -177,14 +192,3 @@ void CommandListManager::WaitForFence(uint64_t FenceValue)
     Producer.WaitForFence(FenceValue);
 }
 
-ID3D12CommandAllocator* CommandQueue::RequestAllocator()
-{
-    uint64_t CompletedFence = m_pFence->GetCompletedValue();
-
-    return m_AllocatorPool.RequestAllocator(CompletedFence);
-}
-
-void CommandQueue::DiscardAllocator(uint64_t FenceValue, ID3D12CommandAllocator* Allocator)
-{
-    m_AllocatorPool.DiscardAllocator(FenceValue, Allocator);
-}

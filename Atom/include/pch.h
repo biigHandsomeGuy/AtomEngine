@@ -42,7 +42,7 @@
 #include <cstdio>
 #include <sstream>
 #include <fstream>
-
+#include <iostream>
 
 #include "d3dUtil.h"
 
