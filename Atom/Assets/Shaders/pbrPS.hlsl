@@ -1,8 +1,8 @@
 
-Texture2D gAlbedeTexture[2] : register(t0);
-Texture2D gNormalTexture[2] : register(t2);
-Texture2D gMetalnessTexture[2] : register(t4);
-Texture2D gRoughnessTexture[2] : register(t6);
+Texture2D gAlbedeTexture : register(t0);
+Texture2D gNormalTexture : register(t1);
+Texture2D gMetalnessTexture : register(t2);
+Texture2D gRoughnessTexture : register(t3);
 
 Texture2D gSphereMap : register(t10);
 Texture2D gShadowMap : register(t11);
@@ -83,12 +83,12 @@ float4 main(VertexOut pin) : SV_Target
     float3 N;
     if(UseTexture)
     {
-        albedo = pow(gAlbedeTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
-        metalness = gMetalnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
-        roughness = gRoughnessTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).r;
+        albedo = pow(gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
+        metalness = gMetalnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
+        roughness = gRoughnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
     
         // Get current fragment's normal and transform to world space.
-        N = normalize(2*gNormalTexture[gMatIndex].Sample(gsamAnisotropicWrap, pin.TexC).rgb-1);
+        N = normalize(2*gNormalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb-1);
         N = normalize(mul(pin.tangentBasis, N));
     
     }
