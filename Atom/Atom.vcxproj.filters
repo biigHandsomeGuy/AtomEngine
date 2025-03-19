@@ -114,6 +114,24 @@
     <ClInclude Include="include\BufferManager.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\RootSignature.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Hash.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Math\Common.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\PipelineState.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\d3dApp.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\DescriptorHeap.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -162,6 +180,15 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\BufferManager.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\RootSignature.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\PipelineState.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\DescriptorHeap.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

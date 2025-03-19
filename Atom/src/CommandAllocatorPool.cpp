@@ -36,7 +36,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::RequestAllocator(uint64_t Complete
     std::lock_guard<std::mutex> LockGuard(m_AllocatorMutex);
 
     ID3D12CommandAllocator* pAllocator = nullptr;
-
+    std::cout << "AllocatorPool size: " << m_AllocatorPool.size() << std::endl;
     if (!m_ReadyAllocators.empty())
     {
         std::pair<uint64_t, ID3D12CommandAllocator*>& AllocatorPair = m_ReadyAllocators.front();

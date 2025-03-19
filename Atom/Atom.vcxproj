@@ -95,6 +95,7 @@
   <ItemGroup>
     <ClInclude Include="include\BufferManager.h" />
     <ClInclude Include="include\d3dApp.h" />
+    <ClInclude Include="include\DescriptorHeap.h" />
     <ClInclude Include="include\GameCore.h" />
     <ClInclude Include="include\Camera.h" />
     <ClInclude Include="include\CommandAllocatorPool.h" />
@@ -125,6 +126,7 @@
     <ClInclude Include="include\Texture.h" />
     <ClInclude Include="include\UploadBuffer.h" />
     <ClCompile Include="src\BufferManager.cpp" />
+    <ClCompile Include="src\DescriptorHeap.cpp" />
     <ClCompile Include="src\Display.cpp" />
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h" />
     <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h" />

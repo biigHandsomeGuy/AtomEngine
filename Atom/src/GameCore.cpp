@@ -158,6 +158,8 @@ namespace GameCore
 		}
 		TerminateApplication(app);
 		Graphics::Shutdown();
+		                                                            
+		return 0;
 	}
 
 }

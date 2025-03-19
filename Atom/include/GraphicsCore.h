@@ -14,22 +14,20 @@ namespace Graphics
 
     extern Microsoft::WRL::ComPtr<ID3D12Device> g_Device;
     extern CommandListManager g_CommandManager;
-    // extern Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> g_CommandList;
-    // extern Microsoft::WRL::ComPtr<ID3D12CommandAllocator> g_CommandAllocator;
-    // extern Microsoft::WRL::ComPtr<ID3D12CommandQueue> g_CommandQueue;
+    extern ID3D12GraphicsCommandList* g_CommandList;
+    extern ID3D12CommandAllocator* g_CommandAllocator;
     extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_SrvHeap;
     extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_RtvHeap;
     extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_DsvHeap;
-    extern Microsoft::WRL::ComPtr<ID3D12Fence> g_Fence;
 }
 
 enum class DescriptorHeapLayout : int
 {
-    ShpereMaterialHeap,
-    ShpereMapHeap = 8,
-    ShadowBufferSrv = 9,
-    SsaoMapHeap = 10,
-    NullCubeCbvHeap = 11,
+    MaterialSrv,
+    ShpereMapHeap = 4,
+    ShadowBufferSrv = 5,
+    SsaoMapHeap = 6,
+    NullCubeCbvHeap = 7,
     NullTexSrvHeap1,
     NullTexSrvHeap2,
     EnvirSrvHeap,

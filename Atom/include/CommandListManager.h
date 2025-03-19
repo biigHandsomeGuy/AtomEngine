@@ -31,11 +31,12 @@ public:
 
     uint64_t GetNextFenceValue() { return m_NextFenceValue; }
     uint64_t CommandQueue::ExecuteCommandList(ID3D12CommandList* List);
+    void DiscardAllocator(uint64_t FenceValueForReset, ID3D12CommandAllocator* Allocator);
+    ID3D12CommandAllocator* RequestAllocator(void);
 private:
 
     
-    ID3D12CommandAllocator* RequestAllocator(void);
-    void DiscardAllocator(uint64_t FenceValueForReset, ID3D12CommandAllocator* Allocator);
+    
 
     ID3D12CommandQueue* m_CommandQueue;
 

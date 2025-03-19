@@ -63,21 +63,16 @@ private:
     virtual void Update(float gt)override;
     virtual void RenderScene()override;
 
-    void RenderSSAO();
-
-    void UpdateSsaoCB(float gt);
     void UpdateUI();
 
   
-    void LoadTextures();
+    void LoadTextures(ID3D12CommandList* CmdList);
     void BuildRootSignature();
     void BuildDescriptorHeaps();
     void BuildInputLayout();
     void BuildShapeGeometry();
     void BuildPSOs();
-    void DrawSceneToShadowMap();
-    void DrawNormalsAndDepth();
-    void CreateCubeMap();
+    void CreateCubeMap(ID3D12GraphicsCommandList* CmdList);
     D3D12_CPU_DESCRIPTOR_HANDLE CreateTextureUav(ID3D12Resource* res, UINT mipSlice);
 
     std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> GetStaticSamplers();
@@ -119,7 +114,7 @@ private:
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
     PostProcess::RenderAttribs m_ppAttribs;
     
-
+    // ComPtr<ID3D12Resource> m_
     ComPtr<ID3D12Resource> m_ShadowPassGlobalConstantsBuffer;
     ComPtr<ID3D12Resource> m_LightPassGlobalConstantsBuffer;
     std::vector<ComPtr<ID3D12Resource>> m_MaterialConstantsBuffers;
