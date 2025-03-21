@@ -59,6 +59,9 @@ namespace Graphics
 		
 		g_CommandManager.Create(g_Device.Get());
 
+		g_CommandManager.CreateNewCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT, &g_CommandList, &g_CommandAllocator);
+
+
 		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
 		rtvHeapDesc.NumDescriptors = 8;
 		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -94,7 +97,12 @@ namespace Graphics
 
 		Display::Initialize();
 
-		// SSAO::Initialize();
+		SSAO::Initialize(g_CommandList);
+
+		uint64_t FenceValue = g_CommandManager.GetGraphicsQueue().ExecuteCommandList(g_CommandList);
+		g_CommandManager.GetGraphicsQueue().WaitForFence(FenceValue);
+		g_CommandManager.GetGraphicsQueue().DiscardAllocator(FenceValue, g_CommandAllocator);
+
     }
     void Shutdown(void)
     {

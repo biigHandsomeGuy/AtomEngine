@@ -104,9 +104,10 @@ void Renderer::Startup()
     XMVECTOR lightPos = XMLoadFloat4(&pos);
     XMStoreFloat4(&mLightPosW, lightPos);
 
+    g_CommandAllocator = g_CommandManager.GetQueue(D3D12_COMMAND_LIST_TYPE_DIRECT).RequestAllocator();
+    g_CommandList->Reset(g_CommandAllocator, nullptr);
+
     
-    
-    g_CommandManager.CreateNewCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT, &g_CommandList, &g_CommandAllocator);
     
     LoadTextures(g_CommandList);
     BuildRootSignature();
@@ -442,7 +443,7 @@ void Renderer::RenderScene()
     
     
     // Render SSAO
-    //SSAO::Render(m_Camera, g_CommandList);
+    SSAO::Render(m_Camera, g_CommandList);
 
     g_CommandList->SetGraphicsRootSignature(m_RootSignature.Get());
     g_CommandList->SetGraphicsRootDescriptorTable(kMaterialSRVs, g_SrvHeap->GetGPUDescriptorHandleForHeapStart());
