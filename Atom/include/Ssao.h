@@ -6,11 +6,10 @@ class Camera;
 
 namespace SSAO
 {
-    void Initialize();
+    void Initialize(ID3D12GraphicsCommandList* CmdList);
 
-    void Render(const Camera& camera);
+    void Render(const Camera& camera, ID3D12GraphicsCommandList* CmdList);
 
     void Shutdown();
-    static const DXGI_FORMAT NormalMapFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
  };
  

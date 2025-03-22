@@ -265,6 +265,9 @@
     <FxCompile Include="Assets\Shaders\LambertModelPS.hlsl">
       <Filter>Assets\Shaders\ShadingModel</Filter>
     </FxCompile>
+    <FxCompile Include="Assets\Shaders\SsaoBlurCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Shaders\Common.hlsli">

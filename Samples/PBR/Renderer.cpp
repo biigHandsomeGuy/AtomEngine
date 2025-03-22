@@ -38,7 +38,7 @@ namespace CS
 #include "../CompiledShaders/IrradianceMapCS.h"
 #include "../CompiledShaders/SpecularMapCS.h"
 #include "../CompiledShaders/EquirectToCubeCS.h"
-using namespace DirectX::PackedVector;
+
 }
 
 namespace
@@ -57,12 +57,11 @@ using namespace VS;
 using namespace PS;
 using namespace CS;
 using namespace DirectX;
+using namespace DirectX::PackedVector;
 
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) {
-    // 分配新的控制台
-    AllocConsole();
-
-    // 重新打开标准输入、标准输出和标准错误流
+    
+    AllocConsole();  
     FILE* fp;
     freopen_s(&fp, "CONOUT$", "w", stdout);
     freopen_s(&fp, "CONOUT$", "w", stderr);
@@ -147,7 +146,6 @@ void Renderer::Startup()
     ground.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device.Get(), g_CommandList);
 
     pbrModel.modelMatrix = XMMatrixScaling(10, 10, 10);
-    //pbrModel.modelMatrix *= XMMatrixTranslation(5, 3, 0);
     ground.modelMatrix = XMMatrixTranslation(0, 0, 0);
 
     pbrModel.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel.modelMatrix));
@@ -155,7 +153,6 @@ void Renderer::Startup()
 
     m_SkyBox.model = std::move(skyBox);
     m_Scene.Models.push_back(std::move(pbrModel));
-    // m_Scene.Models.push_back(std::move(ground));
 
     m_MeshConstants.resize(m_Scene.Models.size());
     m_MeshConstantsBuffers.resize(m_Scene.Models.size());
@@ -583,7 +580,7 @@ void Renderer::RenderScene()
     g_CommandList->DrawInstanced(4, 1, 0, 0); 
 
     
-    if (ImGui::Begin("Debug"))
+    if (ImGui::Begin("Ssao Debug"))
     {
         ImVec2 winSize = ImGui::GetWindowSize();
         float smaller = (std::min)((winSize.x - 20) / ((float)g_DisplayWidth / g_DisplayHeight), winSize.y - 36);

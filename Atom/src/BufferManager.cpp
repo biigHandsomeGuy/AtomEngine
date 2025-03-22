@@ -13,12 +13,12 @@ namespace Graphics
     Microsoft::WRL::ComPtr<ID3D12Resource> g_SceneNormalBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> g_ShadowBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> g_SSAOFullScreen;
+    Microsoft::WRL::ComPtr<ID3D12Resource> g_SSAOUnBlur;
     Microsoft::WRL::ComPtr<ID3D12Resource> g_RandomVectorBuffer;
 
     D3D12_CPU_DESCRIPTOR_HANDLE g_SceneColorBufferRtvHandle;
     D3D12_CPU_DESCRIPTOR_HANDLE g_SceneNormalBufferRtvHandle;
-    D3D12_CPU_DESCRIPTOR_HANDLE g_SSAOFullScreenRtvHandle;
-
+    D3D12_CPU_DESCRIPTOR_HANDLE g_SSAOUnBlurRtvHandle;
     void InitializeRenderingBuffers(uint32_t NativeWidth, uint32_t NativeHeight)
     {
         // g_CommandManager.CreateNewCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT, &g_CommandList, &g_CommandAllocator);
@@ -164,7 +164,39 @@ namespace Graphics
 
         g_Device->CreateDepthStencilView(g_ShadowBuffer.Get(), nullptr, CD3DX12_CPU_DESCRIPTOR_HANDLE(g_DsvHeap->GetCPUDescriptorHandleForHeapStart(), 1, DsvDescriptorSize));
         clearValue.Format = DXGI_FORMAT_R8_UNORM;
+
         // g_SSAOFullScreen
+        desc.Width = NativeWidth;
+        desc.Height = NativeHeight;
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Format = DXGI_FORMAT_R8_UNORM;
+        desc.MipLevels = 1;
+        desc.DepthOrArraySize = 1;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        ThrowIfFailed(g_Device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            nullptr ,
+            IID_PPV_ARGS(&g_SSAOFullScreen)));
+        g_SSAOFullScreen->SetName(L"g_SSAOFullScreen");
+
+        srvDesc.Format = DXGI_FORMAT_R8_UNORM;
+        srvHandle = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
+        g_Device->CreateShaderResourceView(g_SSAOFullScreen.Get(), &srvDesc, srvHandle);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        uavDesc.Texture2D.MipSlice = 0;
+        uavDesc.Texture2D.PlaneSlice = 0;
+        uavDesc.Format = DXGI_FORMAT_R8_UNORM;
+
+        g_Device->CreateUnorderedAccessView(g_SSAOFullScreen.Get(), 0, &uavDesc, GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoUav));
+
+        // ssao un blur
         desc.Width = NativeWidth;
         desc.Height = NativeHeight;
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -180,17 +212,16 @@ namespace Graphics
             &desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             &clearValue,
-            IID_PPV_ARGS(&g_SSAOFullScreen)));
-        g_SSAOFullScreen->SetName(L"g_SSAOFullScreen");
+            IID_PPV_ARGS(&g_SSAOUnBlur)));
+        g_SSAOUnBlur->SetName(L"g_SSAOUnBlur");
 
         srvDesc.Format = DXGI_FORMAT_R8_UNORM;
-        srvHandle = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
-        g_Device->CreateShaderResourceView(g_SSAOFullScreen.Get(), &srvDesc, srvHandle);
+        srvHandle = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoTempSrv);
+        g_Device->CreateShaderResourceView(g_SSAOUnBlur.Get(), &srvDesc, srvHandle);
 
-        g_SSAOFullScreenRtvHandle = GetCpuHandle(g_RtvHeap.Get(), 5);
+        g_SSAOUnBlurRtvHandle = GetCpuHandle(g_RtvHeap.Get(), 5);
         rtvDesc.Format = DXGI_FORMAT_R8_UNORM;
-        g_Device->CreateRenderTargetView(g_SSAOFullScreen.Get(), &rtvDesc, g_SSAOFullScreenRtvHandle);
-
+        g_Device->CreateRenderTargetView(g_SSAOUnBlur.Get(), &rtvDesc, g_SSAOUnBlurRtvHandle);
 
     }
 
