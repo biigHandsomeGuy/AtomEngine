@@ -59,13 +59,8 @@ using namespace CS;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
 
-int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) {
-    
-    AllocConsole();  
-    FILE* fp;
-    freopen_s(&fp, "CONOUT$", "w", stdout);
-    freopen_s(&fp, "CONOUT$", "w", stderr);
-    freopen_s(&fp, "CONIN$", "r", stdin);
+int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) 
+{
     return GameCore::RunApplication(Renderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
 }
 std::vector<XMHALF4> ConvertToHalf(const float* floatData, int pixelCount) {
@@ -170,17 +165,19 @@ void Renderer::Startup()
     g_CommandManager.GetGraphicsQueue().WaitForFence(FenceValue);
     g_CommandManager.GetGraphicsQueue().DiscardAllocator(FenceValue, g_CommandAllocator);
 
-    for (auto& i : m_Textures)
     {
-        std::cout << "m_Texture->upload heap reset" << i.second->UploadHeap.Reset() << std::endl;;
+        for (auto& i : m_Textures)
+        {
+            i.second->UploadHeap.Reset();
+        }
+
+        computeRS.Reset();
+        cubePso.Reset();
+        irMapPso.Reset();
+        spMapPso.Reset();
+        lutPso.Reset();
     }
-    {
-        std::cout << "computeRS.Reset();" << computeRS.Reset() << std::endl;
-        std::cout << "cubePso.Reset();" << cubePso.Reset() << std::endl;
-        std::cout << "irMapPso.Reset();" << irMapPso.Reset() << std::endl;
-        std::cout << "spMapPso.Reset();" << spMapPso.Reset() << std::endl;
-        std::cout << "lutPso.Reset();" << lutPso.Reset() << std::endl;                 
-    }
+    
 }
 
 void Renderer::InitResource()
