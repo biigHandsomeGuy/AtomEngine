@@ -160,13 +160,6 @@ float4 main(VertexOut pin) : SV_Target
         directLighting += (diffuseBRDF + specularBRDF) * radiance * cosLi;    
 
     }
-    // Only the first light casts a shadow.
-    float shadowFactor = 1;
-     
-    if (UseShadow)
-    {
-        shadowFactor = CalcShadowFactorPCSS(pin.ShadowPosH);
-    }
 
     float3 ambientLighting = 1;
     {
@@ -198,7 +191,7 @@ float4 main(VertexOut pin) : SV_Target
     }
        
     
-    float3 color =ambientLighting * ambientAccess + directLighting*shadowFactor;
+    float3 color =ambientLighting * ambientAccess + directLighting;
 
   
     return float4(color, 1.0);
@@ -245,102 +238,3 @@ float3 fresnelSchlick(float cosTheta, float3 F0)
 }
 
 
-float CalcShadowFactor(float4 shadowPosH)
-{
-    // Complete projection by doing division by w.
-    shadowPosH.xyz /= shadowPosH.w;
-
-    // Depth in NDC space.
-    float depth = shadowPosH.z;
-
-    uint width, height, numMips;
-    gShadowMap.GetDimensions(0, width, height, numMips);
-
-    // Texel size.
-    float dx = 1.0f / (float) width;
-
-    float percentLit = 0.0f;
-    const float2 offsets[9] =
-    {
-        float2(-dx, -dx), float2(0.0f, -dx), float2(dx, -dx),
-        float2(-dx, 0.0f), float2(0.0f, 0.0f), float2(dx, 0.0f),
-        float2(-dx, +dx), float2(0.0f, +dx), float2(dx, +dx)
-    };
-
-    [unroll]
-    for (int i = 0; i < 9; ++i)
-    {
-        percentLit += gShadowMap.SampleCmpLevelZero(gsamShadow,
-            shadowPosH.xy + offsets[i], depth).r;
-    }
-    return gShadowMap.SampleCmpLevelZero(gsamShadow,
-            shadowPosH.xy, depth).r;
-    return percentLit / 9.0f;
-}
-
-float CalcShadowFactorPCSS(float4 shadowPosH)
-{
-    float shadowFactor = 1.0f;
-    const float lightSize = 40.0f;
-
-    // 完成投影
-    shadowPosH.xyz /= shadowPosH.w;
-
-    // 获取深度
-    float depth = shadowPosH.z;
-
-    uint width, height, numMips;
-    gShadowMap.GetDimensions(0, width, height, numMips);
-
-    // 纹理像素大小
-    float dx = 1.0f / (float) width;
-    float dy = 1.0f / (float) height;
-
-    // 遮挡物深度搜索 (Blocker Search)
-    float blockerDepth = 0.0f;
-    float blockerNum = 0.0f;
-    
-    const int blockerSearchRadius = 3; // 这是用于遮挡物搜索的固定 3x3 采样
-    for (int i = -blockerSearchRadius; i <= blockerSearchRadius; ++i)
-    {
-        for (int j = -blockerSearchRadius; j <= blockerSearchRadius; ++j)
-        {
-            float shadowMapDepth = gShadowMap.Sample(gsamLinearWrap, shadowPosH.xy + dx * 5 * float2(i, j)).r;
-            if (depth > shadowMapDepth)
-            {
-                blockerDepth += shadowMapDepth;
-                blockerNum += 1.0f;
-            }
-        }
-    }
-    
-    if (blockerNum > 0.0f)
-    {
-        blockerDepth /= blockerNum;
-        
-        // 半影范围计算 (Penumbra Calculation)
-        float penumbra = clamp((depth - blockerDepth) * lightSize / blockerDepth, 0.0f, 50.0f); // 限制penumbra最大值
-        
-        // 根据 penumbra 动态调整采样范围
-        int pcfSampleRadius = int(ceil(penumbra)); // 动态调整 PCF 样本半径，基于 penumbra
-        
-        shadowFactor = 0.0f;
-        int pcfSamples = 0;
-
-        // 动态调整的 PCF 采样，基于 penumbra 的大小
-        for (int i = -pcfSampleRadius; i <= pcfSampleRadius; ++i)
-        {
-            for (int j = -pcfSampleRadius; j <= pcfSampleRadius; ++j)
-            {
-                float2 offset = float2(i * dx, j * dy); // 根据 penumbra 扩展采样范围
-                shadowFactor += gShadowMap.SampleCmpLevelZero(gsamShadow, shadowPosH.xy + offset, depth).r;
-                pcfSamples++;
-            }
-        }
-
-        // 归一化阴影因子
-        shadowFactor /= (float) pcfSamples;
-    }
-
-    return shadowFactor;
-}
