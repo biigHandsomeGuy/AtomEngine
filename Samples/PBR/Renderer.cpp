@@ -10,6 +10,8 @@
 #include "Display.h"
 #include "CommandListManager.h"
 #include "BufferManager.h"
+#include <dxcapi.h>
+#include <d3d12shader.h>
 namespace VS
 {
 #include "../CompiledShaders/pbrVS.h"
@@ -61,8 +63,85 @@ using namespace DirectX::PackedVector;
 
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) 
 {
+    // 分配新的控制台
+    AllocConsole();
+
+    // 重新打开标准输入、标准输出和标准错误流
+    FILE* fp;
+    freopen_s(&fp, "CONOUT$", "w", stdout);
+    freopen_s(&fp, "CONOUT$", "w", stderr);
+    freopen_s(&fp, "CONIN$", "r", stdin);
+
     return GameCore::RunApplication(Renderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
 }
+
+void ReflectDXIL(const void* dxilData, size_t dxilSize)
+{
+    ComPtr<IDxcContainerReflection> pReflection;
+    if (FAILED(DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&pReflection))))
+    {
+        std::cerr << "Failed to create DXC Container Reflection instance." << std::endl;
+        return;
+    }
+
+    
+    ComPtr<IDxcBlobEncoding> pBlob;
+    ComPtr<IDxcLibrary> pLibrary;
+    if (FAILED(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary))))
+    {
+        std::cerr << "Failed to create DXC Library instance." << std::endl;
+        return;
+    }
+
+    if (FAILED(pLibrary->CreateBlobWithEncodingFromPinned(dxilData, (UINT32)dxilSize, 0, &pBlob)))
+    {
+        std::cerr << "Failed to create DXC Blob from DXIL data." << std::endl;
+        return;
+    }
+
+    // 2. 让 pReflection 解析 DXIL
+    if (FAILED(pReflection->Load(pBlob.Get())))
+    {
+        std::cerr << "Failed to load DXIL reflection." << std::endl;
+        return;
+    }
+
+    // 3. 查找 DXIL 代码部分
+    UINT32 shaderIdx;
+    if (FAILED(pReflection->FindFirstPartKind(DXC_PART_DXIL, &shaderIdx)))
+    {
+        std::cerr << "Failed to find DXIL part." << std::endl;
+        return;
+    }
+
+    // 4. 获取 Shader Reflection
+    ComPtr<ID3D12ShaderReflection> pShaderReflection;
+    if (FAILED(pReflection->GetPartReflection(shaderIdx, IID_PPV_ARGS(&pShaderReflection))))
+    {
+        std::cerr << "Failed to get shader reflection." << std::endl;
+        return;
+    }
+
+    // 5. 获取 Shader 描述信息
+    D3D12_SHADER_DESC shaderDesc;
+    if (FAILED(pShaderReflection->GetDesc(&shaderDesc)))
+    {
+        std::cerr << "Failed to get shader description." << std::endl;
+        return;
+    }
+
+    std::cout << "着色器输入参数数量: " << shaderDesc.InputParameters << std::endl;
+    std::cout << "着色器输出参数数量: " << shaderDesc.OutputParameters << std::endl;
+
+    // 6. 遍历绑定资源
+    for (UINT i = 0; i < shaderDesc.BoundResources; i++)
+    {
+        D3D12_SHADER_INPUT_BIND_DESC bindDesc;
+        pShaderReflection->GetResourceBindingDesc(i, &bindDesc);
+        std::cout << "资源绑定: " << bindDesc.Name << "，寄存器: " << bindDesc.BindPoint << std::endl;
+    }
+}
+
 std::vector<XMHALF4> ConvertToHalf(const float* floatData, int pixelCount) {
     std::vector<XMHALF4> halfData(pixelCount);
     for (int i = 0; i < pixelCount; i++) {
@@ -1182,7 +1261,7 @@ void Renderer::BuildPSOs()
     basePsoDesc.SampleDesc.Count = 1;
     basePsoDesc.SampleDesc.Quality = 0;
     basePsoDesc.DSVFormat = DepthStencilFormat;
-
+    
     //
     // PSO for opaque objects.
     //
