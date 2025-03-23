@@ -56,5 +56,7 @@ namespace PostProcess
     __declspec(align(256)) struct RenderAttribs
     {
         float exposure = 2.0f;
+        bool isRenderingLuminance = false;
+        char pad0[3] = { 0,0,0 };
     };
 }

@@ -631,6 +631,7 @@ void Renderer::UpdateUI()
 
         ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
         ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        ImGui::Checkbox("isRenderingLuminance", &m_ppAttribs.isRenderingLuminance);
        
         ImGui::DragFloat4("LightPosition", &mLightPosW.x,0.3f,-90,90);
         ImGui::DragFloat4("CameraPosition", &(m_Camera.GetPosition3f().x));
