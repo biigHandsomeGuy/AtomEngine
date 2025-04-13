@@ -184,14 +184,14 @@ float4 main(VertexOut pin) : SV_Target
             
 		    // Total specular IBL contribution.
             specularIBL = (1 - kd) *
-            (F0 * specularBRDF.x + specularBRDF.y) * specularIrradiance;
+            (F0 * specularBRDF.x + 1 - specularBRDF.y) * specularIrradiance;
         
         ambientLighting = diffuseIBL + specularIBL;
 
     }
        
     
-    float3 color =ambientLighting * ambientAccess + directLighting;
+    float3 color =ambientLighting * ambientAccess + 0;
 
   
     return float4(color, 1.0);
