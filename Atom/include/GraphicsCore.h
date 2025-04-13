@@ -1,6 +1,7 @@
 #pragma once
 
 class CommandListManager;
+class ContextManager;
 namespace Graphics
 {
 
@@ -13,9 +14,10 @@ namespace Graphics
     extern unsigned int CbvSrvUavDescriptorSize;
 
     extern Microsoft::WRL::ComPtr<ID3D12Device> g_Device;
+    // extern ID3D12GraphicsCommandList* g_CommandList;
+    // extern ID3D12CommandAllocator* g_CommandAllocator;
     extern CommandListManager g_CommandManager;
-    extern ID3D12GraphicsCommandList* g_CommandList;
-    extern ID3D12CommandAllocator* g_CommandAllocator;
+    extern ContextManager g_ContextManager;
     extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_SrvHeap;
     extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_RtvHeap;
     extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_DsvHeap;
@@ -32,7 +34,7 @@ enum class DescriptorHeapLayout : int
     NullTexSrvHeap2,
     EnvirSrvHeap,
     EnvirUavHeap,
-    PrefilteredEnvirSrvHeap = EnvirUavHeap + 9,
+    PrefilteredEnvirSrvHeap = EnvirUavHeap + 10,
     PrefilteredEnvirUavHeap,
     IrradianceMapSrvHeap = PrefilteredEnvirUavHeap + 9,
     IrradianceMapUavHeap,

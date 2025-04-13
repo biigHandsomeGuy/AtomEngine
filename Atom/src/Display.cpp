@@ -142,11 +142,6 @@ void Display::Resize(uint32_t width, uint32_t height)
 
 void Display::Present(void)
 {
-    
-    
-    s_SwapChain1->Present(1, 0);
+    s_SwapChain1->Present(0, 0);
     g_CurrentBuffer = (g_CurrentBuffer + 1) % SWAP_CHAIN_BUFFER_COUNT;
-
-   
-
 }

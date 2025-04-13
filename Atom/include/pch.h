@@ -17,6 +17,10 @@
 #define NOHELP
 
 #define WIN32_LEAN_AND_MEAN
+
+#define D3D12_GPU_VIRTUAL_ADDRESS_NULL      ((D3D12_GPU_VIRTUAL_ADDRESS)0)
+#define D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN   ((D3D12_GPU_VIRTUAL_ADDRESS)-1)
+
 #include <wingdi.h>
 #include <DirectXCollision.h>
 #include <DirectXMath.h>

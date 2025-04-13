@@ -132,6 +132,12 @@
     <ClInclude Include="include\DescriptorHeap.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\GpuResource.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\CommandContext.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -189,6 +195,15 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\DescriptorHeap.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\GpuResource.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Texture.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\CommandContex.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
@@ -266,6 +281,9 @@
       <Filter>Assets\Shaders\ShadingModel</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\SsaoBlurCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\GenerateMipMapCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
   </ItemGroup>

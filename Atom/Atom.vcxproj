@@ -94,6 +94,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\BufferManager.h" />
+    <ClInclude Include="include\CommandContext.h" />
     <ClInclude Include="include\d3dApp.h" />
     <ClInclude Include="include\DescriptorHeap.h" />
     <ClInclude Include="include\GameCore.h" />
@@ -108,6 +109,7 @@
     <ClInclude Include="include\Display.h" />
     <ClInclude Include="include\GameTimer.h" />
     <ClInclude Include="include\GeometryGenerator.h" />
+    <ClInclude Include="include\GpuResource.h" />
     <ClInclude Include="include\GraphicsCore.h" />
     <ClInclude Include="include\Hash.h" />
     <ClInclude Include="include\Log.h" />
@@ -126,6 +128,7 @@
     <ClInclude Include="include\Texture.h" />
     <ClInclude Include="include\UploadBuffer.h" />
     <ClCompile Include="src\BufferManager.cpp" />
+    <ClCompile Include="src\CommandContex.cpp" />
     <ClCompile Include="src\DescriptorHeap.cpp" />
     <ClCompile Include="src\Display.cpp" />
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h" />
@@ -134,6 +137,7 @@
   <ItemGroup>
     <ClCompile Include="src\CommandAllocatorPool.cpp" />
     <ClCompile Include="src\CommandListManager.cpp" />
+    <ClCompile Include="src\GpuResource.cpp" />
     <ClCompile Include="src\GraphicsCore.cpp" />
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\pch.cpp">
@@ -142,6 +146,7 @@
     </ClCompile>
     <ClCompile Include="src\PipelineState.cpp" />
     <ClCompile Include="src\RootSignature.cpp" />
+    <ClCompile Include="src\Texture.cpp" />
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp" />
     <ClCompile Include="src\GameCore.cpp" />
     <ClCompile Include="src\Camera.cpp" />
@@ -227,6 +232,20 @@
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </ObjectFileOutput>
       <EnableDebuggingInformation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</EnableDebuggingInformation>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\GenerateMipMapCS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_p%(Filename)</VariableName>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_p%(Filename)</VariableName>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompiledShaders/%(Filename).h</HeaderFileOutput>
+      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </ObjectFileOutput>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompiledShaders/%(Filename).h</HeaderFileOutput>
+      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\IrradianceMapCS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>

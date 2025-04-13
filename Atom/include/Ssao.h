@@ -3,12 +3,12 @@
 #include "d3dUtil.h"
 #include "ConstantBuffers.h"
 class Camera;
-
+class CommandContext;
 namespace SSAO
 {
-    void Initialize(ID3D12GraphicsCommandList* CmdList);
+    void Initialize();
 
-    void Render(const Camera& camera, ID3D12GraphicsCommandList* CmdList);
+    void Render(CommandContext& GfxContext, const Camera& camera);
 
     void Shutdown();
  };

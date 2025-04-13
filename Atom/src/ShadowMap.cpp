@@ -5,7 +5,7 @@
 
 ShadowMap::ShadowMap(UINT width, UINT height)
 {
-	m_Device = Graphics::g_Device;
+	m_Device = Graphics::g_Device.Get();
 
 	mWidth = width;
 	mHeight = height;

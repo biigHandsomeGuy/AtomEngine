@@ -18,11 +18,6 @@ void CommandAllocatorPool::Create(ID3D12Device* pDevice)
 
 void CommandAllocatorPool::Shutdown()
 {
-	// 清理 m_ReadyAllocators，防止误用已释放的 Allocator
-	while (!m_ReadyAllocators.empty())
-	{
-		m_ReadyAllocators.pop();
-	}
 	for (size_t i = 0; i < m_AllocatorPool.size(); ++i)
 	{
 		m_AllocatorPool[i]->Release();

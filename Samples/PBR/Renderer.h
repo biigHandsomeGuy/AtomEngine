@@ -3,7 +3,6 @@
 #include "MathHelper.h"
 #include "GeometryGenerator.h"
 #include "Camera.h"
-#include "ShadowMap.h"
 #include "Ssao.h"
 
 #include "d3dUtil.h"
@@ -73,7 +72,6 @@ private:
     void BuildShapeGeometry();
     void BuildPSOs();
     void CreateCubeMap(ID3D12GraphicsCommandList* CmdList);
-    D3D12_CPU_DESCRIPTOR_HANDLE CreateTextureUav(ID3D12Resource* res, UINT mipSlice);
 
     std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> GetStaticSamplers();
 
