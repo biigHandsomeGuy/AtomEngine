@@ -4,8 +4,6 @@
 > pbr
 
 
-![](https://github.com/biigHandsomeGuy/SmileEngine/blob/master/screenshot/pcss.png)
-> pcss
 #### TODO
 - [x] PBR
 - [x] IBL
