@@ -11,6 +11,7 @@
 #include <DirectXCollision.h>
 #include "GameCore.h"
 
+
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 

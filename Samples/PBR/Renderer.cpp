@@ -215,9 +215,10 @@ void Renderer::Startup()
     Model skyBox, pbrModel;
 
     skyBox.Load(std::string("D:/AtomEngine/Atom/Assets/Models/cube.obj"), g_Device.Get(), gfxContext.m_CommandList);
-    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/happy1.obj"), g_Device.Get(), gfxContext.m_CommandList);
+    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/gun.obj"), g_Device.Get(), gfxContext.m_CommandList);
 
-    pbrModel.modelMatrix = XMMatrixScaling(20, 20, 20);
+    pbrModel.modelMatrix = XMMatrixRotationY(45);
+    pbrModel.modelMatrix *= XMMatrixScaling(3, 3, 3);
 
     pbrModel.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel.modelMatrix));
 
@@ -247,6 +248,7 @@ void Renderer::Startup()
         irMapPso.Reset();
         spMapPso.Reset();
         lutPso.Reset();
+        mmPso.Reset();
     }
     
 }
@@ -591,19 +593,7 @@ void Renderer::RenderScene()
     }   
 
     
-    {
-       
-        BYTE* data = nullptr;
-        envMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-        memcpy(data, &m_EnvMapAttribs, EnvMapAttribsBufferSize);
-        envMapBuffer->Unmap(0, nullptr);
-    }
-
-    gfxContext.m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
-   
-    gfxContext.m_CommandList->SetPipelineState(m_PSOs["sky"].Get());
-    m_SkyBox.model.Draw(gfxContext.m_CommandList);
+    
 
     // // pick bright
     // {
@@ -641,12 +631,25 @@ void Renderer::RenderScene()
 
     gfxContext.m_CommandList->DrawInstanced(4, 1, 0, 0);
 
+    {
+
+        BYTE* data = nullptr;
+        envMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+
+        memcpy(data, &m_EnvMapAttribs, EnvMapAttribsBufferSize);
+        envMapBuffer->Unmap(0, nullptr);
+    }
+
+    gfxContext.m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
+
+    gfxContext.m_CommandList->SetPipelineState(m_PSOs["sky"].Get());
+    m_SkyBox.model.Draw(gfxContext.m_CommandList);
     
     if (ImGui::Begin("Ssao Debug"))
     {
         ImVec2 winSize = ImGui::GetWindowSize();
         float smaller = (std::min)((winSize.x - 20) / ((float)g_DisplayWidth / g_DisplayHeight), winSize.y - 36);
-        ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap).ptr, ImVec2(smaller * ((float)g_DisplayWidth / g_DisplayHeight), smaller));
+        ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::LUTsrv).ptr, ImVec2(smaller * ((float)g_DisplayWidth / g_DisplayHeight), smaller));
     }
     ImGui::End();
     // RenderingF
@@ -750,13 +753,13 @@ void Renderer::LoadTextures(ID3D12CommandList* CmdList)
 	
     std::vector<std::string> texFilenames =
     {
-        "D:/AtomEngine/Atom/Assets/Textures/silver/albedo.png",
+        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/albedo.tga",
 
-        "D:/AtomEngine/Atom/Assets/Textures/silver/normal.png",
+        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/normal.tga",
 
-        "D:/AtomEngine/Atom/Assets/Textures/silver/metallic.png",
+        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/metallic.tga",
 
-        "D:/AtomEngine/Atom/Assets/Textures/silver/roughness.png",
+        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/roughness.tga",
 
         "D:/AtomEngine/Atom/Assets/Textures/EnvirMap/Newport_Loft.hdr"
     };
@@ -1009,6 +1012,7 @@ void Renderer::BuildDescriptorHeaps()
 
     // Create environment Map
     {
+        
         D3D12_RESOURCE_DESC desc = {};
         desc.Width = 512;
         desc.Height = 512;
@@ -1019,7 +1023,7 @@ void Renderer::BuildDescriptorHeaps()
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         desc.SampleDesc.Count = 1;
         desc.SampleDesc.Quality = 0;
-
+        
         ThrowIfFailed(g_Device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE,
@@ -1034,6 +1038,7 @@ void Renderer::BuildDescriptorHeaps()
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
         srvDesc.TextureCube.MostDetailedMip = 0;
         srvDesc.TextureCube.MipLevels = -1;
+        
         //srvDesc.TextureCube.ResourceMinLODClamp = 0;
 
         auto envirSrv = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EnvirSrvHeap);

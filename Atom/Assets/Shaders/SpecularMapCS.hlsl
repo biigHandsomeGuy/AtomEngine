@@ -87,7 +87,7 @@ void main(uint3 ThreadID : SV_DispatchThreadID)
 			float ws = 1.0 / (NumSamples * pdf);
 
 			// Mip level to sample from.
-			float mipLevel = max(0.5 * log2(ws / wt) + 1.0, 0.0);
+			float mipLevel = max(0.5 * log2(ws / wt) + 2, 0.0);
 
 			PrefilteredColor  += inputTexture.SampleLevel(defaultSampler, L, mipLevel).rgb * NoL;
 			TotalWeight += NoL;
