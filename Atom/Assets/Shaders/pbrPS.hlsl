@@ -76,35 +76,37 @@ float4 main(VertexOut pin) : SV_Target
     float3 albedo = 0;
     float metalness = 0;
     float roughness = 0;
-    
+    float3 N = 0;
     if (UseTexture)
     {   
         // Sample input textures to get shading model params.
         albedo = gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb;
         metalness = gMetalnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
         roughness = gRoughnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
+        // Get current fragment's normal and transform to world space.
+        N = normalize(2.0 * gNormalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0);
+	
+        N = normalize(mul(pin.tangentBasis, N));
     }
 	else
     {
         albedo = Albedo;
         metalness = Metallic;
         roughness = Roughness;
-
+        N = normalize(pin.Normal);
+        //return float4(N, 1);
     }
     
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
 
-	// Get current fragment's normal and transform to world space.
-    float3 N = normalize(2.0 * gNormalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0);
 	
-    N = normalize(mul(pin.tangentBasis, N));
 	// Angle between surface normal and outgoing light direction.
     float cosLo = max(0.0, dot(N, Lo));
 		
 	// Specular reflection vector.
-    float3 Lr = 2.0 * cosLo * N - Lo;
-
+    float3 Lr = reflect(-Lo, N);
+    
 	// Fresnel reflectance at normal incidence (for metals use albedo color).
     float3 F0 = lerp(Fdielectric, albedo, metalness);
 

@@ -62,7 +62,7 @@ VertexOut main(VertexIn vin)
 	// Output vertex attributes for interpolation across triangle.
     vout.TexC = float2(vin.TexC.x, 1 - vin.TexC.y);
 
-    vout.Normal = mul(gNormalMatrix, vin.NormalL);
+    vout.Normal = mul(gNormalMatrix, float4(vin.NormalL, 1));
     vout.Tangent = vin.Tangent;
     // Generate projective tex-coords to project shadow map onto scene.
     vout.ShadowPosH = mul(gSunShadowMatrix, posW);
