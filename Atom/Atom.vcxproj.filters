@@ -291,5 +291,8 @@
     <None Include="Assets\Shaders\Common.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
+    <None Include="Assets\Shaders\PBRCommon.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -212,18 +212,23 @@ void Renderer::Startup()
         GpuHandle);
 
 
-    Model skyBox, pbrModel;
+    Model skyBox, pbrModel, pbrModel2;
 
     skyBox.Load(std::string("D:/AtomEngine/Atom/Assets/Models/cube.obj"), g_Device.Get(), gfxContext.m_CommandList);
-    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/gun.obj"), g_Device.Get(), gfxContext.m_CommandList);
+    pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/MaterialBall.obj"), g_Device.Get(), gfxContext.m_CommandList);
+    //pbrModel2.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device.Get(), gfxContext.m_CommandList);
 
-    pbrModel.modelMatrix = XMMatrixRotationY(45);
-    pbrModel.modelMatrix *= XMMatrixScaling(3, 3, 3);
+    pbrModel.modelMatrix = XMMatrixRotationY(60);
+    pbrModel.modelMatrix *= XMMatrixScaling(0.3, 0.3, 0.3);
+    pbrModel2.modelMatrix = XMMatrixScaling(4, 4, 4);
+    pbrModel2.modelMatrix *= XMMatrixTranslation(0, -2, 0);
 
     pbrModel.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel.modelMatrix));
+    pbrModel2.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel2.modelMatrix));
 
     m_SkyBox.model = std::move(skyBox);
     m_Scene.Models.push_back(std::move(pbrModel));
+    m_Scene.Models.push_back(std::move(pbrModel2));
 
     m_MeshConstants.resize(m_Scene.Models.size());
     m_MeshConstantsBuffers.resize(m_Scene.Models.size());
@@ -607,10 +612,24 @@ void Renderer::RenderScene()
     //     g_CommandList->DrawInstanced(4, 1, 0, 0);
     // }
 
+    {
 
+        BYTE* data = nullptr;
+        envMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
+
+        memcpy(data, &m_EnvMapAttribs, EnvMapAttribsBufferSize);
+        envMapBuffer->Unmap(0, nullptr);
+    }
+
+    gfxContext.m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
+
+    gfxContext.m_CommandList->SetPipelineState(m_PSOs["sky"].Get());
+    m_SkyBox.model.Draw(gfxContext.m_CommandList);
     gfxContext.m_CommandList->OMSetRenderTargets(1, &rtv, true, &g_DsvHeap->GetCPUDescriptorHandleForHeapStart());
     gfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SceneColorBuffer.Get(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ));
+
+    
 
     
     {
@@ -631,19 +650,7 @@ void Renderer::RenderScene()
 
     gfxContext.m_CommandList->DrawInstanced(4, 1, 0, 0);
 
-    {
-
-        BYTE* data = nullptr;
-        envMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-        memcpy(data, &m_EnvMapAttribs, EnvMapAttribsBufferSize);
-        envMapBuffer->Unmap(0, nullptr);
-    }
-
-    gfxContext.m_CommandList->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
-
-    gfxContext.m_CommandList->SetPipelineState(m_PSOs["sky"].Get());
-    m_SkyBox.model.Draw(gfxContext.m_CommandList);
+    
     
     if (ImGui::Begin("Ssao Debug"))
     {
@@ -753,15 +760,15 @@ void Renderer::LoadTextures(ID3D12CommandList* CmdList)
 	
     std::vector<std::string> texFilenames =
     {
-        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/albedo.tga",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/albedo.png",
 
-        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/normal.tga",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/normal.png",
 
-        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/metallic.tga",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/metallic.png",
 
-        "D:/AtomEngine/Atom/Assets/Textures/Cerberus_by_Andrew_Maximov/roughness.tga",
+        "D:/AtomEngine/Atom/Assets/Textures/silver/roughness.png",
 
-        "D:/AtomEngine/Atom/Assets/Textures/EnvirMap/Newport_Loft.hdr"
+        "D:/AtomEngine/Atom/Assets/Textures/EnvirMap/sun.hdr"
     };
 	for(int i = 0; i < (int)texNames.size() - 1; ++i)
 	{
@@ -1253,6 +1260,7 @@ void Renderer::BuildPSOs()
     //
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc = basePsoDesc;
+    //opaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
     opaquePsoDesc.DepthStencilState.DepthEnable = true;
     opaquePsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     opaquePsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;

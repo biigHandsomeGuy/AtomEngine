@@ -266,9 +266,7 @@ float4 main(PSInput input) : SV_Target
     }
 
     
-   
-    color = color / (color + 1);
-    //color = 1 - exp(-color * exposure);   
+    color = 1 - exp(-color * exposure);   
     
     color = pow(color, 1 / 2.2);
 

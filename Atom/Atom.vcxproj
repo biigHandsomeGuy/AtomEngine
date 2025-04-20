@@ -548,6 +548,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Shaders\Common.hlsli" />
+    <None Include="Assets\Shaders\PBRCommon.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="Vendor\imgui\Imgui.vcxproj">

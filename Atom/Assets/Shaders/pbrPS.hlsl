@@ -1,3 +1,5 @@
+#include "PBRCommon.hlsli"
+
 
 Texture2D gAlbedeTexture : register(t0);
 Texture2D gNormalTexture : register(t1);
@@ -66,11 +68,6 @@ uint querySpecularTextureLevels()
     return levels;
 }
 
-float DistributionGGX(float3 N, float3 H, float roughness);
-float GeometrySchlickGGX(float NdotV, float roughness);
-float GeometrySmith(float3 N, float3 V, float3 L, float roughness);
-float3 fresnelSchlick(float3 F0, float cosTheta);
-
 float4 main(VertexOut pin) : SV_Target
 {
     float3 albedo = 0;
@@ -80,7 +77,7 @@ float4 main(VertexOut pin) : SV_Target
     if (UseTexture)
     {   
         // Sample input textures to get shading model params.
-        albedo = gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb;
+        albedo = pow(gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
         metalness = gMetalnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
         roughness = gRoughnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
         // Get current fragment's normal and transform to world space.
@@ -114,7 +111,7 @@ float4 main(VertexOut pin) : SV_Target
     float3 directLighting = 0.0;
     for (uint i = 0; i < 1; ++i)
     {
-        float3 Li = gSunPosition - pin.PosW;
+        float3 Li = normalize(gSunPosition - pin.PosW);
         float3 Lradiance = { 1,1,1 };
 
 		// Half-vector between Li and Lo.
@@ -125,11 +122,11 @@ float4 main(VertexOut pin) : SV_Target
         float cosLh = max(0.0, dot(N, Lh));
 
 		// Calculate Fresnel term for direct lighting. 
-        float3 F = fresnelSchlick(F0, max(0.0, dot(Lh, Lo)));
+        float3 F = F_Schlick(F0, max(0.0, dot(Lh, Lo)));
 		// Calculate normal distribution for specular BRDF.
-        float D = DistributionGGX(N, Lh, roughness);
+        float D = D_GGX(roughness, max(0.0, dot(Lh, N)));
 		// Calculate geometric attenuation for specular BRDF.
-        float G = GeometrySmith(N, Lo, Li, roughness);
+        float G = G_Smith(N, Lo, Li, roughness);
 
 		// Diffuse scattering happens due to light being refracted multiple times by a dielectric medium.
 		// Metals on the other hand either reflect or absorb energy, so diffuse contribution is always zero.
@@ -158,7 +155,7 @@ float4 main(VertexOut pin) : SV_Target
 		// Since we use pre-filtered cubemap(s) and irradiance is coming from many directions
 		// use cosLo instead of angle with light's half-vector (cosLh above).
 		// See: https://seblagarde.wordpress.com/2011/08/17/hello-world/
-        float3 F = fresnelSchlick(F0, cosLo);
+        float3 F = F_Schlick(F0, cosLo);
 
 		// Get diffuse contribution factor (as with direct lighting).
         float3 kd = lerp(1.0 - F, 0.0, metalness);
@@ -191,45 +188,4 @@ float4 main(VertexOut pin) : SV_Target
 	// Final fragment color.
     return float4(directLighting + ambientOcclution * ambientLighting, 1.0);
 }
-
-// ----------------------------------------------------------------------------
-float DistributionGGX(float3 N, float3 H, float roughness)
-{
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH * NdotH;
-
-    float nom = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = 3.14159 * denom * denom;
-
-    return nom / denom;
-}
-// ----------------------------------------------------------------------------
-float GeometrySchlickGGX(float NdotV, float roughness)
-{
-    float r = (roughness + 1.0);
-    float k = (r * r) / 8.0;
-
-    float nom = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
-
-    return nom / denom;
-}
-// ----------------------------------------------------------------------------
-float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
-{ 
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-
-    return ggx1 * ggx2;
-}
-// Shlick's approximation of the Fresnel factor.
-float3 fresnelSchlick(float3 F0, float cosTheta)
-{
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-}
-
+ 
