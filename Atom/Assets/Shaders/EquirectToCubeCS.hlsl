@@ -1,16 +1,16 @@
+#include "Common.hlsli"
+
 static const float PI = 3.141592;
 static const float TwoPI = 2 * PI;
 
-SamplerState gSampler : register(s2);
 Texture2D gSphereMap : register(t0);
 RWTexture2DArray<float4> outputTexture : register(u0);
-SamplerState gsamAnisotropicWrap : register(s4);
-SamplerState gsamAnisotropicClamp : register(s5);
+
 float3 getSamplingVector(uint3 ThreadID)
 {
     float outputWidth, outputHeight, outputDepth;
     outputTexture.GetDimensions(outputWidth, outputHeight, outputDepth);
-
+    
     float2 st = ThreadID.xy / float2(outputWidth, outputHeight);
     float2 uv = 2.0 * float2(st.x, 1.0 - st.y) - float2(1.0, 1.0);
 
@@ -50,7 +50,7 @@ void main(uint3 ThreadID : SV_DispatchThreadID)
     float theta = acos(v.y);
 
 	// Sample equirectangular texture.
-    float4 color = gSphereMap.SampleLevel(gSampler, float2(phi / TwoPI, theta / PI), 0);
+    float4 color = gSphereMap.SampleLevel(gsamLinearWrap, float2(phi / TwoPI, theta / PI), 0);
 	// Write out color to output cubemap.
     outputTexture[ThreadID] = color;
 }

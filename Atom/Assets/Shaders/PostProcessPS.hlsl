@@ -30,7 +30,7 @@ float Luminance(float3 color)
 float GetLuma(float2 uv, float uOffset = 0.0, float vOffset = 0.0)
 {
     uv += float2(uOffset, vOffset);
-    return Luminance(ScreenTexture.Sample(gsamLinearClamp, uv).rgb);
+    return Luminance(ScreenTexture.Sample(gsamAnisotropicWrap, uv).rgb);
 }
 
 struct LumaNeighborhood
@@ -94,7 +94,7 @@ struct FXAAEdge
 
 float4 GetSource(float2 uv)
 {
-    return ScreenTexture.Sample(gsamLinearClamp, uv);
+    return ScreenTexture.Sample(gsamAnisotropicWrap, uv);
 }
 
 float2 GetSourceTexelSize()
@@ -229,8 +229,8 @@ float4 main(PSInput input) : SV_Target
     ScreenTexture.GetDimensions(ScreenTextureSize.x, ScreenTextureSize.y);
     
     float2 texelSize = 1.0 / ScreenTextureSize;
-    float4 sceneColor = ScreenTexture.Sample(gsamLinearClamp, input.TexCoord);
-    float4 bloomColor = BloomTexture.Sample(gsamLinearClamp, input.TexCoord);
+    float4 sceneColor = ScreenTexture.Sample(gsamAnisotropicWrap, input.TexCoord);
+    float4 bloomColor = BloomTexture.Sample(gsamAnisotropicWrap, input.TexCoord);
     float4 color = sceneColor;
     
     if(FXAA)

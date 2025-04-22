@@ -1,3 +1,4 @@
+#include "Common.hlsli"
 #include "PBRCommon.hlsli"
 
 
@@ -14,9 +15,8 @@ TextureCube gCubeMap : register(t13);
 TextureCube gIrradianceMap : register(t14);
 TextureCube gSpecularMap : register(t15);
 Texture2D<float2> gLUTMap : register(t16);
-SamplerState gsamLinearWrap : register(s3);
 
-SamplerComparisonState gsamShadow : register(s6);
+
 cbuffer MaterialConstants : register(b0)
 {
     uint gMatIndex;
@@ -44,9 +44,8 @@ cbuffer ShaderParams : register(b2)
     float Metallic;
    
 };
-SamplerState gsamAnisotropicWrap : register(s4);
-static const float3 Fdielectric = 0.04;
-static const float Epsilon = 0.00001;
+static const float3 g_Fdielectric = 0.04;
+static const float g_Epsilon = 0.00001;
 
 struct VertexOut
 {
@@ -96,35 +95,35 @@ float4 main(VertexOut pin) : SV_Target
     
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
-
+    
 	
 	// Angle between surface normal and outgoing light direction.
-    float cosLo = max(0.0, dot(N, Lo));
-		
+    float NoV = max(0.0, dot(N, Lo));
+
 	// Specular reflection vector.
     float3 Lr = reflect(-Lo, N);
     
 	// Fresnel reflectance at normal incidence (for metals use albedo color).
-    float3 F0 = lerp(Fdielectric, albedo, metalness);
+    float3 F0 = lerp(g_Fdielectric, albedo, metalness);
 
 	// Direct lighting calculation for analytical lights.
     float3 directLighting = 0.0;
     for (uint i = 0; i < 1; ++i)
     {
         float3 Li = normalize(gSunPosition - pin.PosW);
-        float3 Lradiance = { 1,1,1 };
+        float3 Lradiance = { 20, 20, 20 };
 
 		// Half-vector between Li and Lo.
         float3 Lh = normalize(Li + Lo);
 
 		// Calculate angles between surface normal and various light vectors.
-        float cosLi = max(0.0, dot(N, Li));
-        float cosLh = max(0.0, dot(N, Lh));
+        float NoL = max(0.0, dot(N, Li));
+        float NoH = max(0.0, dot(N, Lh));
 
 		// Calculate Fresnel term for direct lighting. 
         float3 F = F_Schlick(F0, max(0.0, dot(Lh, Lo)));
 		// Calculate normal distribution for specular BRDF.
-        float D = D_GGX(roughness, max(0.0, dot(Lh, N)));
+        float D = D_GGX(roughness*roughness, max(0.0, dot(Lh, N)));
 		// Calculate geometric attenuation for specular BRDF.
         float G = G_Smith(N, Lo, Li, roughness);
 
@@ -139,10 +138,10 @@ float4 main(VertexOut pin) : SV_Target
         float3 diffuseBRDF = kd * albedo;
 
 		// Cook-Torrance specular microfacet BRDF.
-        float3 specularBRDF = (F * D * G) / max(Epsilon, 4.0 * cosLi * cosLo);
+        float3 specularBRDF = (F * D * G) / max(g_Epsilon, 4.0 * NoL * NoV);
 
 		// Total contribution for this light.
-        directLighting += (diffuseBRDF + specularBRDF) * Lradiance * cosLi;
+        directLighting += (diffuseBRDF + specularBRDF) * Lradiance * NoL;
     }
 
 	// Ambient lighting (IBL).
@@ -155,7 +154,7 @@ float4 main(VertexOut pin) : SV_Target
 		// Since we use pre-filtered cubemap(s) and irradiance is coming from many directions
 		// use cosLo instead of angle with light's half-vector (cosLh above).
 		// See: https://seblagarde.wordpress.com/2011/08/17/hello-world/
-        float3 F = F_Schlick(F0, cosLo);
+        float3 F = F_Schlick(F0, NoV);
 
 		// Get diffuse contribution factor (as with direct lighting).
         float3 kd = lerp(1.0 - F, 0.0, metalness);
@@ -165,14 +164,13 @@ float4 main(VertexOut pin) : SV_Target
 
 		// Sample pre-filtered specular reflection environment at correct mipmap level.
         uint specularTextureLevels = querySpecularTextureLevels();
-        float3 specularIrradiance = gSpecularMap.SampleLevel(gsamLinearWrap, Lr, roughness * specularTextureLevels).rgb;
+        float3 specularIrradiance = gSpecularMap.SampleLevel(gsamAnisotropicWrap, Lr, roughness * specularTextureLevels).rgb;
 
 		// Split-sum approximation factors for Cook-Torrance specular BRDF.
-        float2 specularBRDF = gLUTMap.Sample(gsamLinearWrap, float2(cosLo, roughness)).rg;
+        float2 specularBRDF = gLUTMap.Sample(gsamAnisotropicClamp, float2(NoV, roughness)).rg;
 
 		// Total specular IBL contribution.
-        float3 specularIBL = (1 - kd)*
-        (F0 * specularBRDF.x + specularBRDF.y) * specularIrradiance;
+        float3 specularIBL = (F0 * specularBRDF.x + specularBRDF.y) * specularIrradiance;
 
 		// Total ambient lighting contribution.
         ambientLighting = diffuseIBL + specularIBL;
