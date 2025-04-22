@@ -1,7 +1,7 @@
 #### Some feature of AtomEngine
 
 
-![](https://github.com/biigHandsomeGuy/AtomEngine/tree/master/screenshot/pbr.jpg)
+![](./screenshot/pbr.jpg)
 > pbr
 
 
