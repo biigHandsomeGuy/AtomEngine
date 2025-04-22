@@ -1,6 +1,6 @@
 #### Some feature of AtomEngine
 
-![](https://github.com/biigHandsomeGuy/AtomEngine/blob/master/screenshot/Suzanne.png)
+![](https://github.com/biigHandsomeGuy/AtomEngine/tree/master/screenshot/pbr.png)
 > pbr
 
 
@@ -9,6 +9,7 @@
 - [x] IBL
 - [x] PCSS
 - [x] SSAO
+- [x] FXAA 
 - [ ] Editor
 - [ ] Deffer Rendering
 - [ ] Bloom
