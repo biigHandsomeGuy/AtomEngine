@@ -217,7 +217,7 @@ void Renderer::Startup()
 	pbrModel.Load(std::string("D:/AtomEngine/Atom/Assets/Models/MaterialBall.obj"), g_Device.Get(), gfxContext.m_CommandList);
 	//pbrModel2.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device.Get(), gfxContext.m_CommandList);
 
-	pbrModel.modelMatrix = XMMatrixRotationY(60);
+	pbrModel.modelMatrix = XMMatrixRotationY(-80);
 	pbrModel.modelMatrix *= XMMatrixScaling(0.3, 0.3, 0.3);
 	pbrModel2.modelMatrix = XMMatrixScaling(4, 4, 4);
 	pbrModel2.modelMatrix *= XMMatrixTranslation(0, -2, 0);
@@ -694,7 +694,7 @@ void Renderer::UpdateUI()
 
 		ImGui::Begin("DEBUG");                          // Create a window called "Hello, world!" and append into it.
  
-		ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+		ImGui::Text("Welcome to my renderer!");               // Display some text (you can use a format strings too)
 		ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 		ImGui::Checkbox("Another Window", &show_another_window);
 
@@ -702,7 +702,7 @@ void Renderer::UpdateUI()
 		ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 		ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
 	   
-		//ImGui::Float4
+		
 		ImGui::DragFloat4("LightPosition", &mLightPosW.x,0.3f,-90,90);
 		ImGui::DragFloat4("CameraPosition", &(m_Camera.GetPosition3f().x));
 
