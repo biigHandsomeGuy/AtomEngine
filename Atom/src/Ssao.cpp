@@ -6,6 +6,7 @@
 #include "MathHelper.h"
 #include "Camera.h"
 #include "CommandContext.h"
+
 namespace shader
 {
 #include "../CompiledShaders/SsaoVS.h"
@@ -33,6 +34,9 @@ namespace
 
     SsaoConstants s_SsaoConstants = {};
     ComPtr<ID3D12Resource> s_SsaoCbuffer;
+
+    D3D12_VIEWPORT s_ViewPort;
+    D3D12_RECT s_Rect;
 }
 void BuildOffsetVectors();
 void BuildRandomVectorTexture(ID3D12GraphicsCommandList*);
@@ -70,6 +74,9 @@ std::vector<float> CalcGaussWeights(float sigma)
 void SSAO::Initialize()
 {
     CommandContext& gfxContext = CommandContext::Begin(L"SSAO Initialize");
+
+    s_ViewPort = { 0,0,g_DisplayWidth / 2.0f,g_DisplayHeight / 2.0f,0,1 };
+    s_Rect = { 0,0,(long)g_DisplayWidth / 2,(long)g_DisplayHeight / 2 };
 
     CD3DX12_DESCRIPTOR_RANGE texTable0; // normal depth
     CD3DX12_DESCRIPTOR_RANGE texTable1; // normal depth
@@ -209,16 +216,17 @@ void SSAO::Initialize()
     CD3DX12_DESCRIPTOR_RANGE range3 = {};
     range3.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0);
 
-    CD3DX12_ROOT_PARAMETER rootParameter[4] = {};
+    CD3DX12_ROOT_PARAMETER rootParameter[5] = {};
     rootParameter[0].InitAsDescriptorTable(1, &range1);
     rootParameter[1].InitAsDescriptorTable(1, &range2);
     rootParameter[2].InitAsDescriptorTable(1, &range3);
     rootParameter[3].InitAsConstantBufferView(0, 0);
+    rootParameter[4].InitAsConstants(1, 1);
 
     //auto staticSamplers = GetStaticSamplers();
 
     // A root signature is an array of root parameters.
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc1(4, rootParameter,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc1(5, rootParameter,
         (UINT)staticSamplers.size(), staticSamplers.data(),
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -255,11 +263,15 @@ void SSAO::Initialize()
     gfxContext.Finish();
 }
 
-
+void SsaoBlurHorizontal(CommandContext& GfxContext);
+void SsaoBlurVertical(CommandContext& GfxContext);
 void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
 {
-    GfxContext.m_CommandList->RSSetViewports(1, &g_ViewPort);
-    GfxContext.m_CommandList->RSSetScissorRects(1, &g_Rect);
+    s_ViewPort = { 0,0,g_DisplayWidth / 2.0f,g_DisplayHeight / 2.0f,0,1 };
+    s_Rect = { 0,0,(long)g_DisplayWidth / 2,(long)g_DisplayHeight / 2 };
+
+    GfxContext.m_CommandList->RSSetViewports(1, &s_ViewPort);
+    GfxContext.m_CommandList->RSSetScissorRects(1, &s_Rect);
 
     // We compute the initial SSAO to AmbientMap0.
 
@@ -296,8 +308,7 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
         s_SsaoConstants.BlurWeights[1] = XMFLOAT4(&blurWeights[4]);
         s_SsaoConstants.BlurWeights[2] = XMFLOAT4(&blurWeights[8]);
         
-        s_SsaoConstants.InvRenderTargetSize = XMFLOAT2((1.0f / g_DisplayWidth), 1.0f / g_DisplayHeight);
-
+        s_SsaoConstants.InvRenderTargetSize = XMFLOAT2((1.0f / g_DisplayWidth * 2), 1.0f / g_DisplayHeight * 2);
 
         
         BYTE* data = nullptr;
@@ -327,14 +338,12 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
     GfxContext.m_CommandList->IASetIndexBuffer(nullptr);
     GfxContext.m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     GfxContext.m_CommandList->DrawInstanced(6, 1, 0, 0);
-
     // Change back to GENERIC_READ so we can read the texture in a shader.
     GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOUnBlur.Get(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ));
 
+    // first blur - vertical
     {
-       
-        
         GfxContext.m_CommandList->SetComputeRootSignature(s_ComputeRS.Get());
         GfxContext.m_CommandList->SetPipelineState(s_BlurPso.Get());
 
@@ -347,19 +356,50 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
         GfxContext.m_CommandList->SetComputeRootDescriptorTable(2, uav);
 
         GfxContext.m_CommandList->SetComputeRootConstantBufferView(3, s_SsaoCbuffer->GetGPUVirtualAddress());
-        GfxContext.m_CommandList->SetGraphicsRoot32BitConstant(1, 0, 0);
-
+        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 0, 0);
 
         GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
-        
-        GfxContext.m_CommandList->Dispatch(g_DisplayWidth/16, g_DisplayHeight / 16, 1);
-
-
+        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
         GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
     }
-    
+    // first blur - horizontal
+    {
+        auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
+        GfxContext.m_CommandList->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
+        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 1, 0);
+
+        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+
+        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+    }
+
+    // second blur
+    {
+        auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
+        GfxContext.m_CommandList->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
+        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 0, 0);
+
+        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+
+        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+    }
+    {
+        auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
+        GfxContext.m_CommandList->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
+        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 1, 0);
+
+        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+
+        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+    }
+
 }
+
+
 void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
 {
     D3D12_RESOURCE_DESC texDesc;

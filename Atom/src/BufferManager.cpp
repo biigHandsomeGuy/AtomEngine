@@ -166,8 +166,8 @@ namespace Graphics
         clearValue.Format = DXGI_FORMAT_R8_UNORM;
 
         // g_SSAOFullScreen
-        desc.Width = NativeWidth;
-        desc.Height = NativeHeight;
+        desc.Width = NativeWidth/2;
+        desc.Height = NativeHeight/2;
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         desc.Format = DXGI_FORMAT_R8_UNORM;
         desc.MipLevels = 1;
@@ -179,7 +179,7 @@ namespace Graphics
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE,
             &desc,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_COMMON,
             nullptr ,
             IID_PPV_ARGS(&g_SSAOFullScreen)));
         g_SSAOFullScreen->SetName(L"g_SSAOFullScreen");
@@ -197,8 +197,7 @@ namespace Graphics
         g_Device->CreateUnorderedAccessView(g_SSAOFullScreen.Get(), 0, &uavDesc, GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoUav));
 
         // ssao un blur
-        desc.Width = NativeWidth;
-        desc.Height = NativeHeight;
+
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         desc.Format = DXGI_FORMAT_R8_UNORM;
         desc.MipLevels = 1;

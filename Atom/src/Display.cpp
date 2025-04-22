@@ -138,6 +138,7 @@ void Display::Resize(uint32_t width, uint32_t height)
 
     InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
     g_CommandManager.IdleGPU();
+    
 }
 
 void Display::Present(void)

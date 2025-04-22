@@ -4,3 +4,8 @@
 
 /Atom/src/d3d12.cpp
 /Atom/src/d3d.h
+/bin
+/bin-int
+/Samples/PBR/x64/Debug
+/Atom/CompiledShaders
+/.vs
