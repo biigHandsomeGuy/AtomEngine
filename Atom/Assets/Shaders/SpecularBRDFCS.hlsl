@@ -3,7 +3,7 @@
 
 static const float Epsilon = 0.001; // This program needs larger eps.
 
-static const uint g_NumSamples = 1024;
+static const uint g_NumSamples = 512;
 static const float g_InvNumSamples = 1.0 / float(g_NumSamples);
 
 RWTexture2D<float2> LUT : register(u0);
@@ -12,77 +12,71 @@ RWTexture2D<float2> LUT : register(u0);
 // For derivation see: http://blog.tobias-franke.eu/2014/03/30/notes_on_importance_sampling.html
 float3 sampleGGX(float u1, float u2, float roughness)
 {
-    float alpha = roughness * roughness;
+	float alpha = roughness * roughness;
 
-    float cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta); // Trig. identity
-    float phi = 2 * PI * u1;
+	float cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
+	float sinTheta = sqrt(1.0 - cosTheta * cosTheta); // Trig. identity
+	float phi = 2 * PI * u1;
 
 	// Convert to Cartesian upon return.
-    return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+	return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
 }
 
 // Single term for separable Schlick-GGX below.
 float gaSchlickG1(float cosTheta, float k)
 {
-    return cosTheta / (cosTheta * (1.0 - k) + k);
+	return cosTheta / (cosTheta * (1.0 - k) + k);
 }
 
 // Schlick-GGX approximation of geometric attenuation function using Smith's method (IBL version).
 float gaSchlickGGX_IBL(float cosLi, float cosLo, float roughness)
 {
-    float r = roughness;
-    float k = (r * r) / 2.0; // Epic suggests using this roughness remapping for IBL lighting.
-    return gaSchlickG1(cosLi, k) * gaSchlickG1(cosLo, k);
+	float r = roughness;
+	float k = (r * r) / 2.0; // Epic suggests using this roughness remapping for IBL lighting.
+	return gaSchlickG1(cosLi, k) * gaSchlickG1(cosLo, k);
 }
 
 [numthreads(32, 32, 1)]
 void main(uint2 ThreadID : SV_DispatchThreadID)
 {
 	// Get output LUT dimensions.
-    float outputWidth, outputHeight;
-    LUT.GetDimensions(outputWidth, outputHeight);
+	float outputWidth, outputHeight;
+	LUT.GetDimensions(outputWidth, outputHeight);
 
 	// Get integration parameters.
-    float cosLo = ThreadID.x / outputWidth;
-    float roughness = ThreadID.y / outputHeight;
-    roughness = max(roughness, 0.025);
-	// Make sure viewing angle is non-zero to avoid divisions by zero (and subsequently NaNs).
-    cosLo = max(cosLo, Epsilon);
+    float NoV = (ThreadID.x) / outputWidth;
+	float roughness = (ThreadID.y) / outputHeight;
 
-	// Derive tangent-space viewing vector from angle to normal (pointing towards +Z in this reference frame).
-    float3 Lo = float3(sqrt(1.0 - cosLo * cosLo), 0.0, cosLo);
+	float3 V;
+	V.x = sqrt(1.0f - NoV * NoV); // sin
+	V.y = 0;
+	V.z = NoV;
+	const float3 N = float3(0.0, 0.0, 1.0);
 
-	// We will now pre-integrate Cook-Torrance BRDF for a solid white environment and save results into a 2D LUT.
-	// DFG1 & DFG2 are terms of split-sum approximation of the reflectance integral.
-	// For derivation see: "Moving Frostbite to Physically Based Rendering 3.0", SIGGRAPH 2014, section 4.9.2.
-    float DFG1 = 0;
-    float DFG2 = 0;
-
-    for (uint i = 0; i < g_NumSamples; ++i)
-    {
-        float2 u = Hammersley2D(i, g_NumSamples);
-
-		// Sample directly in tangent/shading space since we don't care about reference frame as long as it's consistent.
-        float3 Lh = sampleGGX(u.x, u.y, roughness);
-
-		// Compute incident direction (Li) by reflecting viewing direction (Lo) around half-vector (Lh).
-        float3 Li = 2.0 * dot(Lo, Lh) * Lh - Lo;
-
-        float cosLi = Li.z;
-        float cosLh = Lh.z;
-        float cosLoLh = max(dot(Lo, Lh), 0.0);
-
-        if (cosLi > 0.0)
+	float DFG1 = 0.0f, DFG2 = 0.0f;
+	for (uint i = 0u; i < g_NumSamples; i++)
+	{
+        float2 Xi = Hammersley2D(i, g_NumSamples);
+        float3 H = ImportanceSampleGGX(Xi, roughness, N);
+        float3 L = 2.0 * dot(V, H) * H - V;
+		
+        float NoL = saturate(L.z);
+        float NoH = saturate(H.z);
+        float VoH = saturate(dot(V, H));
+		
+		if(NoL > 0)
         {
-            float G = gaSchlickGGX_IBL(cosLi, cosLo, roughness);
-            float Gv = G * cosLoLh / (cosLh * cosLo);
-            float Fc = pow(1.0 - cosLoLh, 5);
+            float AlphaRoughness = roughness * roughness;
+			
+            float G_Vis = 4.0f * SmithGGXVisibilityCorrelated(NoL, NoV, AlphaRoughness) * VoH * NoL / NoH;
+            float Fc = pow(1.0f - VoH, 5.0f);
+			
+            DFG1 += G_Vis * (1 - Fc);
+            DFG2 += G_Vis * Fc;
 
-            DFG1 += (1 - Fc) * Gv;
-            DFG2 += Fc * Gv;
         }
-    }
 
-    LUT[ThreadID] = float2(DFG1, DFG2) * g_InvNumSamples;
+    }
+	
+	LUT[ThreadID] = float2(DFG1, DFG2) * g_InvNumSamples;
 }

@@ -194,5 +194,21 @@ float SmithGGXSampleDirectionPDF(float3 V, float3 N, float3 L, float AlphaRoughn
     }
 }
 
+float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughness)
+{
+    // G1 (masking) is % microfacets visible in 1 direction
+    // G2 (shadow-masking) is % microfacets visible in 2 directions
+    // If uncorrelated:
+    //    G2(NdotL, NdotV) = G1(NdotL) * G1(NdotV)
+    //    Less realistic as higher points are more likely visible to both L and V
+    //
+    // https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2017/Presentations/Hammon_Earl_PBR_Diffuse_Lighting.pdf
 
+    float a2 = AlphaRoughness * AlphaRoughness;
+
+    float GGXV = NdotL * sqrt(max(NdotV * NdotV * (1.0 - a2) + a2, 1e-7));
+    float GGXL = NdotV * sqrt(max(NdotL * NdotL * (1.0 - a2) + a2, 1e-7));
+
+    return 0.5 / (GGXV + GGXL);
+}
 #endif
