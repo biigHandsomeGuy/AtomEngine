@@ -69,8 +69,6 @@ void main(uint3 ThreadID : SV_DispatchThreadID)
 		float2 Xi = Hammersley2D( i, g_NumSamples);
 		float3 H  = ImportanceSampleGGX( Xi, roughness, N );
 		float3 L  = 2.0 * dot(V, H) * H - V;
-
-		
 		
 		float NoL = saturate(dot(N, L));
 		float VoH = saturate(dot(V, H));

@@ -10,6 +10,7 @@
 #ifndef PI
 #define PI 3.1415926536
 #endif
+const float g_Epsilon = 0.00001;
 
 
 float3 Diffuse_Lambert(float3 DiffuseColor)
@@ -17,42 +18,48 @@ float3 Diffuse_Lambert(float3 DiffuseColor)
     return DiffuseColor * (1 / PI);
 }
 
-
-// GGX / Trowbridge-Reitz
-// [Walter et al. 2007, "Microfacet models for refraction through rough surfaces"]
-float D_GGX(float a2, float NoH)
+// The following equation(s) model the distribution of microfacet normals across the area being drawn (aka D())
+// Implementation from "Average Irregularity Representation of a Roughened Surface for Ray Reflection" by T. S. Trowbridge, and K. P. Reitz
+// Follows the distribution function recommended in the SIGGRAPH 2013 course notes from EPIC Games, Equation 3.
+float D_GGX(float NdotH, float AlphaRoughness)
 {
-    float d = (NoH * a2 - NoH) * NoH + 1; // 2 mad
-    return a2 / (PI * d * d); // 4 mul, 1 rcp
-}
+    // "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (1)
+    // https://jcgt.org/published/0007/04/01/
 
+    // Make sure we reasonably handle AlphaRoughness == 0
+    // (which corresponds to delta function)
+    AlphaRoughness = max(AlphaRoughness, 1e-3);
+
+    float a2 = AlphaRoughness * AlphaRoughness;
+    float nh2 = NdotH * NdotH;
+    float f = nh2 * a2 + (1.0 - nh2);
+    return a2 / max(PI * f * f, 1e-9);
+}
 // Schlick [1994]
 float F_Schlick(float3 F0, float cosTheta)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-float GeometrySchlickGGX(float NdotV, float roughness)
+// Visibility = G2(v,l,a) / (4 * (n,v) * (n,l))
+// see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf
+float V_SmithGGXCorrelated(float NdotL, float NdotV, float AlphaRoughness)
 {
-    float r = (roughness + 1.0);
-    float k = (r * r) / 8.0;
+    // G1 (masking) is % microfacets visible in 1 direction
+    // G2 (shadow-masking) is % microfacets visible in 2 directions
+    // If uncorrelated:
+    //    G2(NdotL, NdotV) = G1(NdotL) * G1(NdotV)
+    //    Less realistic as higher points are more likely visible to both L and V
+    //
+    // https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2017/Presentations/Hammon_Earl_PBR_Diffuse_Lighting.pdf
 
-    float nom = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
+    float a2 = AlphaRoughness * AlphaRoughness;
 
-    return nom / denom;
+    float GGXV = NdotL * sqrt(max(NdotV * NdotV * (1.0 - a2) + a2, 1e-7));
+    float GGXL = NdotV * sqrt(max(NdotL * NdotL * (1.0 - a2) + a2, 1e-7));
+
+    return 0.5 / (GGXV + GGXL);
 }
-
-float G_Smith(float3 N, float3 V, float3 L, float roughness)
-{
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
-
-    return ggx1 * ggx2;
-}
-
 
 // Returns a random cosine-weighted direction on the hemisphere around z = 1.
 void SampleDirectionCosineHemisphere(in float2 UV, // Normal random variables
@@ -100,6 +107,7 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     float a = Roughness * Roughness;
     
     float Phi = 2 * PI * Xi.x;
+    // 从NDF推到出CDF，求反函数得到cos theta
     float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
     float SinTheta = sqrt(1 - CosTheta * CosTheta);
     
@@ -115,23 +123,7 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
-// The following equation(s) model the distribution of microfacet normals across the area being drawn (aka D())
-// Implementation from "Average Irregularity Representation of a Roughened Surface for Ray Reflection" by T. S. Trowbridge, and K. P. Reitz
-// Follows the distribution function recommended in the SIGGRAPH 2013 course notes from EPIC Games, Equation 3.
-float NormalDistribution_GGX(float NdotH, float AlphaRoughness)
-{
-    // "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (1)
-    // https://jcgt.org/published/0007/04/01/
 
-    // Make sure we reasonably handle AlphaRoughness == 0
-    // (which corresponds to delta function)
-    AlphaRoughness = max(AlphaRoughness, 1e-3);
-
-    float a2 = AlphaRoughness * AlphaRoughness;
-    float nh2 = NdotH * NdotH;
-    float f = nh2 * a2 + (1.0 - nh2);
-    return a2 / max(PI * f * f, 1e-9);
-}
 // Smith GGX masking function G1
 // [1] "Sampling the GGX Distribution of Visible Normals" (2018) by Eric Heitz - eq. (2)
 // https://jcgt.org/published/0007/04/01/
@@ -182,7 +174,7 @@ float SmithGGXSampleDirectionPDF(float3 V, float3 N, float3 L, float AlphaRoughn
     {
         // Note that [1] uses notation N for the micronormal, but in our case N is the macronormal,
         // while micronormal is H (aka the halfway vector).
-        float NDF = NormalDistribution_GGX(NdotH, AlphaRoughness); // (1) - D(N)
+        float NDF = D_GGX(NdotH, AlphaRoughness); // (1) - D(N)
         float G1 = SmithGGXMasking(NdotV, AlphaRoughness); // (2) - G1(V)
 
         float VNDF = G1 /* * VdotH */ * NDF / NdotV; // (3) - Dv(N)
@@ -194,21 +186,5 @@ float SmithGGXSampleDirectionPDF(float3 V, float3 N, float3 L, float AlphaRoughn
     }
 }
 
-float SmithGGXVisibilityCorrelated(float NdotL, float NdotV, float AlphaRoughness)
-{
-    // G1 (masking) is % microfacets visible in 1 direction
-    // G2 (shadow-masking) is % microfacets visible in 2 directions
-    // If uncorrelated:
-    //    G2(NdotL, NdotV) = G1(NdotL) * G1(NdotV)
-    //    Less realistic as higher points are more likely visible to both L and V
-    //
-    // https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2017/Presentations/Hammon_Earl_PBR_Diffuse_Lighting.pdf
 
-    float a2 = AlphaRoughness * AlphaRoughness;
-
-    float GGXV = NdotL * sqrt(max(NdotV * NdotV * (1.0 - a2) + a2, 1e-7));
-    float GGXL = NdotV * sqrt(max(NdotL * NdotL * (1.0 - a2) + a2, 1e-7));
-
-    return 0.5 / (GGXV + GGXL);
-}
 #endif

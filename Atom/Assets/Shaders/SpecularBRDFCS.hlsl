@@ -58,7 +58,7 @@ void main(uint2 ThreadID : SV_DispatchThreadID)
 	{
         float2 Xi = Hammersley2D(i, g_NumSamples);
         float3 H = ImportanceSampleGGX(Xi, roughness, N);
-        float3 L = 2.0 * dot(V, H) * H - V;
+        float3 L = normalize(2.0 * dot(V, H) * H - V);
 		
         float NoL = saturate(L.z);
         float NoH = saturate(H.z);
@@ -68,7 +68,7 @@ void main(uint2 ThreadID : SV_DispatchThreadID)
         {
             float AlphaRoughness = roughness * roughness;
 			
-            float G_Vis = 4.0f * SmithGGXVisibilityCorrelated(NoL, NoV, AlphaRoughness) * VoH * NoL / NoH;
+            float G_Vis = 4.0f * V_SmithGGXCorrelated(NoL, NoV, AlphaRoughness) * VoH * NoL / NoH;
             float Fc = pow(1.0f - VoH, 5.0f);
 			
             DFG1 += G_Vis * (1 - Fc);
