@@ -58,5 +58,11 @@ namespace PostProcess
         float exposure = 2.0f;
         bool isRenderingLuminance = false;
         char pad0[3] = { 0,0,0 };
+        bool reinhard = false;
+        char pad1[3] = { 0,0,0 };
+        bool filmic = false;
+        char pad2[3] = { 0,0,0 };
+        bool aces = true;
+        char pad3[3] = { 0,0,0 };
     };
 }

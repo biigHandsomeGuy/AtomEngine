@@ -1,277 +1,254 @@
 #include "Common.hlsli"
 
-#define fixedThreshold 0.0312
-#define relativeThreshold  0.063
-#define subpixelBlending 0.75f
 
-#define EXTRA_EDGE_STEPS 10
-#define EDGE_STEP_SIZES 1.0, 1.0, 1.0, 1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0
-#define LAST_EDGE_STEP_GUESS 8.0
-static const float edgeStepSizes[EXTRA_EDGE_STEPS] = { EDGE_STEP_SIZES };
 Texture2D ScreenTexture : register(t17); 
 Texture2D BloomTexture : register(t18); 
 cbuffer MaterialConstants : register(b0)
 {
-    float exposure;
-    bool FXAA;
+	float exposure;
+	bool UseFXAA;
+    bool UseReinhard;
+    bool UseFilmic;
+    bool UseAces;
 }
+
+#define FXAA_EDGE_THRESHOLD      (1.0/8.0)
+#define FXAA_EDGE_THRESHOLD_MIN  (1.0/24.0)
+#define FXAA_SEARCH_STEPS        32
+#define FXAA_SEARCH_ACCELERATION 1
+#define FXAA_SEARCH_THRESHOLD    (1.0/4.0)
+#define FXAA_SUBPIX              1
+#define FXAA_SUBPIX_FASTER       0
+#define FXAA_SUBPIX_CAP          (3.0/4.0)
+#define FXAA_SUBPIX_TRIM         (1.0/4.0)
+#define FXAA_SUBPIX_TRIM_SCALE (1.0/(1.0 - FXAA_SUBPIX_TRIM))
+float4 FxaaTexOff(Texture2D ScreenTexture, float2 pos, int2 off)
+{
+	return ScreenTexture.SampleLevel(gsamAnisotropicClamp, pos.xy, 0.0, off.xy);
+}
+
+float FxaaLuma(float3 rgb)
+{
+	return rgb.y * (0.587 / 0.299) + rgb.x;
+}
+
+float3 FxaaFilterReturn(float3 rgb)
+{
+	return rgb;
+}
+
+float4 FxaaTexGrad(Texture2D ScreenTexture, float2 pos, float2 grad)
+{
+	return ScreenTexture.SampleGrad(gsamAnisotropicClamp, pos.xy, grad, grad);
+}
+
+float3 FxaaLerp3(float3 a, float3 b, float amountOfA)
+{
+	return (float3(-amountOfA, 0, 0) * b) +
+		((a * float3(amountOfA, 0, 0)) + b);
+}
+
+float4 FxaaTexLod0(Texture2D ScreenTexture, float2 pos)
+{
+	return ScreenTexture.SampleLevel(gsamAnisotropicClamp, pos.xy, 0.0);
+}
+
 
 struct PSInput
 {
-    float4 Position : SV_POSITION;
-    float2 TexCoord : TEXCOORD;
+	float4 Position : SV_POSITION;
+	float2 uv : TEXCOORD;
 };
 
-float Luminance(float3 color)
+float4 Reinhard(float4 color)
 {
-    return pow(color.r * 0.299 + color.g * 0.587 + color.b * 0.114, 1);
+    return color / (color + 1);
+}
+float4 Filmic(float4 col)
+{
+    col *= 0.6;
+    float A = 0.15;
+    float B = 0.50;
+    float C = 0.10;
+    float D = 0.20;
+    float E = 0.02;
+    float F = 0.30;
+    float W = 11.2;
+
+    return ((col * (A * col + C * B) + D * E) / (col * (A * col + B) + D * F)) - E / F;
 }
 
-float GetLuma(float2 uv, float uOffset = 0.0, float vOffset = 0.0)
+float4 ACESFilm(float4 x)
 {
-    uv += float2(uOffset, vOffset);
-    return Luminance(ScreenTexture.Sample(gsamAnisotropicWrap, uv).rgb);
-}
-
-struct LumaNeighborhood
-{
-    float m, n, s, w, e, ne, se, sw, nw;
-    float highest, lowest, range;
-};
-
-
-LumaNeighborhood GetLumaNeighborhood(float2 uv, float2 uvOffset)
-{
-    LumaNeighborhood luma;
-    luma.m = GetLuma(uv);
-    luma.n = GetLuma(uv, 0.0, -uvOffset.y);
-    luma.e = GetLuma(uv, uvOffset.x, 0.0);
-    luma.s = GetLuma(uv, 0.0, uvOffset.y);
-    luma.w = GetLuma(uv, -uvOffset.x, 0.0);
-    luma.ne = GetLuma(uv, uvOffset.x, -uvOffset.y);
-    luma.se = GetLuma(uv, uvOffset.x, uvOffset.y);
-    luma.sw = GetLuma(uv, -uvOffset.x, uvOffset.y);
-    luma.nw = GetLuma(uv, -uvOffset.x, +uvOffset.y);
-
-    luma.highest = max(max(max(max(luma.m, luma.n), luma.e), luma.s), luma.w);
-    luma.lowest = min(min(min(min(luma.m, luma.n), luma.e), luma.s), luma.w);
-    luma.range = luma.highest - luma.lowest;
-    return luma;
-}
-bool CanSkipFXAA(LumaNeighborhood luma)
-{
-    return luma.range < fixedThreshold;
-}
-
-float GetSubpixelBlendFactor(LumaNeighborhood luma)
-{
-    float filter = 2.0 * (luma.n + luma.e + luma.s + luma.w);
-    filter += luma.ne + luma.nw + luma.se + luma.sw;
-    filter *= 1.0 / 12.0;
-    filter = abs(filter - luma.m);
-    filter = saturate(filter / luma.range);
-    filter = smoothstep(0, 1, filter);
-    return filter * filter * subpixelBlending;
-}
-bool IsHorizontalEdge(LumaNeighborhood luma)
-{
-    float horizontal =
-		2.0 * abs(luma.n + luma.s - 2.0 * luma.m) +
-		abs(luma.ne + luma.se - 2.0 * luma.e) +
-		abs(luma.nw + luma.sw - 2.0 * luma.w);
-    float vertical =
-		2.0 * abs(luma.e + luma.w - 2.0 * luma.m) +
-		abs(luma.ne + luma.nw - 2.0 * luma.n) +
-		abs(luma.se + luma.sw - 2.0 * luma.s);
-    return horizontal >= vertical;
-}
-struct FXAAEdge
-{
-    bool isHorizontal;
-    float pixelStep;
-    float lumaGradient, otherLuma;
-};
-
-float4 GetSource(float2 uv)
-{
-    return ScreenTexture.Sample(gsamAnisotropicWrap, uv);
-}
-
-float2 GetSourceTexelSize()
-{
-    float2 ScreenTextureSize;
-    ScreenTexture.GetDimensions(ScreenTextureSize.x, ScreenTextureSize.y);
-    return 1/ScreenTextureSize;
-}
-
-FXAAEdge GetFXAAEdge(LumaNeighborhood luma)
-{
-    float lumaP, lumaN;
-    FXAAEdge edge;
-    edge.isHorizontal = IsHorizontalEdge(luma);
-    if (edge.isHorizontal)
-    {
-        edge.pixelStep = -GetSourceTexelSize().y;
-        lumaP = luma.n;
-        lumaN = luma.s;
-    }
-	else 
-    {
-        edge.pixelStep = GetSourceTexelSize().x;
-        lumaP = luma.e;
-        lumaN = luma.w;
-    }
-    float gradientP = abs(lumaP - luma.m);
-    float gradientN = abs(lumaN - luma.m);
-
-    if (gradientP < gradientN)
-    {
-        edge.pixelStep = -edge.pixelStep;
-        edge.lumaGradient = gradientN;
-        edge.otherLuma = lumaN;
-    }
-    else
-    {
-        edge.lumaGradient = gradientP;
-        edge.otherLuma = lumaP;
-    }
-    return edge;
-}
-float GetEdgeBlendFactor(LumaNeighborhood luma, FXAAEdge edge, float2 uv)
-{
-    float2 edgeUV = uv;
-    float2 uvStep = 0.0;
-    if (edge.isHorizontal)
-    {
-        edgeUV.y += 0.5 * edge.pixelStep;
-        uvStep.x = GetSourceTexelSize().x;
-    }
-    else
-    {
-        edgeUV.x += 0.5 * edge.pixelStep;
-        uvStep.y = GetSourceTexelSize().y;
-    }
-
-    float edgeLuma = 0.5 * (luma.m + edge.otherLuma);
-    float gradientThreshold = 0.25 * edge.lumaGradient;
-			
-    float2 uvP = edgeUV + uvStep;
-    float lumaDeltaP = GetLuma(uvP) - edgeLuma;
-    bool atEndP = abs(lumaDeltaP) >= gradientThreshold;
-
-    int i;
-    
-
-    for (i = 0; i < EXTRA_EDGE_STEPS && !atEndP; i++)
-    {
-        uvP += uvStep * edgeStepSizes[i];
-        lumaDeltaP = GetLuma(uvP) - edgeLuma;
-        atEndP = abs(lumaDeltaP) >= gradientThreshold;
-    }
-    if (!atEndP)
-    {
-        uvP += uvStep * LAST_EDGE_STEP_GUESS;
-    }
-
-    float2 uvN = edgeUV - uvStep;
-    float lumaDeltaN = GetLuma(uvN) - edgeLuma;
-    bool atEndN = abs(lumaDeltaN) >= gradientThreshold;
-
-    
-    for (i = 0; i < EXTRA_EDGE_STEPS && !atEndN; i++)
-    {
-        uvN -= uvStep * edgeStepSizes[i];
-        lumaDeltaN = GetLuma(uvN) - edgeLuma;
-        atEndN = abs(lumaDeltaN) >= gradientThreshold;
-    }
-    if (!atEndN)
-    {
-        uvN -= uvStep * LAST_EDGE_STEP_GUESS;
-    }
-
-    float distanceToEndP, distanceToEndN;
-    if (edge.isHorizontal)
-    {
-        distanceToEndP = uvP.x - uv.x;
-        distanceToEndN = uv.x - uvN.x;
-    }
-    else
-    {
-        distanceToEndP = uvP.y - uv.y;
-        distanceToEndN = uv.y - uvN.y;
-    }
-
-    float distanceToNearestEnd;
-    bool deltaSign;
-    if (distanceToEndP <= distanceToEndN)
-    {
-        distanceToNearestEnd = distanceToEndP;
-        deltaSign = lumaDeltaP >= 0;
-    }
-    else
-    {
-        distanceToNearestEnd = distanceToEndN;
-        deltaSign = lumaDeltaN >= 0;
-    }
-
-    if (deltaSign == (luma.m - edgeLuma >= 0))
-    {
-        return 0.0;
-    }
-    else
-    {
-        return 0.5 - distanceToNearestEnd / (distanceToEndP + distanceToEndN);
-    }
+    x *= 0.1;
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 float4 main(PSInput input) : SV_Target
 {
-    float2 ScreenTextureSize;
-    ScreenTexture.GetDimensions(ScreenTextureSize.x, ScreenTextureSize.y);
-    
-    float2 texelSize = 1.0 / ScreenTextureSize;
-    float4 sceneColor = ScreenTexture.Sample(gsamAnisotropicWrap, input.TexCoord);
-    float4 bloomColor = BloomTexture.Sample(gsamAnisotropicWrap, input.TexCoord);
-    float4 color = sceneColor;
-    
-    if(FXAA)
-    {
-        LumaNeighborhood luma = GetLumaNeighborhood(input.TexCoord, texelSize);
-        
-        if (CanSkipFXAA(luma))
+	float2 ScreenTextureSize;
+	ScreenTexture.GetDimensions(ScreenTextureSize.x, ScreenTextureSize.y);
+	
+	float2 rcpFrame = 1.0 / ScreenTextureSize;
+	float4 sceneColor = ScreenTexture.Sample(gsamAnisotropicClamp, input.uv);
+	float4 bloomColor = BloomTexture.Sample(gsamAnisotropicClamp, input.uv);
+	float4 color = sceneColor;
+   
+    if (UseFXAA)
+	{
+		//SEARCH MAP
+        float3 rgbN = FxaaTexOff(ScreenTexture, input.uv.xy, int2(0, -1)).xyz;
+        float3 rgbW = FxaaTexOff(ScreenTexture, input.uv.xy, int2(-1, 0)).xyz;
+        float3 rgbM = FxaaTexOff(ScreenTexture, input.uv.xy, int2(0, 0)).xyz;
+        float3 rgbE = FxaaTexOff(ScreenTexture, input.uv.xy, int2(1, 0)).xyz;
+        float3 rgbS = FxaaTexOff(ScreenTexture, input.uv.xy, int2(0, 1)).xyz;
+        float lumaN = FxaaLuma(rgbN);
+        float lumaW = FxaaLuma(rgbW);
+        float lumaM = FxaaLuma(rgbM);
+        float lumaE = FxaaLuma(rgbE);
+        float lumaS = FxaaLuma(rgbS);
+        float rangeMin = min(lumaM, min(min(lumaN, lumaW), min(lumaS, lumaE)));
+        float rangeMax = max(lumaM, max(max(lumaN, lumaW), max(lumaS, lumaE)));
+        float range = rangeMax - rangeMin;
+        if (range < max(FXAA_EDGE_THRESHOLD_MIN, rangeMax * FXAA_EDGE_THRESHOLD))
         {
-            
-            color = GetSource(input.TexCoord);
-
+            color = float4(FxaaFilterReturn(rgbM), 1.0f);
         }
-        else
+        float3 rgbL = rgbN + rgbW + rgbM + rgbE + rgbS;
+	
+	//COMPUTE LOWPASS
+#if FXAA_SUBPIX != 0
+        float lumaL = (lumaN + lumaW + lumaE + lumaS) * 0.25;
+        float rangeL = abs(lumaL - lumaM);
+#endif
+#if FXAA_SUBPIX == 1
+        float blendL = max(0.0,
+			(rangeL / range) - FXAA_SUBPIX_TRIM) * FXAA_SUBPIX_TRIM_SCALE;
+        blendL = min(FXAA_SUBPIX_CAP, blendL);
+#endif
+	
+	
+	//CHOOSE VERTICAL OR HORIZONTAL SEARCH
+        float3 rgbNW = FxaaTexOff(ScreenTexture, input.uv.xy, int2(-1, -1)).xyz;
+        float3 rgbNE = FxaaTexOff(ScreenTexture, input.uv.xy, int2(1, -1)).xyz;
+        float3 rgbSW = FxaaTexOff(ScreenTexture, input.uv.xy, int2(-1, 1)).xyz;
+        float3 rgbSE = FxaaTexOff(ScreenTexture, input.uv.xy, int2(1, 1)).xyz;
+#if (FXAA_SUBPIX_FASTER == 0) && (FXAA_SUBPIX > 0)
+        rgbL += (rgbNW + rgbNE + rgbSW + rgbSE);
+        rgbL *= float3(1.0 / 9.0, 0, 0);
+#endif
+        float lumaNW = FxaaLuma(rgbNW);
+        float lumaNE = FxaaLuma(rgbNE);
+        float lumaSW = FxaaLuma(rgbSW);
+        float lumaSE = FxaaLuma(rgbSE);
+        float edgeVert =
+		abs((0.25 * lumaNW) + (-0.5 * lumaN) + (0.25 * lumaNE)) +
+		abs((0.50 * lumaW) + (-1.0 * lumaM) + (0.50 * lumaE)) +
+		abs((0.25 * lumaSW) + (-0.5 * lumaS) + (0.25 * lumaSE));
+        float edgeHorz =
+		abs((0.25 * lumaNW) + (-0.5 * lumaW) + (0.25 * lumaSW)) +
+		abs((0.50 * lumaN) + (-1.0 * lumaM) + (0.50 * lumaS)) +
+		abs((0.25 * lumaNE) + (-0.5 * lumaE) + (0.25 * lumaSE));
+        bool horzSpan = edgeHorz >= edgeVert;
+        float lengthSign = horzSpan ? -rcpFrame.y : -rcpFrame.x;
+        if (!horzSpan)
+            lumaN = lumaW;
+        if (!horzSpan)
+            lumaS = lumaE;
+        float gradientN = abs(lumaN - lumaM);
+        float gradientS = abs(lumaS - lumaM);
+        lumaN = (lumaN + lumaM) * 0.5;
+        lumaS = (lumaS + lumaM) * 0.5;
+	
+	
+	//CHOOSE SIDE OF PIXEL WHERE GRADIENT IS HIGHEST
+        bool pairN = gradientN >= gradientS;
+        if (!pairN)
+            lumaN = lumaS;
+        if (!pairN)
+            gradientN = gradientS;
+        if (!pairN)
+            lengthSign *= -1.0;
+        float2 posN;
+        posN.x = input.uv.x + (horzSpan ? 0.0 : lengthSign * 0.5);
+        posN.y = input.uv.y + (horzSpan ? lengthSign * 0.5 : 0.0);
+	
+	//CHOOSE SEARCH LIMITING VALUES
+        gradientN *= FXAA_SEARCH_THRESHOLD;
+
+	//SEARCH IN BOTH DIRECTIONS UNTIL FIND LUMA PAIR AVERAGE IS OUT OF RANGE
+        float2 posP = posN;
+        float2 offNP = horzSpan ?
+		float2(rcpFrame.x, 0.0) :
+		float2(0.0f, rcpFrame.y);
+        float lumaEndN = lumaN;
+        float lumaEndP = lumaN;
+        bool doneN = false;
+        bool doneP = false;
+#if FXAA_SEARCH_ACCELERATION == 1
+        posN += offNP * float2(-1.0, -1.0);
+        posP += offNP * float2(1.0, 1.0);
+#endif
+        for (int i = 0; i < FXAA_SEARCH_STEPS; i++)
         {
-            FXAAEdge edge = GetFXAAEdge(luma);
-
-            float blendFactor = max(
-		GetSubpixelBlendFactor(luma), GetEdgeBlendFactor(luma, edge, input.TexCoord)
-	);
-            float2 blendUV = input.TexCoord;
-            if (edge.isHorizontal)
-            {
-                blendUV.y += blendFactor * edge.pixelStep;
-            }
-            else
-            {
-                blendUV.x += blendFactor * edge.pixelStep;
-            }
-            
-            color = GetSource(blendUV);
+#if FXAA_SEARCH_ACCELERATION == 1
+            if (!doneN)
+                lumaEndN =
+				FxaaLuma(FxaaTexLod0(ScreenTexture, posN.xy).xyz);
+            if (!doneP)
+                lumaEndP =
+				FxaaLuma(FxaaTexLod0(ScreenTexture, posP.xy).xyz);
+#endif
+            doneN = doneN || (abs(lumaEndN - lumaN) >= gradientN);
+            doneP = doneP || (abs(lumaEndP - lumaN) >= gradientN);
+            if (doneN && doneP)
+                break;
+            if (!doneN)
+                posN -= offNP;
+            if (!doneP)
+                posP += offNP;
         }
+	
+	
+	//HANDLE IF CENTER IS ON POSITIVE OR NEGATIVE SIDE
+        float dstN = horzSpan ? input.uv.x - posN.x : input.uv.y - posN.y;
+        float dstP = horzSpan ? posP.x - input.uv.x : posP.y - input.uv.y;
+        bool directionN = dstN < dstP;
+        lumaEndN = directionN ? lumaEndN : lumaEndP;
+	
+	//CHECK IF PIXEL IS IN SECTION OF SPAN WHICH GETS NO FILTERING   
+        if (((lumaM - lumaN) < 0.0) == ((lumaEndN - lumaN) < 0.0)) 
+            lengthSign = 0.0;
+	
+        float spanLength = (dstP + dstN);
+        dstN = directionN ? dstN : dstP;
+        float subPixelOffset = (0.5 + (dstN * (-1.0 / spanLength))) * lengthSign;
+        float3 rgbF = FxaaTexLod0(ScreenTexture, float2(
+	input.uv.x + (horzSpan ? 0.0 : subPixelOffset),
+	input.uv.y + (horzSpan ? subPixelOffset : 0.0))).xyz;
+	
+        color = float4(FxaaFilterReturn(FxaaLerp3(rgbL, rgbF, blendL)), 1.0f);
 
     }
+	
+	// color = 1 - exp(-color * exposure);   
+	
+    if (UseReinhard)
+        color = Reinhard(color);
+    if(UseFilmic)
+        color = Filmic(color);
+    if(UseAces)
+        color = ACESFilm(color);
+    //color = color / (1.0f + color);
+    
+	color = pow(color, 1 / 2.2);
 
-    
-    color = 1 - exp(-color * exposure);   
-    
-    color = pow(color, 1 / 2.2);
+	return color;
 
-    return color;
-
-    
-    
+	
+	
 }

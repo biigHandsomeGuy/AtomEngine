@@ -2,7 +2,7 @@
 #include "Renderer.h"
 #include "ConstantBuffers.h"
 #include "GraphicsCore.h"
-
+#include <utility>
 #include "stb_image/stb_image.h"
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_win32.h"
@@ -72,8 +72,8 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
 	freopen_s(&fp, "CONOUT$", "w", stderr);
 	freopen_s(&fp, "CONIN$", "r", stdin);
 #endif
+	int a;
 
-	
 	return GameCore::RunApplication(Renderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
 }
 
@@ -624,6 +624,9 @@ void Renderer::RenderScene()
 
 	gfxContext.m_CommandList->SetPipelineState(m_PSOs["sky"].Get());
 	m_SkyBox.model.Draw(gfxContext.m_CommandList);
+
+
+	
 	gfxContext.m_CommandList->OMSetRenderTargets(1, &rtv, true, &g_DsvHeap->GetCPUDescriptorHandleForHeapStart());
 	gfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SceneColorBuffer.Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ));
@@ -654,8 +657,8 @@ void Renderer::RenderScene()
 	if (ImGui::Begin("Ssao Debug"))
 	{
 		ImVec2 winSize = ImGui::GetWindowSize();
-		float smaller = (std::min)((winSize.x - 20) / ((float)g_DisplayWidth / g_DisplayHeight), winSize.y - 36);
-		ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap).ptr, ImVec2(smaller * ((float)g_DisplayWidth / g_DisplayHeight), smaller));
+		float smaller = (std::min)((winSize.x - 20), winSize.y - 20);
+		ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::LUTsrv).ptr, ImVec2(smaller, smaller));
 	}
 	ImGui::End();
 	// RenderingF
@@ -701,6 +704,9 @@ void Renderer::UpdateUI()
 		ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 		ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 		ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
+		ImGui::Checkbox("UseReinhard", &m_ppAttribs.reinhard);
+		ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
+		ImGui::Checkbox("UseAces", &m_ppAttribs.aces);
 	   
 		
 		ImGui::DragFloat4("LightPosition", &mLightPosW.x,0.3f,-90,90);
@@ -768,7 +774,7 @@ void Renderer::LoadTextures(ID3D12CommandList* CmdList)
 
 		"D:/AtomEngine/Atom/Assets/Textures/silver/roughness.png",
 
-		"D:/AtomEngine/Atom/Assets/Textures/EnvirMap/sun.hdr"
+		"D:/AtomEngine/Atom/Assets/Textures/EnvirMap/marry.hdr"
 	};
 	for(int i = 0; i < (int)texNames.size() - 1; ++i)
 	{
