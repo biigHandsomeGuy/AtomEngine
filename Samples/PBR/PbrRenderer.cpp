@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "Renderer.h"
+#include "PbrRenderer.h"
 #include "ConstantBuffers.h"
 #include "GraphicsCore.h"
 #include <utility>
@@ -40,6 +40,8 @@ namespace CS
 #include "../CompiledShaders/SpecularMapCS.h"
 #include "../CompiledShaders/EquirectToCubeCS.h"
 #include "../CompiledShaders/GenerateMipMapCS.h"
+#include "../CompiledShaders/Emu.h"
+#include "../CompiledShaders/Eavg.h"
 
 }
 
@@ -51,6 +53,8 @@ namespace
 	ComPtr<ID3D12PipelineState> spMapPso;
 	ComPtr<ID3D12PipelineState> lutPso;
 	ComPtr<ID3D12PipelineState> mmPso;
+	ComPtr<ID3D12PipelineState> emuPso;
+	ComPtr<ID3D12PipelineState> eavgPso;
 }
 
 using namespace Graphics;
@@ -658,7 +662,7 @@ void Renderer::RenderScene()
 	{
 		ImVec2 winSize = ImGui::GetWindowSize();
 		float smaller = (std::min)((winSize.x - 20), winSize.y - 20);
-		ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::LUTsrv).ptr, ImVec2(smaller, smaller));
+		ImGui::Image((ImTextureID)GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EmuSrv).ptr, ImVec2(smaller, smaller));
 	}
 	ImGui::End();
 	// RenderingF
@@ -695,7 +699,7 @@ void Renderer::UpdateUI()
 		static float f = 0.0f;
 		static int counter = 0;
 
-		ImGui::Begin("DEBUG");                          // Create a window called "Hello, world!" and append into it.
+		ImGui::Begin("debug");                          // Create a window called "Hello, world!" and append into it.
  
 		ImGui::Text("Welcome to my renderer!");               // Display some text (you can use a format strings too)
 		ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
@@ -715,6 +719,7 @@ void Renderer::UpdateUI()
 		ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
 		ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);       
 		ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);       
+		ImGui::Checkbox("UseEmu", &m_ShaderAttribs.UseEmu);       
 		if (m_ShaderAttribs.UseTexture == false)
 		{
 			ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
@@ -776,6 +781,7 @@ void Renderer::LoadTextures(ID3D12CommandList* CmdList)
 
 		"D:/AtomEngine/Atom/Assets/Textures/EnvirMap/marry.hdr"
 	};
+
 	for(int i = 0; i < (int)texNames.size() - 1; ++i)
 	{
 		auto texMap = std::make_unique<Texture>();
@@ -921,6 +927,11 @@ void Renderer::BuildRootSignature()
 	CD3DX12_DESCRIPTOR_RANGE postRange;
 	postRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 17, 0);
 		
+	CD3DX12_DESCRIPTOR_RANGE emuRange;
+	emuRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 19);
+	CD3DX12_DESCRIPTOR_RANGE eavgRange;
+	eavgRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 20);
+
 	// Root parameter can be a table, root descriptor or root constants.
 	CD3DX12_ROOT_PARAMETER slotRootParameter[kNumRootBindings] = {};
 
@@ -936,6 +947,8 @@ void Renderer::BuildRootSignature()
 	slotRootParameter[kSpecularSrv].InitAsDescriptorTable(1, &specularRange, D3D12_SHADER_VISIBILITY_PIXEL);
 	slotRootParameter[kLUT].InitAsDescriptorTable(1, &lutRange, D3D12_SHADER_VISIBILITY_PIXEL);
 	slotRootParameter[kPostProcess].InitAsDescriptorTable(1, &postRange, D3D12_SHADER_VISIBILITY_PIXEL);
+	slotRootParameter[kEmu].InitAsDescriptorTable(1, &emuRange, D3D12_SHADER_VISIBILITY_PIXEL);
+	slotRootParameter[kEavg].InitAsDescriptorTable(1, &eavgRange, D3D12_SHADER_VISIBILITY_PIXEL);
 	
 
 	auto staticSamplers = GetStaticSamplers();
@@ -1210,7 +1223,89 @@ void Renderer::BuildDescriptorHeaps()
 		g_Device->CreateUnorderedAccessView(m_LUT.Get(), nullptr, &uavDesc, spbrdfUrv);
 	}
 
-  
+	{
+		D3D12_RESOURCE_DESC desc = {};
+		desc.Width = 512;
+		desc.Height = 512;
+		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		desc.Format = DXGI_FORMAT_R32_FLOAT;
+		desc.MipLevels = 1;
+		desc.DepthOrArraySize = 1;
+		desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+
+		ThrowIfFailed(g_Device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&desc,
+			D3D12_RESOURCE_STATE_COMMON,
+			nullptr,
+			IID_PPV_ARGS(&m_Emu)));
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = desc.Format;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = -1;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.ResourceMinLODClamp = 0;
+
+		auto spbrdfSrv = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EmuSrv);
+
+		g_Device->CreateShaderResourceView(m_Emu.Get(), &srvDesc, spbrdfSrv);
+
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.Format = desc.Format;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+		uavDesc.Texture2D.MipSlice = 0;
+		uavDesc.Texture2D.PlaneSlice = 0;
+
+		auto spbrdfUrv = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EmuUav);
+		g_Device->CreateUnorderedAccessView(m_Emu.Get(), nullptr, &uavDesc, spbrdfUrv);
+	}
+
+	{
+		D3D12_RESOURCE_DESC desc = {};
+		desc.Width = 512;
+		desc.Height = 512;
+		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		desc.Format = DXGI_FORMAT_R32_FLOAT;
+		desc.MipLevels = 1;
+		desc.DepthOrArraySize = 1;
+		desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+
+		ThrowIfFailed(g_Device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&desc,
+			D3D12_RESOURCE_STATE_COMMON,
+			nullptr,
+			IID_PPV_ARGS(&m_Eavg)));
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = desc.Format;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = -1;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.ResourceMinLODClamp = 0;
+
+		auto spbrdfSrv = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EavgSrv);
+
+		g_Device->CreateShaderResourceView(m_Eavg.Get(), &srvDesc, spbrdfSrv);
+
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.Format = desc.Format;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+		uavDesc.Texture2D.MipSlice = 0;
+		uavDesc.Texture2D.PlaneSlice = 0;
+
+		auto spbrdfUrv = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EavgUav);
+		g_Device->CreateUnorderedAccessView(m_Eavg.Get(), nullptr, &uavDesc, spbrdfUrv);
+	}
 }
 
 void Renderer::BuildInputLayout()
@@ -1584,6 +1679,46 @@ void Renderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_LUT.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 		CmdList->Dispatch(512/32, 512/32, 1);
 		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_LUT.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+	}
+
+	{
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.CS =
+		{
+			g_pEmu,
+			sizeof(g_pEmu)
+		};
+		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+		psoDesc.pRootSignature = computeRS.Get();
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&emuPso)));
+
+
+		CmdList->SetPipelineState(emuPso.Get());
+		auto uavHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EmuUav);
+		CmdList->SetComputeRootDescriptorTable(1, uavHandle);
+		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_Emu.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+		CmdList->Dispatch(512 / 32, 512 / 32, 1);
+		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_Emu.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+	}
+
+	{
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.CS =
+		{
+			g_pEavg,
+			sizeof(g_pEavg)
+		};
+		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+		psoDesc.pRootSignature = computeRS.Get();
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&eavgPso)));
+
+
+		CmdList->SetPipelineState(eavgPso.Get());
+		auto uavHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::EavgUav);
+		CmdList->SetComputeRootDescriptorTable(1, uavHandle);
+		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_Eavg.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+		CmdList->Dispatch(512 / 32, 512 / 32, 1);
+		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_Eavg.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
 	}
 }
 

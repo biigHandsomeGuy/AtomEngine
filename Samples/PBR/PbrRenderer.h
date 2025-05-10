@@ -30,6 +30,8 @@ enum RootBindings
     kSpecularSrv,
     kLUT,
     kPostProcess,
+    kEmu,
+    kEavg,
     kNumRootBindings      
 };
 __declspec(align(256)) struct ShaderParams
@@ -43,6 +45,8 @@ __declspec(align(256)) struct ShaderParams
     float roughness = 0;
     float albedo[3] = { 0,0,0 };
     float metallic = 0;
+    bool UseEmu;
+    char pad3[3]{ 0,0,0 };
 };
 
 class Renderer : public GameCore::IGameApp
@@ -106,6 +110,8 @@ private:
     ComPtr<ID3D12Resource> m_EnvirMap; // cube map with different mip maps
     ComPtr<ID3D12Resource> m_IrradianceMap;
     ComPtr<ID3D12Resource> m_LUT;
+    ComPtr<ID3D12Resource> m_Emu;
+    ComPtr<ID3D12Resource> m_Eavg;
 
     BYTE* data = nullptr;
 

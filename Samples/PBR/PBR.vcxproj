@@ -86,10 +86,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="PbrRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Renderer.h" />
+    <ClInclude Include="PbrRenderer.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Atom\Atom.vcxproj">
