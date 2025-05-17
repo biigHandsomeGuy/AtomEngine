@@ -50,9 +50,10 @@ void ContextManager::DestroyAllContexts()
 
 CommandContext::CommandContext(D3D12_COMMAND_LIST_TYPE Type)
 	:m_Type(Type),
-	m_OwningManager(nullptr),
 	m_CommandList(nullptr),
-	m_CurrentAllocator(nullptr)
+	m_CurrentAllocator(nullptr),
+	m_CpuLinearAllocator(kCpuWritable),
+	m_GpuLinearAllocator(kGpuExclusive)
 {
 
 }
@@ -92,9 +93,75 @@ uint64_t CommandContext::Finish(bool WaitForCompletion)
 	return FenceValue;
 }
 
+
 void CommandContext::Initialize()
 {
 	g_CommandManager.CreateNewCommandList(m_Type, &m_CommandList, &m_CurrentAllocator);
 }
 
+void CommandContext::InitializeTexture(GpuResource& Dest, UINT NumSubresources, D3D12_SUBRESOURCE_DATA SubData[])
+{
+	UINT64 uploadBufferSize = GetRequiredIntermediateSize(Dest.GetResource(), 0, NumSubresources);
+
+	CommandContext& InitContext = CommandContext::Begin();
+
+	// copy data to the intermediate upload heap and then schedule a copy from the upload heap to the default texture
+	DynAlloc mem = InitContext.ReserveUploadMemory(uploadBufferSize);
+	UpdateSubresources(InitContext.m_CommandList, Dest.GetResource(), mem.Buffer.GetResource(), 0, 0, NumSubresources, SubData);
+	InitContext.TransitionResource(Dest, D3D12_RESOURCE_STATE_GENERIC_READ);
+
+	// Execute the command list and wait for it to finish so we can release the upload buffer
+	InitContext.Finish(true);
+}
+
+void CommandContext::TransitionResource(GpuResource& Resource, D3D12_RESOURCE_STATES NewState, bool FlushImmediate)
+{
+	D3D12_RESOURCE_STATES OldState = Resource.m_UsageState;
+
+	if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+	{
+		assert((OldState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == OldState);
+		assert((NewState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == NewState);
+	}
+
+	if (OldState != NewState)
+	{
+		assert(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
+		D3D12_RESOURCE_BARRIER& BarrierDesc = m_ResourceBarrierBuffer[m_NumBarriersToFlush++];
+
+		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		BarrierDesc.Transition.pResource = Resource.GetResource();
+		BarrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		BarrierDesc.Transition.StateBefore = OldState;
+		BarrierDesc.Transition.StateAfter = NewState;
+
+		// Check to see if we already started the transition
+		if (NewState == Resource.m_TransitioningState)
+		{
+			BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_END_ONLY;
+			Resource.m_TransitioningState = (D3D12_RESOURCE_STATES)-1;
+		}
+		else
+			BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+
+		Resource.m_UsageState = NewState;
+	}
+	else if (NewState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		InsertUAVBarrier(Resource, FlushImmediate);
+
+	if (FlushImmediate || m_NumBarriersToFlush == 16)
+		FlushResourceBarriers();
+}
+void CommandContext::InsertUAVBarrier(GpuResource& Resource, bool FlushImmediate)
+{
+	assert(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
+	D3D12_RESOURCE_BARRIER& BarrierDesc = m_ResourceBarrierBuffer[m_NumBarriersToFlush++];
+
+	BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+	BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	BarrierDesc.UAV.pResource = Resource.GetResource();
+
+	if (FlushImmediate)
+		FlushResourceBarriers();
+}
 

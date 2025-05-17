@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DescriptorHeap.h"
+
 class CommandListManager;
 class ContextManager;
 namespace Graphics
@@ -18,9 +20,12 @@ namespace Graphics
     // extern ID3D12CommandAllocator* g_CommandAllocator;
     extern CommandListManager g_CommandManager;
     extern ContextManager g_ContextManager;
-    extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_SrvHeap;
-    extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_RtvHeap;
-    extern Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_DsvHeap;
+
+    extern DescriptorAllocator g_DescriptorAllocator[];
+    inline D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE Type, UINT Count = 1)
+    {
+        return g_DescriptorAllocator[Type].Allocate(Count);
+    }
 }
 
 enum class DescriptorHeapLayout : int
@@ -45,5 +50,9 @@ enum class DescriptorHeapLayout : int
     SceneDepthBufferSrv,   
     RandomVectorMapSrv,
     SsaoTempSrv,
-    SsaoUav
+    SsaoUav,
+    EmuSrv,
+    EmuUav,
+    EavgSrv,
+    EavgUav
 };

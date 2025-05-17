@@ -6,13 +6,13 @@
 #include "MathHelper.h"
 #include "Camera.h"
 #include "CommandContext.h"
+#include "Renderer.h"
+#include "DescriptorHeap.h"
 
 namespace shader
 {
 #include "../CompiledShaders/SsaoVS.h"
 #include "../CompiledShaders/SsaoPS.h"
-#include "../CompiledShaders/SsaoBlurVS.h"
-#include "../CompiledShaders/SsaoBlurPS.h"
 #include "../CompiledShaders/SsaoBlurCS.h"
 }
 
@@ -24,6 +24,7 @@ using namespace shader;
 
 namespace
 {
+
     ComPtr<ID3D12RootSignature> s_RootSignature;
     ComPtr<ID3D12PipelineState> s_SsaoPso;
     ComPtr<ID3D12PipelineState> s_BlurPso;
@@ -79,9 +80,10 @@ void SSAO::Initialize()
     s_Rect = { 0,0,(long)g_DisplayWidth / 2,(long)g_DisplayHeight / 2 };
 
     CD3DX12_DESCRIPTOR_RANGE texTable0; // normal depth
-    CD3DX12_DESCRIPTOR_RANGE texTable1; // normal depth
+    CD3DX12_DESCRIPTOR_RANGE texTable1; // random
     texTable0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0);
     texTable1.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0);
+
 
     // Root parameter can be a table, root descriptor or root constants.
     CD3DX12_ROOT_PARAMETER slotRootParameter[4];
@@ -183,19 +185,6 @@ void SSAO::Initialize()
     ssaoPsoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
     ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&ssaoPsoDesc, IID_PPV_ARGS(&s_SsaoPso)));
 
-    //
-    // PSO for SSAO blur.
-    //
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC ssaoBlurPsoDesc = ssaoPsoDesc;
-    ssaoBlurPsoDesc.VS =
-    {
-        g_pSsaoBlurVS,sizeof(g_pSsaoBlurVS)
-    };
-    ssaoBlurPsoDesc.PS =
-    {
-        g_pSsaoBlurPS,sizeof(g_pSsaoBlurPS)
-    };
-
 
     ThrowIfFailed(g_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -205,7 +194,7 @@ void SSAO::Initialize()
         nullptr,
         IID_PPV_ARGS(s_SsaoCbuffer.GetAddressOf())
     ));
-    BuildRandomVectorTexture(gfxContext.m_CommandList);
+    BuildRandomVectorTexture(gfxContext.GetCommandList());
     BuildOffsetVectors();
     // universal conpute root signature
 
@@ -260,30 +249,50 @@ void SSAO::Initialize()
     psoDesc.pRootSignature = s_ComputeRS.Get();
     ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_BlurPso)));
 
+    
     gfxContext.Finish();
 }
 
-void SsaoBlurHorizontal(CommandContext& GfxContext);
-void SsaoBlurVertical(CommandContext& GfxContext);
+#define OffsetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(Renderer::g_SSAOSrvHeap, x, CbvSrvUavDescriptorSize)
+
 void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
 {
+    {
+
+        uint32_t DestCount = 5;
+        uint32_t SourceCounts[] = { 1, 1, 1, 1, 1 };
+
+        D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[] =
+        {
+            g_SceneNormalBuffer.SrvHandle,
+            g_SceneDepthBuffer.SrvHandle,
+            g_RandomVectorBuffer.SrvHandle,
+            g_SSAOUnBlur.SrvHandle,
+            g_SSAOFullScreen.SrvHandle,
+        };
+
+        g_Device->CopyDescriptors(1, &Renderer::g_SSAOSrvHeap, &DestCount, DestCount, SourceTextures,
+            SourceCounts, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        g_Device->CopyDescriptorsSimple(1, Renderer::g_SSAOUavHeap, g_SSAOFullScreen.UavHandle[0], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    }
+
     s_ViewPort = { 0,0,g_DisplayWidth / 2.0f,g_DisplayHeight / 2.0f,0,1 };
     s_Rect = { 0,0,(long)g_DisplayWidth / 2,(long)g_DisplayHeight / 2 };
 
-    GfxContext.m_CommandList->RSSetViewports(1, &s_ViewPort);
-    GfxContext.m_CommandList->RSSetScissorRects(1, &s_Rect);
+    GfxContext.GetCommandList()->RSSetViewports(1, &s_ViewPort);
+    GfxContext.GetCommandList()->RSSetScissorRects(1, &s_Rect);
 
     // We compute the initial SSAO to AmbientMap0.
 
     // Change to RENDER_TARGET.
-    GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOUnBlur.Get(),
+    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOUnBlur.Resource.Get(),
         D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
     float clearValue[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-    GfxContext.m_CommandList->ClearRenderTargetView(g_SSAOUnBlurRtvHandle, clearValue, 0, nullptr);
+    GfxContext.GetCommandList()->ClearRenderTargetView(g_SSAOUnBlur.RtvHandle, clearValue, 0, nullptr);
 
     // Specify the buffers we are going to render to.
-    GfxContext.m_CommandList->OMSetRenderTargets(1, &g_SSAOUnBlurRtvHandle, true, nullptr);
+    GfxContext.GetCommandList()->OMSetRenderTargets(1, &g_SSAOUnBlur.RtvHandle, true, nullptr);
 
   
     {
@@ -318,84 +327,80 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
         s_SsaoCbuffer->Unmap(0, nullptr);
     }
 
-    GfxContext.m_CommandList->SetGraphicsRootSignature(s_RootSignature.Get());
-    GfxContext.m_CommandList->SetPipelineState(s_SsaoPso.Get());
+    GfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSignature.Get());
+    GfxContext.GetCommandList()->SetPipelineState(s_SsaoPso.Get());
 
-    GfxContext.m_CommandList->SetGraphicsRootConstantBufferView(0, s_SsaoCbuffer->GetGPUVirtualAddress());
-    GfxContext.m_CommandList->SetGraphicsRoot32BitConstant(1, 0, 0);
+    GfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(0, s_SsaoCbuffer->GetGPUVirtualAddress());
+    GfxContext.GetCommandList()->SetGraphicsRoot32BitConstant(1, 0, 0);
 
-    auto normalSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SceneNormalBufferSrv);
     // Bind the normal and depth maps.
-    GfxContext.m_CommandList->SetGraphicsRootDescriptorTable(2, normalSrvHandle);
+    GfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(2, OffsetHandle(0));
 
-    auto randomRtv = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::RandomVectorMapSrv);
-    // Bind the normal and depth maps.
-    GfxContext.m_CommandList->SetGraphicsRootDescriptorTable(3, randomRtv);
+    GfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(3, OffsetHandle(2));
 
 
     // Draw fullscreen quad.
-    GfxContext.m_CommandList->IASetVertexBuffers(0, 0, nullptr);
-    GfxContext.m_CommandList->IASetIndexBuffer(nullptr);
-    GfxContext.m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    GfxContext.m_CommandList->DrawInstanced(6, 1, 0, 0);
+    GfxContext.GetCommandList()->IASetVertexBuffers(0, 0, nullptr);
+    GfxContext.GetCommandList()->IASetIndexBuffer(nullptr);
+    GfxContext.GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    GfxContext.GetCommandList()->DrawInstanced(6, 1, 0, 0);
+
     // Change back to GENERIC_READ so we can read the texture in a shader.
-    GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOUnBlur.Get(),
+    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOUnBlur.Resource.Get(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ));
 
     // first blur - vertical
     {
-        GfxContext.m_CommandList->SetComputeRootSignature(s_ComputeRS.Get());
-        GfxContext.m_CommandList->SetPipelineState(s_BlurPso.Get());
-
-        auto normalSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SceneNormalBufferSrv);
-        GfxContext.m_CommandList->SetComputeRootDescriptorTable(0, normalSrvHandle);
-
-        auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoTempSrv);
-        GfxContext.m_CommandList->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
-        auto uav = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoUav);
-        GfxContext.m_CommandList->SetComputeRootDescriptorTable(2, uav);
-
-        GfxContext.m_CommandList->SetComputeRootConstantBufferView(3, s_SsaoCbuffer->GetGPUVirtualAddress());
-        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 0, 0);
-
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-
-        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+        GfxContext.GetCommandList()->SetComputeRootSignature(s_ComputeRS.Get());
+        GfxContext.GetCommandList()->SetPipelineState(s_BlurPso.Get());
+    
+        GfxContext.GetCommandList()->SetComputeRootDescriptorTable(0, OffsetHandle(0));
+    
+        GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, OffsetHandle(3));
+        GfxContext.GetCommandList()->SetComputeRootDescriptorTable(2, Renderer::g_SSAOUavHeap);
+    
+        GfxContext.GetCommandList()->SetComputeRootConstantBufferView(3, s_SsaoCbuffer->GetGPUVirtualAddress());
+        GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 0, 0);
+    
+        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+    
+        GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
     }
-    // first blur - horizontal
-    {
-        auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
-        GfxContext.m_CommandList->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
-        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 1, 0);
-
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-
-        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    }
-
-    // second blur
-    {
-        auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
-        GfxContext.m_CommandList->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
-        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 0, 0);
-
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-
-        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    }
-    {
-        auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
-        GfxContext.m_CommandList->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
-        GfxContext.m_CommandList->SetComputeRoot32BitConstant(4, 1, 0);
-
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-
-        GfxContext.m_CommandList->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-        GfxContext.m_CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    }
+    //// first blur - horizontal
+    //{
+    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, OffsetHandle(4));
+    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(2, UavHandle);
+    //
+    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 1, 0);
+    //
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+    //
+    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+    //}
+    //
+    //// second blur
+    //{
+    //    auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
+    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
+    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 0, 0);
+    //
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+    //
+    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+    //}
+    //{
+    //    auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
+    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
+    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 1, 0);
+    //
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+    //
+    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+    //}
 
 }
 
@@ -422,8 +427,8 @@ void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
         &texDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
-        IID_PPV_ARGS(&g_RandomVectorBuffer)));
-    g_RandomVectorBuffer->SetName(L"g_RandomVectorBuffer");
+        IID_PPV_ARGS(&g_RandomVectorBuffer.Resource)));
+    g_RandomVectorBuffer.Resource->SetName(L"g_RandomVectorBuffer");
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -433,12 +438,12 @@ void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
     srvDesc.Texture2D.MostDetailedMip = 0;
     srvDesc.Texture2D.ResourceMinLODClamp = 0;
     
-    auto srvHandle = GetCpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::RandomVectorMapSrv);
-    g_Device->CreateShaderResourceView(g_RandomVectorBuffer.Get(), &srvDesc, srvHandle);
+    g_RandomVectorBuffer.SrvHandle = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    g_Device->CreateShaderResourceView(g_RandomVectorBuffer.Resource.Get(), &srvDesc, g_RandomVectorBuffer.SrvHandle);
 
 
     const UINT num2DSubresources = texDesc.DepthOrArraySize * texDesc.MipLevels;
-    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(g_RandomVectorBuffer.Get(), 0, num2DSubresources);
+    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(g_RandomVectorBuffer.Resource.Get(), 0, num2DSubresources);
 
     ThrowIfFailed(g_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -471,11 +476,11 @@ void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
     // read by a shader.
     //
 
-    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Get(),
+    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Resource.Get(),
         D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST));
-    UpdateSubresources(CmdList, g_RandomVectorBuffer.Get(), s_RandomVectorMapUploadBuffer.Get(),
+    UpdateSubresources(CmdList, g_RandomVectorBuffer.Resource.Get(), s_RandomVectorMapUploadBuffer.Get(),
         0, 0, num2DSubresources, &subResourceData);
-    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Get(),
+    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Resource.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
 }
 

@@ -10,9 +10,9 @@
 //
 // Author(s):  James Stanard
 //             Alex Nankervis
-//
-#include "Math/Common.h"
+
 #include "pch.h"
+#include "Math/Common.h"
 #include "LinearAllocator.h"
 #include "GraphicsCore.h"
 #include "CommandListManager.h"

@@ -4,7 +4,7 @@
 #include "Ssao.h"
 #include "CommandListManager.h"
 #include "CommandContext.h"
-
+#include "Renderer.h"
 
 namespace Graphics
 {
@@ -19,11 +19,15 @@ namespace Graphics
 	CommandListManager g_CommandManager;
 	ContextManager g_ContextManager;
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_SrvHeap;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_RtvHeap;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> g_DsvHeap;
+	DescriptorAllocator g_DescriptorAllocator[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] =
+	{
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+		D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+		D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+		D3D12_DESCRIPTOR_HEAP_TYPE_DSV
+	};
 
-	Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
+	Microsoft::WRL::ComPtr<ID3D12Debug1> debugController;
 	Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
 	UINT g_CurrentFence = 0;
     void Initialize(bool RequireDXRSupport)
@@ -34,6 +38,7 @@ namespace Graphics
 		{		
 			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
 			debugController->EnableDebugLayer();
+			debugController->SetEnableGPUBasedValidation(true);
 		}
 #endif
 		Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;
@@ -64,41 +69,12 @@ namespace Graphics
 
 		// g_CommandManager.CreateNewCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT, &g_CommandList, &g_CommandAllocator);
 
-
-		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
-		rtvHeapDesc.NumDescriptors = 8;
-		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-		rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-		rtvHeapDesc.NodeMask = 0;
-		ThrowIfFailed(g_Device->CreateDescriptorHeap(
-			&rtvHeapDesc, IID_PPV_ARGS(&g_RtvHeap)));
-		g_RtvHeap->SetName(L"g_RtvHeap");
-
-		D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc;
-		dsvHeapDesc.NumDescriptors = 8;
-		dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-		dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-		dsvHeapDesc.NodeMask = 0;
-		ThrowIfFailed(g_Device->CreateDescriptorHeap(
-			&dsvHeapDesc, IID_PPV_ARGS(&g_DsvHeap)));
-		g_DsvHeap->SetName(L"g_DsvHeap");
-		//
-		// Create the SRV heap.
-		//
-		D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-		srvHeapDesc.NumDescriptors = 64;
-		srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		ThrowIfFailed(g_Device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&g_SrvHeap)));
-		g_SrvHeap->SetName(L"g_SrvHeap");
-
 		Graphics::RtvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		Graphics::DsvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		Graphics::CbvSrvUavDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-
-
 		Display::Initialize();
+
 
 		SSAO::Initialize();
 
