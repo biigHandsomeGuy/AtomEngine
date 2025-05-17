@@ -28,7 +28,7 @@ namespace Graphics
     D3D12_VIEWPORT g_ViewPort;
     D3D12_RECT g_Rect;
 
-
+    D3D12_CPU_DESCRIPTOR_HANDLE g_BackBufferHandle[SWAP_CHAIN_BUFFER_COUNT];
     Microsoft::WRL::ComPtr<ID3D12Resource> g_DisplayPlane[SWAP_CHAIN_BUFFER_COUNT];   
 }
 
@@ -73,13 +73,13 @@ void Display::Initialize(void)
         &s_SwapChain1));
 
     
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(g_RtvHeap->GetCPUDescriptorHandleForHeapStart());
     for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
     {
         ThrowIfFailed(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&g_DisplayPlane[i])));
         g_DisplayPlane[i]->SetName(L"g_DisplayPlane");
-        g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, rtvHeapHandle);
-        rtvHeapHandle.Offset(1, Graphics::RtvDescriptorSize);
+        g_BackBufferHandle[i] = Graphics::AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+        g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, g_BackBufferHandle[i]);
         
     }
 
@@ -99,7 +99,9 @@ void Display::Shutdown(void)
 
 void Display::Resize(uint32_t width, uint32_t height)
 {
-   
+    width = std::max(width, 8u);
+    height = std::max(height, 8u);
+
     g_CommandManager.IdleGPU();
     g_DisplayWidth = width;
     g_DisplayHeight = height;
@@ -127,16 +129,15 @@ void Display::Resize(uint32_t width, uint32_t height)
 
     g_CurrentBuffer = 0;
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(g_RtvHeap->GetCPUDescriptorHandleForHeapStart());
     for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
     {
         ThrowIfFailed(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&g_DisplayPlane[i])));
         g_DisplayPlane[i]->SetName(L"g_DisplayPlane");
-        g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, rtvHeapHandle);
-        rtvHeapHandle.Offset(1, Graphics::RtvDescriptorSize);
+        g_BackBufferHandle[i] = Graphics::AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        g_Device->CreateRenderTargetView(g_DisplayPlane[i].Get(), nullptr, g_BackBufferHandle[i]);
     }
 
-    InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
+    ResizeDisplayDependentBuffers(g_DisplayWidth, g_DisplayHeight);
     g_CommandManager.IdleGPU();
     
 }

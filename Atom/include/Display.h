@@ -20,7 +20,7 @@ namespace Graphics
 
     extern D3D12_VIEWPORT g_ViewPort;
     extern D3D12_RECT g_Rect;
-
+    extern D3D12_CPU_DESCRIPTOR_HANDLE g_BackBufferHandle[];
 
     extern DXGI_FORMAT SwapChainFormat;
     extern DXGI_FORMAT DepthStencilFormat;
