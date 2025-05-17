@@ -138,6 +138,10 @@
     <ClInclude Include="include\CommandContext.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\Renderer.h" />
+    <ClInclude Include="include\TextureManager.h" />
+    <ClInclude Include="include\GraphicsCommon.h" />
+    <ClInclude Include="include\LinearAllocator.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -206,6 +210,10 @@
     <ClCompile Include="src\CommandContex.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\Renderer.cpp" />
+    <ClCompile Include="src\TextureManager.cpp" />
+    <ClCompile Include="src\GraphicsCommon.cpp" />
+    <ClCompile Include="src\LinearAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">
@@ -274,6 +282,8 @@
     <FxCompile Include="Assets\Shaders\GenerateMipMapCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Assets\Shaders\Emu.hlsl" />
+    <FxCompile Include="Assets\Shaders\Eavg.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Shaders\Common.hlsli">

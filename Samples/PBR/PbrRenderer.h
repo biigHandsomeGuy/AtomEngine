@@ -17,23 +17,7 @@ using namespace DirectX;
 
 
 
-enum RootBindings
-{
-    kMeshConstants,       // for VS
-    kMaterialConstants,   // for PS
-    kMaterialSRVs,        // material texture 
-    kCommonSRVs,          // sphere map / shadow map / ssao map 
-    kCommonCBV,           // global cbv
-    kShaderParams,
-    kCubemapSrv,
-    kIrradianceSrv,
-    kSpecularSrv,
-    kLUT,
-    kPostProcess,
-    kEmu,
-    kEavg,
-    kNumRootBindings      
-};
+
 __declspec(align(256)) struct ShaderParams
 {
     bool UseSSAO = false;
@@ -49,14 +33,17 @@ __declspec(align(256)) struct ShaderParams
     char pad3[3]{ 0,0,0 };
 };
 
-class Renderer : public GameCore::IGameApp
+TextureRef g_IBLTexture;
+DescriptorHandle g_PreComputeSrvHandle;
+DescriptorHandle g_PreComputeUavHandle;
+class PbrRenderer : public GameCore::IGameApp
 {
 public:
     
-    Renderer(HINSTANCE hInstance);
-    Renderer(const Renderer& rhs) = delete;
-    Renderer& operator=(const Renderer& rhs) = delete;
-    ~Renderer();
+    PbrRenderer(HINSTANCE hInstance);
+    PbrRenderer(const PbrRenderer& rhs) = delete;
+    PbrRenderer& operator=(const PbrRenderer& rhs) = delete;
+    ~PbrRenderer();
 
     void OnResize() override;
     void Startup() override;
@@ -104,14 +91,6 @@ private:
     float mLightRotationAngle = 0.0f;
 
     XMFLOAT3 mRotatedLightDirections[3];
-
-    
-    ComPtr<ID3D12Resource> m_PrefilteredEnvirMap; // cube map with different roughness mip maps
-    ComPtr<ID3D12Resource> m_EnvirMap; // cube map with different mip maps
-    ComPtr<ID3D12Resource> m_IrradianceMap;
-    ComPtr<ID3D12Resource> m_LUT;
-    ComPtr<ID3D12Resource> m_Emu;
-    ComPtr<ID3D12Resource> m_Eavg;
 
     BYTE* data = nullptr;
 
