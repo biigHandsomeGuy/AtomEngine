@@ -1,20 +1,20 @@
 
 #include "pch.h"
 #include "Model.h"
-
-
+#include "GraphicsCore.h"
+#include "Renderer.h"
 #include "d3dUtil.h"
 
 using namespace DirectX;
 void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
-void Model::Load(const std::string& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
+void Model::Load(const std::wstring& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList)
 {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str());
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, Utility::WideStringToUTF8(filepath).c_str());
 
     if (!warn.empty()) {
         OutputDebugStringA(warn.c_str());
@@ -23,23 +23,70 @@ void Model::Load(const std::string& filepath, ID3D12Device* device, ID3D12Graphi
         throw std::runtime_error("Failed to load model: " + err);
     }
     if (!ret) {
-        throw std::runtime_error("Failed to load model: " + filepath);
+        throw std::runtime_error("Failed to load model: ");
     }
 
     meshes.clear();
     for (const auto& shape : shapes) {
         meshes.push_back(ProcessMesh(attrib, shape, device, commandList));
     }  
+
+    LoadTextures(L"D:/AtomEngine/Atom/Assets/Textures/gold/");
+
 }
 
 void Model::Draw(ID3D12GraphicsCommandList* commandList)
 {
     for (uint32_t meshIndex = 0; meshIndex < meshes.size(); meshIndex++)
     {
+        commandList->SetGraphicsRootDescriptorTable(Renderer::kMaterialSRVs, m_SRVs);
+
+
         commandList->IASetVertexBuffers(0, 1, &meshes[meshIndex].vbv);
         commandList->IASetIndexBuffer(&meshes[meshIndex].ibv);
         commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         commandList->DrawIndexedInstanced(meshes[meshIndex].Indices.size(), 1, 0, 0, 0);
+    }
+}
+
+void Model::LoadTextures(const std::wstring& basePath)
+{
+    using namespace Graphics;
+    using namespace Renderer;
+    using namespace TextureManager;
+
+    m_TextureReferences.resize(4);
+    m_SRVs = Renderer::s_TextureHeap.Alloc(4);
+    m_SRVDescriptorSize = Renderer::s_TextureHeap.GetDescriptorSize();
+
+    DescriptorHandle SRVs = m_SRVs;
+
+    TextureRef* MatTextures = m_TextureReferences.data();
+    for (uint32_t materialIdx = 0; materialIdx < 1; materialIdx++)
+    {
+        MatTextures[0] = LoadTexFromFile(basePath + L"albedo.png", kWhiteOpaque2D, true);
+
+        MatTextures[1] = LoadTexFromFile(basePath + L"roughness.png", kWhiteOpaque2D, true);
+
+        MatTextures[2] = LoadTexFromFile(basePath + L"metallic.png", kWhiteOpaque2D, true);
+
+        MatTextures[3] = LoadTexFromFile(basePath + L"normal.png", kDefaultNormalMap, false);
+
+        uint32_t DestCount = 4;
+        uint32_t SourceCounts[] = { 1, 1, 1, 1};
+        D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[4] =
+        {
+            MatTextures[0].GetSRV(),
+            MatTextures[1].GetSRV(),
+            MatTextures[2].GetSRV(),
+            MatTextures[3].GetSRV(),
+        };
+
+        Graphics::g_Device->CopyDescriptors(1, &SRVs, &DestCount,
+            DestCount, SourceTextures, SourceCounts, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        SRVs += (m_SRVDescriptorSize * 4);
+        MatTextures += 4;
     }
 }
 

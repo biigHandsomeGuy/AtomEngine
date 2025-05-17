@@ -165,3 +165,26 @@ CD3DX12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(ID3D12DescriptorHeap* heap, int offse
     handle.Offset(offset, size);
     return handle;
 }
+
+std::wstring Utility::UTF8ToWideString(const std::string& str)
+{
+    wchar_t wstr[MAX_PATH];
+    if (!MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, str.c_str(), -1, wstr, MAX_PATH))
+        wstr[0] = L'\0';
+    return wstr;
+}
+
+std::string Utility::WideStringToUTF8(const std::wstring& wstr)
+{
+    if (wstr.empty())
+        return std::string();
+
+    int sizeNeeded = WideCharToMultiByte(
+        CP_UTF8, 0, wstr.c_str(), (int)wstr.size(), nullptr, 0, nullptr, nullptr);
+
+    std::string strTo(sizeNeeded, 0);
+    WideCharToMultiByte(
+        CP_UTF8, 0, wstr.c_str(), (int)wstr.size(), &strTo[0], sizeNeeded, nullptr, nullptr);
+
+    return strTo;
+}

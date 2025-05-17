@@ -141,3 +141,9 @@ __declspec(dllexport) CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(ID3D12Descripto
 CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(ID3D12DescriptorHeap* heap, int offset);
 
 CD3DX12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(ID3D12DescriptorHeap* heap, int offset);
+
+namespace Utility
+{
+    std::wstring UTF8ToWideString(const std::string& str);
+    std::string WideStringToUTF8(const std::wstring& wstr);
+}
