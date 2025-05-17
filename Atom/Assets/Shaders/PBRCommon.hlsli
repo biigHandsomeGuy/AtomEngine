@@ -105,7 +105,7 @@ float2 Hammersley2D(uint i, uint N)
 float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
 {
     float a = Roughness * Roughness;
-    
+    a = max(0.0025, a);
     float Phi = 2 * PI * Xi.x;
     // 从NDF推到出CDF，求反函数得到cos theta
     float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));

@@ -3,19 +3,17 @@
 
 
 Texture2D gAlbedeTexture : register(t0);
-Texture2D gNormalTexture : register(t1);
+Texture2D gRoughnessTexture : register(t1);
 Texture2D gMetalnessTexture : register(t2);
-Texture2D gRoughnessTexture : register(t3);
+Texture2D  gNormalTexture: register(t3);
 
-Texture2D gSphereMap : register(t10);
-Texture2D gShadowMap : register(t11);
+TextureCube gRadianceTexture : register(t10);
+TextureCube gIrradianceMap : register(t11);
 Texture2D gSsaoMap : register(t12);
-TextureCube gCubeMap : register(t13);
-
-TextureCube gIrradianceMap : register(t14);
-TextureCube gSpecularMap : register(t15);
-Texture2D<float2> gLUTMap : register(t16);
-
+Texture2D gShadowMap : register(t13);
+Texture2D<float2> gLUTMap : register(t14);
+Texture2D gEmu : register(t15);
+Texture2D gEavg : register(t16);
 
 cbuffer MaterialConstants : register(b0)
 {
@@ -42,7 +40,7 @@ cbuffer ShaderParams : register(b2)
     float Roughness;
     float3 Albedo;
     float Metallic;
-   
+    bool UseEmu;
 };
 static const float3 g_Fdielectric = 0.04;
 
@@ -62,12 +60,20 @@ struct VertexOut
 uint querySpecularTextureLevels()
 {
     uint width, height, levels;
-    gSpecularMap.GetDimensions(0, width, height, levels);
+    gRadianceTexture.GetDimensions(0, width, height, levels);
     return levels;
 }
 
+//https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf
+float3 AverageFresnel(float3 r, float3 g)
+{
+    return 0.087237 + 0.0230685 * g - 0.0864902 * g * g + 0.0774594 * g * g * g
+           + 0.782654 * r - 0.136432 * r * r + 0.278708 * r * r * r
+           + 0.19744 * g * r + 0.0360605 * g * g * r - 0.2586 * g * r * r;
+}
 float4 main(VertexOut pin) : SV_Target
 {
+
     float3 albedo = 0;
     float metalness = 0;
     float roughness = 0;
@@ -142,9 +148,23 @@ float4 main(VertexOut pin) : SV_Target
 
 		    // Cook-Torrance specular microfacet BRDF.
             float3 specularBRDF = (F * D * G);
-
+            
+            //float3 EmuL = gEmu.Sample(gsamAnisotropicClamp, float2(NoL, roughness)).rrr;
+            //float3 EmuV = gEmu.Sample(gsamAnisotropicClamp, float2(NoV, roughness)).rrr;
+            //
+            //
+            //float3 E_avg = gEavg.Sample(gsamAnisotropicClamp, float2(0, roughness)).rrr;
+            
+            //float3 edgetint = float3(0.827, 0.792, 0.678);
+            //float3 Favg = (1.0 + F0 * 20.0) / 21.0;
+            //float OneMinusEavg = 1.0 - E_avg;
+            //float3 Fms = (1.0 - EmuL) * (1.0 - EmuV) * OneMinusEavg * Favg / (PI * OneMinusEavg * (1.0 - Favg * E_avg));
+            
+            float3 BRDF = diffuseBRDF + specularBRDF;
+            //if(UseEmu)
+               // BRDF += (Fms);
 		    // Total contribution for this light.
-            directLighting += (diffuseBRDF + specularBRDF) * Lradiance * NoL;
+            directLighting += BRDF * Lradiance * NoL;
         }
     }
 
@@ -168,7 +188,7 @@ float4 main(VertexOut pin) : SV_Target
 
 		// Sample pre-filtered specular reflection environment at correct mipmap level.
         uint specularTextureLevels = querySpecularTextureLevels();
-        float3 specularIrradiance = gSpecularMap.SampleLevel(gsamAnisotropicWrap, Lr, roughness * specularTextureLevels).rgb;
+        float3 specularIrradiance = gRadianceTexture.SampleLevel(gsamAnisotropicWrap, Lr, roughness * specularTextureLevels).rgb;
 
 		// Split-sum approximation factors for Cook-Torrance specular BRDF.
         float2 specularBRDF = gLUTMap.Sample(gsamAnisotropicClamp, float2(NoV, roughness)).rg;
@@ -184,10 +204,11 @@ float4 main(VertexOut pin) : SV_Target
     if(UseSSAO)
     {
         pin.SsaoPosH /= pin.SsaoPosH.w;
-        ambientOcclution = gSsaoMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
+        ambientOcclution += gShadowMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
+        ambientOcclution += gSsaoMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
     }
     
 	// Final fragment color.
-    return float4(directLighting + ambientOcclution * ambientLighting, 1.0);
+    return float4(directLighting + ambientLighting * ambientOcclution, 1.0);
 }
  

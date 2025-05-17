@@ -7,34 +7,9 @@ static const uint g_NumSamples = 512;
 static const float g_InvNumSamples = 1.0 / float(g_NumSamples);
 
 RWTexture2D<float2> LUT : register(u0);
-// Importance sample GGX normal distribution function for a fixed roughness value.
-// This returns normalized half-vector between Li & Lo.
-// For derivation see: http://blog.tobias-franke.eu/2014/03/30/notes_on_importance_sampling.html
-float3 sampleGGX(float u1, float u2, float roughness)
-{
-	float alpha = roughness * roughness;
 
-	float cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
-	float sinTheta = sqrt(1.0 - cosTheta * cosTheta); // Trig. identity
-	float phi = 2 * PI * u1;
 
-	// Convert to Cartesian upon return.
-	return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-}
 
-// Single term for separable Schlick-GGX below.
-float gaSchlickG1(float cosTheta, float k)
-{
-	return cosTheta / (cosTheta * (1.0 - k) + k);
-}
-
-// Schlick-GGX approximation of geometric attenuation function using Smith's method (IBL version).
-float gaSchlickGGX_IBL(float cosLi, float cosLo, float roughness)
-{
-	float r = roughness;
-	float k = (r * r) / 2.0; // Epic suggests using this roughness remapping for IBL lighting.
-	return gaSchlickG1(cosLi, k) * gaSchlickG1(cosLo, k);
-}
 
 [numthreads(32, 32, 1)]
 void main(uint2 ThreadID : SV_DispatchThreadID)
@@ -46,7 +21,7 @@ void main(uint2 ThreadID : SV_DispatchThreadID)
 	// Get integration parameters.
     float NoV = (ThreadID.x) / outputWidth;
 	float roughness = (ThreadID.y) / outputHeight;
-
+    //roughness = max(0.0025, roughness);
 	float3 V;
 	V.x = sqrt(1.0f - NoV * NoV); // sin
 	V.y = 0;

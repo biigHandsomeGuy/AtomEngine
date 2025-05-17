@@ -47,7 +47,7 @@ float3 getSamplingVector(uint3 ThreadID)
 }
 
 
-[numthreads(8, 8, 1)]
+[numthreads(32, 32, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     float3 lo = getSamplingVector(DTid);

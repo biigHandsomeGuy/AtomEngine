@@ -2,7 +2,7 @@
 
 
 Texture2D ScreenTexture : register(t17); 
-Texture2D BloomTexture : register(t18); 
+//Texture2D BloomTexture : register(t18); 
 cbuffer MaterialConstants : register(b0)
 {
 	float exposure;
@@ -77,6 +77,7 @@ float4 Filmic(float4 col)
 
     return ((col * (A * col + C * B) + D * E) / (col * (A * col + B) + D * F)) - E / F;
 }
+RWByteAddressBuffer ras_order_buff;
 
 float4 ACESFilm(float4 x)
 {
@@ -90,12 +91,14 @@ float4 ACESFilm(float4 x)
 }
 float4 main(PSInput input) : SV_Target
 {
+    //uint order = GetRasterizationOrder();
+    // return float4((uint3(order >> uint3(0, 8, 16)) & 0xFF) / 255.0f, 1);
 	float2 ScreenTextureSize;
 	ScreenTexture.GetDimensions(ScreenTextureSize.x, ScreenTextureSize.y);
 	
 	float2 rcpFrame = 1.0 / ScreenTextureSize;
 	float4 sceneColor = ScreenTexture.Sample(gsamAnisotropicClamp, input.uv);
-	float4 bloomColor = BloomTexture.Sample(gsamAnisotropicClamp, input.uv);
+	//float4 bloomColor = BloomTexture.Sample(gsamAnisotropicClamp, input.uv);
 	float4 color = sceneColor;
    
     if (UseFXAA)
@@ -234,9 +237,6 @@ float4 main(PSInput input) : SV_Target
         color = float4(FxaaFilterReturn(FxaaLerp3(rgbL, rgbF, blendL)), 1.0f);
 
     }
-	
-	// color = 1 - exp(-color * exposure);   
-	
     if (UseReinhard)
         color = Reinhard(color);
     if(UseFilmic)
@@ -245,10 +245,9 @@ float4 main(PSInput input) : SV_Target
         color = ACESFilm(color);
     //color = color / (1.0f + color);
     
+    
+    
 	color = pow(color, 1 / 2.2);
 
 	return color;
-
-	
-	
 }
