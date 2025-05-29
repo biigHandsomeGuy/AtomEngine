@@ -1,19 +1,7 @@
 #pragma once
 
-struct ColorBuffer
-{
-    Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
-    D3D12_CPU_DESCRIPTOR_HANDLE RtvHandle;
-    D3D12_CPU_DESCRIPTOR_HANDLE SrvHandle;
-    D3D12_CPU_DESCRIPTOR_HANDLE UavHandle[12] = { 0 };
-};
-
-struct DepthBuffer
-{
-    Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
-    D3D12_CPU_DESCRIPTOR_HANDLE DsvHandle;
-    D3D12_CPU_DESCRIPTOR_HANDLE SrvHandle;
-};
+#include "ColorBuffer.h"
+#include "DepthBuffer.h"
 
 
 namespace Graphics

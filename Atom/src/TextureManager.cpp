@@ -11,10 +11,10 @@ std::vector<XMHALF4> ConvertToHalf(const float* floatData, int pixelCount) {
 	std::vector<XMHALF4> halfData(pixelCount);
 	for (int i = 0; i < pixelCount; i++) {
 		halfData[i] = XMHALF4(
-			floatData[i * 4 + 0],  // R
-			floatData[i * 4 + 1],  // G
-			floatData[i * 4 + 2],  // B
-			floatData[i * 4 + 3]   // A
+			floatData[i * 4 + 0],
+			floatData[i * 4 + 1],
+			floatData[i * 4 + 2],
+			floatData[i * 4 + 3] 
 		);
 	}
 	return halfData;
@@ -90,9 +90,9 @@ namespace TextureManager
 		// Create Texture
 		int width = 0, height = 0, channels = 0;
 		stbi_set_flip_vertically_on_load(false);
-		auto data = stbi_loadf("D:/AtomEngine/Atom/Assets/Textures/EnvirMap/marry.hdr", &width, &height, &channels, 4);
-		if (!data) {
-			printf("stbi_loadf failed: %s\n", stbi_failure_reason());
+		auto data = stbi_loadf(Utility::WideStringToUTF8(filePath).c_str(), &width, &height, &channels, 4);
+		if (data == nullptr) {
+			abort();
 		}
 		tex->CreateFromMemory(data, width, height);
 		// This was the first time it was requested, so indicate that the caller must read the file

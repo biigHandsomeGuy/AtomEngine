@@ -57,9 +57,7 @@ private:
     void UpdateUI();
 
   
-    void LoadTextures(ID3D12CommandList* CmdList);
     void BuildRootSignature();
-    void BuildDescriptorHeaps();
     void BuildInputLayout();
     void BuildShapeGeometry();
     void BuildPSOs();

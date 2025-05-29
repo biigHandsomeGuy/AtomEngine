@@ -81,9 +81,6 @@
     <ClInclude Include="include\Scene.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\ShadowMap.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\SkyBox.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -142,6 +139,11 @@
     <ClInclude Include="include\TextureManager.h" />
     <ClInclude Include="include\GraphicsCommon.h" />
     <ClInclude Include="include\LinearAllocator.h" />
+    <ClInclude Include="include\PixelBuffer.h" />
+    <ClInclude Include="include\ColorBuffer.h" />
+    <ClInclude Include="include\Color.h" />
+    <ClInclude Include="include\DepthBuffer.h" />
+    <ClInclude Include="include\ShadowBuffer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -154,9 +156,6 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\MathHelper.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ShadowMap.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\Ssao.cpp">
@@ -201,9 +200,6 @@
     <ClCompile Include="src\DescriptorHeap.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\GpuResource.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\Texture.cpp">
       <Filter>src</Filter>
     </ClCompile>
@@ -214,6 +210,9 @@
     <ClCompile Include="src\TextureManager.cpp" />
     <ClCompile Include="src\GraphicsCommon.cpp" />
     <ClCompile Include="src\LinearAllocator.cpp" />
+    <ClCompile Include="src\PixelBuffer.cpp" />
+    <ClCompile Include="src\ColorBuffer.cpp" />
+    <ClCompile Include="src\DepthBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">

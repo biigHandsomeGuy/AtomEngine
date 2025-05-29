@@ -264,16 +264,16 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
 
         D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[] =
         {
-            g_SceneNormalBuffer.SrvHandle,
-            g_SceneDepthBuffer.SrvHandle,
-            g_RandomVectorBuffer.SrvHandle,
-            g_SSAOUnBlur.SrvHandle,
-            g_SSAOFullScreen.SrvHandle,
+            g_SceneNormalBuffer.GetSRV(),
+            g_SceneDepthBuffer.GetDepthSRV(),
+            g_RandomVectorBuffer.GetSRV(),
+            g_SSAOUnBlur.GetSRV(),
+            g_SSAOFullScreen.GetSRV(),
         };
 
         g_Device->CopyDescriptors(1, &Renderer::g_SSAOSrvHeap, &DestCount, DestCount, SourceTextures,
             SourceCounts, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        g_Device->CopyDescriptorsSimple(1, Renderer::g_SSAOUavHeap, g_SSAOFullScreen.UavHandle[0], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        g_Device->CopyDescriptorsSimple(1, Renderer::g_SSAOUavHeap, g_SSAOFullScreen.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
 
     s_ViewPort = { 0,0,g_DisplayWidth / 2.0f,g_DisplayHeight / 2.0f,0,1 };
@@ -282,17 +282,22 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
     GfxContext.GetCommandList()->RSSetViewports(1, &s_ViewPort);
     GfxContext.GetCommandList()->RSSetScissorRects(1, &s_Rect);
 
-    // We compute the initial SSAO to AmbientMap0.
 
-    // Change to RENDER_TARGET.
-    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOUnBlur.Resource.Get(),
-        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
-    float clearValue[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-    GfxContext.GetCommandList()->ClearRenderTargetView(g_SSAOUnBlur.RtvHandle, clearValue, 0, nullptr);
+    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+        g_SSAOUnBlur.GetResource(),
+        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET));
+
+    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+        g_SceneDepthBuffer.GetResource(),
+        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE));
+
+
+    float clearValue[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    GfxContext.GetCommandList()->ClearRenderTargetView(g_SSAOUnBlur.GetRTV(), clearValue, 0, nullptr);
 
     // Specify the buffers we are going to render to.
-    GfxContext.GetCommandList()->OMSetRenderTargets(1, &g_SSAOUnBlur.RtvHandle, true, nullptr);
+    GfxContext.GetCommandList()->OMSetRenderTargets(1, &g_SSAOUnBlur.GetRTV(), true, nullptr);
 
   
     {
@@ -345,9 +350,10 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
     GfxContext.GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     GfxContext.GetCommandList()->DrawInstanced(6, 1, 0, 0);
 
-    // Change back to GENERIC_READ so we can read the texture in a shader.
-    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOUnBlur.Resource.Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ));
+    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+        g_SSAOUnBlur.GetResource(),
+        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE));
+
 
     // first blur - vertical
     {
@@ -362,11 +368,25 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
         GfxContext.GetCommandList()->SetComputeRootConstantBufferView(3, s_SsaoCbuffer->GetGPUVirtualAddress());
         GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 0, 0);
     
-        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+            g_SSAOFullScreen.GetResource(), 
+            D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
     
         GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+            g_SSAOFullScreen.GetResource(), 
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
     }
+    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+        g_SSAOUnBlur.GetResource(),
+        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON));
+
+    
+    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+        g_SceneDepthBuffer.GetResource(),
+        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+
+
     //// first blur - horizontal
     //{
     //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, OffsetHandle(4));
@@ -407,43 +427,12 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
 
 void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
 {
-    D3D12_RESOURCE_DESC texDesc;
-    ZeroMemory(&texDesc, sizeof(D3D12_RESOURCE_DESC));
-    texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    texDesc.Alignment = 0;
-    texDesc.Width = 256;
-    texDesc.Height = 256;
-    texDesc.DepthOrArraySize = 1;
-    texDesc.MipLevels = 1;
-    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    texDesc.SampleDesc.Count = 1;
-    texDesc.SampleDesc.Quality = 0;
-    texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    texDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    g_RandomVectorBuffer.Create(L"Random Vector Buffer", 256, 256, 1, DXGI_FORMAT_R8G8B8A8_UNORM);
 
-    ThrowIfFailed(g_Device->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-        D3D12_HEAP_FLAG_NONE,
-        &texDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&g_RandomVectorBuffer.Resource)));
-    g_RandomVectorBuffer.Resource->SetName(L"g_RandomVectorBuffer");
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Texture2D.MipLevels = -1;
-    srvDesc.Texture2D.MostDetailedMip = 0;
-    srvDesc.Texture2D.ResourceMinLODClamp = 0;
-    
-    g_RandomVectorBuffer.SrvHandle = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    g_Device->CreateShaderResourceView(g_RandomVectorBuffer.Resource.Get(), &srvDesc, g_RandomVectorBuffer.SrvHandle);
-
+    auto texDesc = g_RandomVectorBuffer.GetResource()->GetDesc();
 
     const UINT num2DSubresources = texDesc.DepthOrArraySize * texDesc.MipLevels;
-    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(g_RandomVectorBuffer.Resource.Get(), 0, num2DSubresources);
+    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(g_RandomVectorBuffer.GetResource(),  0, num2DSubresources);
 
     ThrowIfFailed(g_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -476,11 +465,11 @@ void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
     // read by a shader.
     //
 
-    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Resource.Get(),
-        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST));
-    UpdateSubresources(CmdList, g_RandomVectorBuffer.Resource.Get(), s_RandomVectorMapUploadBuffer.Get(),
+    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.GetResource(),
+        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST));
+    UpdateSubresources(CmdList, g_RandomVectorBuffer.GetResource(), s_RandomVectorMapUploadBuffer.Get(),
         0, 0, num2DSubresources, &subResourceData);
-    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.Resource.Get(),
+    CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_RandomVectorBuffer.GetResource(),
         D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
 }
 

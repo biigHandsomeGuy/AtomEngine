@@ -15,7 +15,7 @@ namespace Graphics
     extern unsigned int DsvDescriptorSize;
     extern unsigned int CbvSrvUavDescriptorSize;
 
-    extern Microsoft::WRL::ComPtr<ID3D12Device> g_Device;
+    extern ID3D12Device* g_Device;
     // extern ID3D12GraphicsCommandList* g_CommandList;
     // extern ID3D12CommandAllocator* g_CommandAllocator;
     extern CommandListManager g_CommandManager;

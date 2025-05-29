@@ -12,7 +12,7 @@ namespace Graphics
     UINT DsvDescriptorSize = 0;
     UINT CbvSrvUavDescriptorSize = 0;
 
-	Microsoft::WRL::ComPtr<ID3D12Device> g_Device;
+	ID3D12Device* g_Device;
     
 	// ID3D12GraphicsCommandList* g_CommandList;
 	// ID3D12CommandAllocator* g_CommandAllocator;
@@ -65,9 +65,7 @@ namespace Graphics
 		g_Device = pDevice.Detach();
 		g_Device->SetName(L"g_Device");
 		
-		g_CommandManager.Create(g_Device.Get());
-
-		// g_CommandManager.CreateNewCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT, &g_CommandList, &g_CommandAllocator);
+		g_CommandManager.Create(g_Device);
 
 		Graphics::RtvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		Graphics::DsvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);

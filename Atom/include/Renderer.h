@@ -14,6 +14,7 @@ namespace Renderer
         kMaterialSRVs,        // material texture 
         kCommonSRVs,          //
         kCommonCBV,           // global cbv
+        kPostprocessSRVs,
         kShaderParams,
         kNumRootBindings
     };
@@ -22,6 +23,9 @@ namespace Renderer
     extern DescriptorHandle m_CommonTextures;
     extern DescriptorHandle g_SSAOSrvHeap;
     extern DescriptorHandle g_SSAOUavHeap;
+    extern DescriptorHandle g_PostprocessHeap;
+    extern DescriptorHandle g_NullDescriptor;
+
     void Initialize(void);
     void Shutdown(void);
     void UpdateGlobalDescriptors(void);
