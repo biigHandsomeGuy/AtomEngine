@@ -661,18 +661,6 @@ void PbrRenderer::RenderScene()
 	
 	gfxContext.GetCommandList()->DrawInstanced(4, 1, 0, 0);
 
-	
-	
-	if (ImGui::Begin("Ssao Debug"))
-	{
-		ImVec2 winSize = ImGui::GetWindowSize();
-		float smaller = (std::min)((winSize.x - 20), winSize.y - 20);
-		ImGui::Image((ImTextureID)(m_CommonTextures + 2*CbvSrvUavDescriptorSize).GetCpuPtr(), ImVec2(smaller, smaller));
-
-		ImGui::End();
-	}
-	
-
 	ImGui::Render();
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), gfxContext.GetCommandList());
 

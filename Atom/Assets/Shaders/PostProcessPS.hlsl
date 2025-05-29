@@ -27,9 +27,9 @@ float4 FxaaTexOff(Texture2D ScreenTexture, float2 pos, int2 off)
 	return ScreenTexture.SampleLevel(gsamAnisotropicClamp, pos.xy, 0.0, off.xy);
 }
 
-float FxaaLuma(float3 rgb)
+float GetLuminance(float3 rgb)
 {
-	return rgb.y * (0.587 / 0.299) + rgb.x;
+	return rgb.r * 0.2126 + rgb.g * 0.7152 + rgb.b * 0.0722;
 }
 
 float3 FxaaFilterReturn(float3 rgb)
@@ -108,11 +108,11 @@ float4 main(PSInput input) : SV_Target
         float3 rgbM = FxaaTexOff(ScreenTexture, input.uv.xy, int2(0, 0)).xyz;
         float3 rgbE = FxaaTexOff(ScreenTexture, input.uv.xy, int2(1, 0)).xyz;
         float3 rgbS = FxaaTexOff(ScreenTexture, input.uv.xy, int2(0, 1)).xyz;
-        float lumaN = FxaaLuma(rgbN);
-        float lumaW = FxaaLuma(rgbW);
-        float lumaM = FxaaLuma(rgbM);
-        float lumaE = FxaaLuma(rgbE);
-        float lumaS = FxaaLuma(rgbS);
+        float lumaN = GetLuminance(rgbN);
+        float lumaW = GetLuminance(rgbW);
+        float lumaM = GetLuminance(rgbM);
+        float lumaE = GetLuminance(rgbE);
+        float lumaS = GetLuminance(rgbS);
         float rangeMin = min(lumaM, min(min(lumaN, lumaW), min(lumaS, lumaE)));
         float rangeMax = max(lumaM, max(max(lumaN, lumaW), max(lumaS, lumaE)));
         float range = rangeMax - rangeMin;
@@ -143,10 +143,10 @@ float4 main(PSInput input) : SV_Target
         rgbL += (rgbNW + rgbNE + rgbSW + rgbSE);
         rgbL *= float3(1.0 / 9.0, 0, 0);
 #endif
-        float lumaNW = FxaaLuma(rgbNW);
-        float lumaNE = FxaaLuma(rgbNE);
-        float lumaSW = FxaaLuma(rgbSW);
-        float lumaSE = FxaaLuma(rgbSE);
+        float lumaNW = GetLuminance(rgbNW);
+        float lumaNE = GetLuminance(rgbNE);
+        float lumaSW = GetLuminance(rgbSW);
+        float lumaSE = GetLuminance(rgbSE);
         float edgeVert =
 		abs((0.25 * lumaNW) + (-0.5 * lumaN) + (0.25 * lumaNE)) +
 		abs((0.50 * lumaW) + (-1.0 * lumaM) + (0.50 * lumaE)) +
@@ -200,10 +200,10 @@ float4 main(PSInput input) : SV_Target
 #if FXAA_SEARCH_ACCELERATION == 1
             if (!doneN)
                 lumaEndN =
-				FxaaLuma(FxaaTexLod0(ScreenTexture, posN.xy).xyz);
+				GetLuminance(FxaaTexLod0(ScreenTexture, posN.xy).xyz);
             if (!doneP)
                 lumaEndP =
-				FxaaLuma(FxaaTexLod0(ScreenTexture, posP.xy).xyz);
+				GetLuminance(FxaaTexLod0(ScreenTexture, posP.xy).xyz);
 #endif
             doneN = doneN || (abs(lumaEndN - lumaN) >= gradientN);
             doneP = doneP || (abs(lumaEndP - lumaN) >= gradientN);

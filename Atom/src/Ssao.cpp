@@ -285,7 +285,7 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
 
 
     GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        g_SSAOUnBlur.GetResource(),
+        g_SSAOFullScreen.GetResource(),
         D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
     GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
@@ -294,10 +294,10 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
 
 
     float clearValue[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    GfxContext.GetCommandList()->ClearRenderTargetView(g_SSAOUnBlur.GetRTV(), clearValue, 0, nullptr);
+    GfxContext.GetCommandList()->ClearRenderTargetView(g_SSAOFullScreen.GetRTV(), clearValue, 0, nullptr);
 
     // Specify the buffers we are going to render to.
-    GfxContext.GetCommandList()->OMSetRenderTargets(1, &g_SSAOUnBlur.GetRTV(), true, nullptr);
+    GfxContext.GetCommandList()->OMSetRenderTargets(1, &g_SSAOFullScreen.GetRTV(), true, nullptr);
 
   
     {
@@ -351,35 +351,35 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
     GfxContext.GetCommandList()->DrawInstanced(6, 1, 0, 0);
 
     GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        g_SSAOUnBlur.GetResource(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE));
+        g_SSAOFullScreen.GetResource(),
+        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON));
 
 
     // first blur - vertical
-    {
-        GfxContext.GetCommandList()->SetComputeRootSignature(s_ComputeRS.Get());
-        GfxContext.GetCommandList()->SetPipelineState(s_BlurPso.Get());
-    
-        GfxContext.GetCommandList()->SetComputeRootDescriptorTable(0, OffsetHandle(0));
-    
-        GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, OffsetHandle(3));
-        GfxContext.GetCommandList()->SetComputeRootDescriptorTable(2, Renderer::g_SSAOUavHeap);
-    
-        GfxContext.GetCommandList()->SetComputeRootConstantBufferView(3, s_SsaoCbuffer->GetGPUVirtualAddress());
-        GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 0, 0);
-    
-        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            g_SSAOFullScreen.GetResource(), 
-            D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-    
-        GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-        GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            g_SSAOFullScreen.GetResource(), 
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    }
-    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        g_SSAOUnBlur.GetResource(),
-        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON));
+    //{
+    //    GfxContext.GetCommandList()->SetComputeRootSignature(s_ComputeRS.Get());
+    //    GfxContext.GetCommandList()->SetPipelineState(s_BlurPso.Get());
+    //
+    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(0, OffsetHandle(0));
+    //
+    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, OffsetHandle(3));
+    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(2, Renderer::g_SSAOUavHeap);
+    //
+    //    GfxContext.GetCommandList()->SetComputeRootConstantBufferView(3, s_SsaoCbuffer->GetGPUVirtualAddress());
+    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 0, 0);
+    //
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+    //        g_SSAOFullScreen.GetResource(), 
+    //        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+    //
+    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
+    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+    //        g_SSAOFullScreen.GetResource(), 
+    //        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
+    //}
+    //GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+    //    g_SSAOUnBlur.GetResource(),
+    //    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON));
 
     
     GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
