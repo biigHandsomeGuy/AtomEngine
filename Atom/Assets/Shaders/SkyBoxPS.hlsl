@@ -1,6 +1,6 @@
 #include "Common.hlsli"
 
-TextureCube gCubeMap : register(t10);
+TextureCube gCubeMap : register(t11);
 
 struct VertexOut
 {

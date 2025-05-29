@@ -7,13 +7,15 @@ Texture2D gRoughnessTexture : register(t1);
 Texture2D gMetalnessTexture : register(t2);
 Texture2D  gNormalTexture: register(t3);
 
-TextureCube gRadianceTexture : register(t10);
-TextureCube gIrradianceMap : register(t11);
-Texture2D gSsaoMap : register(t12);
-Texture2D gShadowMap : register(t13);
-Texture2D<float2> gLUTMap : register(t14);
-Texture2D gEmu : register(t15);
-Texture2D gEavg : register(t16);
+
+TextureCube gEnvironmentTexture : register(t10);
+TextureCube gRadianceTexture : register(t11);
+TextureCube gIrradianceMap : register(t12);
+Texture2D gSsaoMap : register(t13);
+Texture2D gShadowMap : register(t14);
+Texture2D<float2> gLUTMap : register(t15);
+Texture2D gEmu : register(t16);
+Texture2D gEavg : register(t17);
 
 cbuffer MaterialConstants : register(b0)
 {
@@ -205,7 +207,7 @@ float4 main(VertexOut pin) : SV_Target
     {
         pin.SsaoPosH /= pin.SsaoPosH.w;
         ambientOcclution += gShadowMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
-        ambientOcclution += gSsaoMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
+        ambientOcclution = gSsaoMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
     }
     
 	// Final fragment color.

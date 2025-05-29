@@ -3,7 +3,7 @@
 
 // reference: Diligent Engine
 
-static const uint g_NumSamples = 1024;
+static const uint g_NumSamples = 1024 * 64;
 
 TextureCube inputTexture : register(t0);
 RWTexture2DArray<float4> outputTexture : register(u0);

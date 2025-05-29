@@ -1,7 +1,7 @@
 #include "Common.hlsli"
 
 
-Texture2D ScreenTexture : register(t17); 
+Texture2D ScreenTexture : register(t20); 
 //Texture2D BloomTexture : register(t18); 
 cbuffer MaterialConstants : register(b0)
 {
@@ -77,7 +77,6 @@ float4 Filmic(float4 col)
 
     return ((col * (A * col + C * B) + D * E) / (col * (A * col + B) + D * F)) - E / F;
 }
-RWByteAddressBuffer ras_order_buff;
 
 float4 ACESFilm(float4 x)
 {
