@@ -18,9 +18,10 @@
 - [ ] Motion Blur
 - [ ] MultiThread
 
-#### Running
+#### Refrence
 
-Only support visual studio(maybe add cmake or something else in future)
+MiniEngine
 
-Running Samples 
+DiligentEngine
 
+d3d12book
