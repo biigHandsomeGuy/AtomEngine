@@ -33,117 +33,118 @@
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h">
       <Filter>Vendor\stb_image\stb_image</Filter>
     </ClInclude>
-    <ClInclude Include="include\GameCore.h">
+    <ClInclude Include="src\GameCore.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Camera.h">
+    <ClInclude Include="src\Camera.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\ConstantBuffers.h">
+    <ClInclude Include="src\ConstantBuffers.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\d3dUtil.h">
+    <ClInclude Include="src\d3dUtil.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\d3dx12.h">
+    <ClInclude Include="src\d3dx12.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\DDSTextureLoader.h">
+    <ClInclude Include="src\DDSTextureLoader.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\demo.h">
+    <ClInclude Include="src\demo.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\GameTimer.h">
+    <ClInclude Include="src\GameTimer.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\GeometryGenerator.h">
+    <ClInclude Include="src\GeometryGenerator.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\GraphicsCore.h">
+    <ClInclude Include="src\GraphicsCore.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Material.h">
+    <ClInclude Include="src\Material.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\MathHelper.h">
+    <ClInclude Include="src\MathHelper.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Mesh.h">
+    <ClInclude Include="src\Mesh.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Model.h">
+    <ClInclude Include="src\Model.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\pch.h">
+    <ClInclude Include="src\pch.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Scene.h">
+    <ClInclude Include="src\Scene.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\SkyBox.h">
+    <ClInclude Include="src\SkyBox.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Ssao.h">
+    <ClInclude Include="src\Ssao.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Texture.h">
+    <ClInclude Include="src\Texture.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\UploadBuffer.h">
+    <ClInclude Include="src\UploadBuffer.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h">
       <Filter>Vendor\TinyObjLoader</Filter>
     </ClInclude>
-    <ClInclude Include="include\CommandAllocatorPool.h">
+    <ClInclude Include="src\CommandAllocatorPool.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Log.h">
+    <ClInclude Include="src\Log.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\CommandListManager.h">
+    <ClInclude Include="src\CommandListManager.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Display.h">
+    <ClInclude Include="src\Display.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\BufferManager.h">
+    <ClInclude Include="src\BufferManager.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\RootSignature.h">
+    <ClInclude Include="src\RootSignature.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Hash.h">
+    <ClInclude Include="src\Hash.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Math\Common.h">
+    <ClInclude Include="src\Math\Common.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\PipelineState.h">
+    <ClInclude Include="src\PipelineState.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\d3dApp.h">
+    <ClInclude Include="src\d3dApp.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\DescriptorHeap.h">
+    <ClInclude Include="src\DescriptorHeap.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\GpuResource.h">
+    <ClInclude Include="src\GpuResource.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\CommandContext.h">
+    <ClInclude Include="src\CommandContext.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\Renderer.h" />
-    <ClInclude Include="include\TextureManager.h" />
-    <ClInclude Include="include\GraphicsCommon.h" />
-    <ClInclude Include="include\LinearAllocator.h" />
-    <ClInclude Include="include\PixelBuffer.h" />
-    <ClInclude Include="include\ColorBuffer.h" />
-    <ClInclude Include="include\Color.h" />
-    <ClInclude Include="include\DepthBuffer.h" />
-    <ClInclude Include="include\ShadowBuffer.h" />
+    <ClInclude Include="src\Renderer.h" />
+    <ClInclude Include="src\TextureManager.h" />
+    <ClInclude Include="src\GraphicsCommon.h" />
+    <ClInclude Include="src\LinearAllocator.h" />
+    <ClInclude Include="src\PixelBuffer.h" />
+    <ClInclude Include="src\ColorBuffer.h" />
+    <ClInclude Include="src\Color.h" />
+    <ClInclude Include="src\DepthBuffer.h" />
+    <ClInclude Include="src\ShadowBuffer.h" />
+    <ClInclude Include="src\SamplerManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">

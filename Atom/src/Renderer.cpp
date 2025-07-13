@@ -44,11 +44,11 @@ namespace Renderer
 	void Initialize(void)
 	{
 		s_RootSig.Reset(kNumRootBindings, 5);
-		s_RootSig.InitStaticSampler(SamplerLinearWrapDesc);
-		s_RootSig.InitStaticSampler(SamplerLinearClampDesc);
-		s_RootSig.InitStaticSampler(SamplerAnisotropicWrapDesc);
-		s_RootSig.InitStaticSampler(SamplerAnisotropicClampDesc);
-		s_RootSig.InitStaticSampler(SamplerShadowDesc);
+		s_RootSig.InitStaticSampler(0, SamplerLinearWrapDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+		s_RootSig.InitStaticSampler(1, SamplerLinearClampDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+		s_RootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+		s_RootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+		s_RootSig.InitStaticSampler(4, SamplerShadowDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 		s_RootSig[kMeshConstants].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_VERTEX);
 		s_RootSig[kMaterialConstants].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_PIXEL);
 		s_RootSig[kMaterialSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 10, D3D12_SHADER_VISIBILITY_PIXEL);

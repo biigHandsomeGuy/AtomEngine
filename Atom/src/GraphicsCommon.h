@@ -1,7 +1,13 @@
 #pragma once
 
+#include "SamplerManager.h"
+
+class SamplerDesc;
+
 namespace Graphics
 {
+    void InitializeCommonState();
+
     enum eDefaultTexture
     {
         kMagenta2D,  // Useful for indicating missing textures
@@ -16,11 +22,15 @@ namespace Graphics
     };
 
     D3D12_CPU_DESCRIPTOR_HANDLE GetDefaultTexture(eDefaultTexture texID);
+
+    
     // SamplerLinearWrapDesc
-    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerLinearWrapDesc;
-    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerLinearClampDesc;
-    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerAnisotropicWrapDesc;
-    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerAnisotropicClampDesc;
-    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerShadowDesc;
+    extern SamplerDesc SamplerPointWrapDesc;
+    extern SamplerDesc SamplerPointClampDesc;
+    extern SamplerDesc SamplerLinearWrapDesc;
+    extern SamplerDesc SamplerLinearClampDesc;
+    extern SamplerDesc SamplerAnisotropicWrapDesc;
+    extern SamplerDesc SamplerAnisotropicClampDesc;
+    extern SamplerDesc SamplerShadowDesc;
 
 }

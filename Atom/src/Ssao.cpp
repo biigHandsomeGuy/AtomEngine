@@ -9,6 +9,7 @@
 #include "Renderer.h"
 #include "DescriptorHeap.h"
 #include "RootSignature.h"
+#include "GraphicsCommon.h"
 
 namespace shader
 {
@@ -79,43 +80,11 @@ void SSAO::Initialize()
     s_ViewPort = { 0,0,g_DisplayWidth / 2.0f,g_DisplayHeight / 2.0f,0,1 };
     s_Rect = { 0,0,(long)g_DisplayWidth / 2,(long)g_DisplayHeight / 2 };
 
-    const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
-        0, // shaderRegister
-        D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-    const CD3DX12_STATIC_SAMPLER_DESC linearClamp(
-        1, // shaderRegister
-        D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-        D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-    const CD3DX12_STATIC_SAMPLER_DESC depthMapSam(
-        2, // shaderRegister
-        D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-        D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressU
-        D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressV
-        D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressW
-        0.0f,
-        0,
-        D3D12_COMPARISON_FUNC_LESS_EQUAL,
-        D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE);
-
-    const CD3DX12_STATIC_SAMPLER_DESC linearWrap(
-        3, // shaderRegister
-        D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-        D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-        D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-        D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
-
     m_RootSig.Reset(4, 4);
-    m_RootSig.InitStaticSampler(pointClamp);
-    m_RootSig.InitStaticSampler(linearClamp);
-    m_RootSig.InitStaticSampler(depthMapSam);
-    m_RootSig.InitStaticSampler(linearWrap);
+    m_RootSig.InitStaticSampler(0, SamplerPointClampDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootSig.InitStaticSampler(1, SamplerLinearClampDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootSig.InitStaticSampler(2, SamplerShadowDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+    m_RootSig.InitStaticSampler(3, SamplerLinearWrapDesc, D3D12_SHADER_VISIBILITY_PIXEL);
     m_RootSig[0].InitAsConstantBuffer(0);
     m_RootSig[1].InitAsConstants(1, 1);
     m_RootSig[2].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 2);

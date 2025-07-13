@@ -4,6 +4,7 @@
 #include "Ssao.h"
 #include "CommandListManager.h"
 #include "CommandContext.h"
+#include "GraphicsCommon.h"
 #include "Renderer.h"
 
 namespace Graphics
@@ -66,6 +67,8 @@ namespace Graphics
 		g_Device->SetName(L"g_Device");
 		
 		g_CommandManager.Create(g_Device);
+
+		Graphics::InitializeCommonState();
 
 		Graphics::RtvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		Graphics::DsvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);

@@ -55,7 +55,6 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
 	freopen_s(&fp, "CONOUT$", "w", stderr);
 	freopen_s(&fp, "CONIN$", "r", stdin);
 #endif
-	int a;
 
 	return GameCore::RunApplication(PbrRenderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
 }
@@ -154,9 +153,7 @@ void PbrRenderer::Startup()
 	XMVECTOR lightPos = XMLoadFloat4(&pos);
 	XMStoreFloat4(&mLightPosW, lightPos);
 	
-	//LoadTextures(gfxContext.GetCommandList());
 
-	BuildInputLayout();
 	g_IBLTexture = TextureManager::LoadHdrFromFile(L"D:/AtomEngine/Atom/Assets/Textures/EnvirMap/sun.hdr");
 
 	PrecomputeCubemaps(gfxContext);
@@ -728,12 +725,6 @@ void PbrRenderer::UpdateUI()
 	}
 }
 
-void PbrRenderer::BuildInputLayout()
-{
-	
-
-}
-
 
 #define SrvOffSetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(g_PreComputeSrvHandle, x, CbvSrvUavDescriptorSize)
 #define UavOffSetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(g_PreComputeUavHandle, x, CbvSrvUavDescriptorSize)
@@ -756,11 +747,11 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 	auto CmdList = gfxContext.GetCommandList();
 
 	s_IBL_RootSig.Reset(4, 5);
-	s_IBL_RootSig.InitStaticSampler(SamplerLinearWrapDesc);
-	s_IBL_RootSig.InitStaticSampler(SamplerLinearClampDesc);
-	s_IBL_RootSig.InitStaticSampler(SamplerAnisotropicWrapDesc);
-	s_IBL_RootSig.InitStaticSampler(SamplerAnisotropicClampDesc);
-	s_IBL_RootSig.InitStaticSampler(SamplerShadowDesc);
+	s_IBL_RootSig.InitStaticSampler(0, SamplerLinearWrapDesc);
+	s_IBL_RootSig.InitStaticSampler(1, SamplerLinearClampDesc);
+	s_IBL_RootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc);
+	s_IBL_RootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc);
+	s_IBL_RootSig.InitStaticSampler(4, SamplerShadowDesc);
 	s_IBL_RootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1);
 	s_IBL_RootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
 	s_IBL_RootSig[2].InitAsConstants(0, 1);

@@ -56,8 +56,6 @@ private:
 
     void UpdateUI();
 
-    void BuildInputLayout();
-
     void PrecomputeCubemaps(CommandContext& gfxContext);
 
 
