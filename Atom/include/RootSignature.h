@@ -135,6 +135,9 @@ public:
 	void InitStaticSampler(UINT Register, const D3D12_SAMPLER_DESC& NonStaticSamplerDesc,
 		D3D12_SHADER_VISIBILITY Visibility = D3D12_SHADER_VISIBILITY_ALL);
 
+	void InitStaticSampler(const D3D12_STATIC_SAMPLER_DESC& StaticSamplerDesc);
+
+
 	void Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAGS Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 	ID3D12RootSignature* GetSignature() const { return m_Signature; }

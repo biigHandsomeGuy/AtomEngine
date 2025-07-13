@@ -16,4 +16,11 @@ namespace Graphics
     };
 
     D3D12_CPU_DESCRIPTOR_HANDLE GetDefaultTexture(eDefaultTexture texID);
+    // SamplerLinearWrapDesc
+    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerLinearWrapDesc;
+    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerLinearClampDesc;
+    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerAnisotropicWrapDesc;
+    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerAnisotropicClampDesc;
+    extern const CD3DX12_STATIC_SAMPLER_DESC SamplerShadowDesc;
+
 }

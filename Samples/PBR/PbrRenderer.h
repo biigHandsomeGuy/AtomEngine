@@ -1,5 +1,5 @@
 #pragma once
-
+#include "CommandContext.h"
 #include "MathHelper.h"
 #include "GeometryGenerator.h"
 #include "Camera.h"
@@ -56,21 +56,14 @@ private:
 
     void UpdateUI();
 
-  
-    void BuildRootSignature();
     void BuildInputLayout();
-    void BuildShapeGeometry();
-    void BuildPSOs();
-    void CreateCubeMap(ID3D12GraphicsCommandList* CmdList);
 
-    std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> GetStaticSamplers();
+    void PrecomputeCubemaps(CommandContext& gfxContext);
+
 
 private:
-    ComPtr<ID3D12RootSignature> m_RootSignature = nullptr;
-
 
     std::unordered_map<std::string, ComPtr<ID3DBlob>> m_Shaders;
-    std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> m_PSOs;
     std::unordered_map<std::string, std::unique_ptr<Texture>> m_Textures;
     
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
@@ -105,7 +98,7 @@ private:
     std::vector<MeshConstants> m_MeshConstants;
     std::vector<ComPtr<ID3D12Resource>> m_MeshConstantsBuffers;
 
-    std::vector < MaterialConstants> m_MaterialConstants;
+    std::vector <MaterialConstants> m_MaterialConstants;
 
     const UINT64 GlobalConstantsBufferSize = sizeof(GlobalConstants);
     const UINT64 MeshConstantsBufferSize = sizeof(MeshConstants);

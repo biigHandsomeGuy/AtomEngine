@@ -9,17 +9,6 @@ static const float g_InvNumSamples = 1.0 / float(g_NumSamples);
 RWTexture2D<float2> Emu : register(u0);
 
 
-float GeometrySchlickGGX(float NdotV, float roughness)
-{
-    float a = roughness;
-    float k = (a * a) / 2.0f;
-
-    float nom = NdotV;
-    float denom = NdotV * (1.0f - k) + k;
-
-    return nom / denom;
-}
-
 float GeometrySmith(float roughness, float NoV, float NoL)
 {
     float ggx2 = GeometrySchlickGGX(NoV, roughness);

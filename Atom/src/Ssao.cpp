@@ -8,6 +8,7 @@
 #include "CommandContext.h"
 #include "Renderer.h"
 #include "DescriptorHeap.h"
+#include "RootSignature.h"
 
 namespace shader
 {
@@ -25,12 +26,11 @@ using namespace shader;
 namespace
 {
 
-    ComPtr<ID3D12RootSignature> s_RootSignature;
+    RootSignature m_RootSig;
     ComPtr<ID3D12PipelineState> s_SsaoPso;
-    ComPtr<ID3D12PipelineState> s_BlurPso;
+
     ComPtr<ID3D12Resource> s_RandomVectorMapUploadBuffer;
 
-    ComPtr<ID3D12RootSignature> s_ComputeRS;
     const UINT64 s_SsaoCbuferSize = sizeof(SsaoConstants);
 
     SsaoConstants s_SsaoConstants = {};
@@ -79,21 +79,6 @@ void SSAO::Initialize()
     s_ViewPort = { 0,0,g_DisplayWidth / 2.0f,g_DisplayHeight / 2.0f,0,1 };
     s_Rect = { 0,0,(long)g_DisplayWidth / 2,(long)g_DisplayHeight / 2 };
 
-    CD3DX12_DESCRIPTOR_RANGE texTable0; // normal depth
-    CD3DX12_DESCRIPTOR_RANGE texTable1; // random
-    texTable0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0);
-    texTable1.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0);
-
-
-    // Root parameter can be a table, root descriptor or root constants.
-    CD3DX12_ROOT_PARAMETER slotRootParameter[4];
-
-    // Perfomance TIP: Order from most frequent to least frequent.
-    slotRootParameter[0].InitAsConstantBufferView(0);
-    slotRootParameter[1].InitAsConstants(1, 1);
-    slotRootParameter[2].InitAsDescriptorTable(1, &texTable0, D3D12_SHADER_VISIBILITY_PIXEL);
-    slotRootParameter[3].InitAsDescriptorTable(1, &texTable1, D3D12_SHADER_VISIBILITY_PIXEL);
-
     const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
         0, // shaderRegister
         D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
@@ -126,41 +111,23 @@ void SSAO::Initialize()
         D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
         D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
 
-    std::array<CD3DX12_STATIC_SAMPLER_DESC, 4> staticSamplers =
-    {
-        pointClamp, linearClamp, depthMapSam, linearWrap
-    };
-
-    // A root signature is an array of root parameters.
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, slotRootParameter,
-        (UINT)staticSamplers.size(), staticSamplers.data(),
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-    // create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
-    ComPtr<ID3DBlob> serializedRootSig = nullptr;
-    ComPtr<ID3DBlob> errorBlob = nullptr;
-    HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-        serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf());
-
-    if (errorBlob != nullptr)
-    {
-        ::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-    }
-    ThrowIfFailed(hr);
-
-    ThrowIfFailed(g_Device->CreateRootSignature(
-        0,
-        serializedRootSig->GetBufferPointer(),
-        serializedRootSig->GetBufferSize(),
-        IID_PPV_ARGS(&s_RootSignature)));
-
+    m_RootSig.Reset(4, 4);
+    m_RootSig.InitStaticSampler(pointClamp);
+    m_RootSig.InitStaticSampler(linearClamp);
+    m_RootSig.InitStaticSampler(depthMapSam);
+    m_RootSig.InitStaticSampler(linearWrap);
+    m_RootSig[0].InitAsConstantBuffer(0);
+    m_RootSig[1].InitAsConstants(1, 1);
+    m_RootSig[2].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 2);
+    m_RootSig[3].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 1);
+    m_RootSig.Finalize(L"SSAO_RootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
     //
- // PSO for SSAO.  
- //
+    // PSO for SSAO.  
+    //
     D3D12_GRAPHICS_PIPELINE_STATE_DESC ssaoPsoDesc = {};
 
     ssaoPsoDesc.InputLayout = { nullptr, 0 };
-    ssaoPsoDesc.pRootSignature = s_RootSignature.Get();
+    ssaoPsoDesc.pRootSignature = m_RootSig.GetSignature();
     ssaoPsoDesc.VS =
     {
         g_pSsaoVS,sizeof(g_pSsaoVS)
@@ -196,62 +163,11 @@ void SSAO::Initialize()
     ));
     BuildRandomVectorTexture(gfxContext.GetCommandList());
     BuildOffsetVectors();
-    // universal conpute root signature
-
-    CD3DX12_DESCRIPTOR_RANGE range1 = {};
-    range1.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0);
-    CD3DX12_DESCRIPTOR_RANGE range2 = {};
-    range2.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0);
-    CD3DX12_DESCRIPTOR_RANGE range3 = {};
-    range3.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0);
-
-    CD3DX12_ROOT_PARAMETER rootParameter[5] = {};
-    rootParameter[0].InitAsDescriptorTable(1, &range1);
-    rootParameter[1].InitAsDescriptorTable(1, &range2);
-    rootParameter[2].InitAsDescriptorTable(1, &range3);
-    rootParameter[3].InitAsConstantBufferView(0, 0);
-    rootParameter[4].InitAsConstants(1, 1);
-
-    //auto staticSamplers = GetStaticSamplers();
-
-    // A root signature is an array of root parameters.
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc1(5, rootParameter,
-        (UINT)staticSamplers.size(), staticSamplers.data(),
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-    // create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
-    
-    ComPtr<ID3DBlob> serializedRootSig1 = nullptr;
-    ComPtr<ID3DBlob> errorBlob1 = nullptr;
-
-    ThrowIfFailed(D3D12SerializeRootSignature(
-        &rootSigDesc1, D3D_ROOT_SIGNATURE_VERSION_1,
-        serializedRootSig1.GetAddressOf(), errorBlob1.GetAddressOf()));
-
-    if (errorBlob1 != nullptr)
-    {
-        ::OutputDebugStringA((char*)errorBlob1->GetBufferPointer());
-    }
-
-
-    ThrowIfFailed(g_Device->CreateRootSignature(
-        0,
-        serializedRootSig1->GetBufferPointer(),
-        serializedRootSig1->GetBufferSize(),
-        IID_PPV_ARGS(&s_ComputeRS)));
-
-    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.CS =
-    {
-        g_pSsaoBlurCS,sizeof(g_pSsaoBlurCS)
-    };
-    psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-    psoDesc.pRootSignature = s_ComputeRS.Get();
-    ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_BlurPso)));
 
     
     gfxContext.Finish();
 }
+
 
 #define OffsetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(Renderer::g_SSAOSrvHeap, x, CbvSrvUavDescriptorSize)
 
@@ -259,15 +175,14 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
 {
     {
 
-        uint32_t DestCount = 5;
-        uint32_t SourceCounts[] = { 1, 1, 1, 1, 1 };
+        uint32_t DestCount = 4;
+        uint32_t SourceCounts[] = { 1, 1, 1, 1 };
 
         D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[] =
         {
             g_SceneNormalBuffer.GetSRV(),
             g_SceneDepthBuffer.GetDepthSRV(),
             g_RandomVectorBuffer.GetSRV(),
-            g_SSAOUnBlur.GetSRV(),
             g_SSAOFullScreen.GetSRV(),
         };
 
@@ -332,7 +247,7 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
         s_SsaoCbuffer->Unmap(0, nullptr);
     }
 
-    GfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSignature.Get());
+    GfxContext.GetCommandList()->SetGraphicsRootSignature(m_RootSig.GetSignature());
     GfxContext.GetCommandList()->SetPipelineState(s_SsaoPso.Get());
 
     GfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(0, s_SsaoCbuffer->GetGPUVirtualAddress());
@@ -354,74 +269,9 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
         g_SSAOFullScreen.GetResource(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON));
 
-
-    // first blur - vertical
-    //{
-    //    GfxContext.GetCommandList()->SetComputeRootSignature(s_ComputeRS.Get());
-    //    GfxContext.GetCommandList()->SetPipelineState(s_BlurPso.Get());
-    //
-    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(0, OffsetHandle(0));
-    //
-    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, OffsetHandle(3));
-    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(2, Renderer::g_SSAOUavHeap);
-    //
-    //    GfxContext.GetCommandList()->SetComputeRootConstantBufferView(3, s_SsaoCbuffer->GetGPUVirtualAddress());
-    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 0, 0);
-    //
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-    //        g_SSAOFullScreen.GetResource(), 
-    //        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-    //
-    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-    //        g_SSAOFullScreen.GetResource(), 
-    //        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    //}
-    //GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-    //    g_SSAOUnBlur.GetResource(),
-    //    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON));
-
-    
     GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
         g_SceneDepthBuffer.GetResource(),
         D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-
-
-    //// first blur - horizontal
-    //{
-    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, OffsetHandle(4));
-    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(2, UavHandle);
-    //
-    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 1, 0);
-    //
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-    //
-    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    //}
-    //
-    //// second blur
-    //{
-    //    auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
-    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
-    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 0, 0);
-    //
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-    //
-    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    //}
-    //{
-    //    auto ssaoUnBlurSrvHandle = GetGpuHandle(g_SrvHeap.Get(), (int)DescriptorHeapLayout::SsaoMapHeap);
-    //    GfxContext.GetCommandList()->SetComputeRootDescriptorTable(1, ssaoUnBlurSrvHandle);
-    //    GfxContext.GetCommandList()->SetComputeRoot32BitConstant(4, 1, 0);
-    //
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-    //
-    //    GfxContext.GetCommandList()->Dispatch((g_DisplayWidth + 31) / 32, (g_DisplayHeight + 31) / 32, 1);
-    //    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_SSAOFullScreen.Resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON));
-    //}
-
 }
 
 
@@ -476,9 +326,7 @@ void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
 void SSAO::Shutdown()
 {
     s_SsaoCbuffer.Reset();
-    s_RootSignature.Reset();
     s_SsaoPso.Reset();
-    s_BlurPso.Reset();
 }
 
 void BuildOffsetVectors()

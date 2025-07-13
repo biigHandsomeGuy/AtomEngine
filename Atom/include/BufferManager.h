@@ -11,7 +11,6 @@ namespace Graphics
     extern ColorBuffer g_SceneNormalBuffer;
     extern DepthBuffer g_ShadowBuffer;
     extern ColorBuffer g_SSAOFullScreen;
-    extern ColorBuffer g_SSAOUnBlur;
     extern ColorBuffer g_RandomVectorBuffer;
 
     extern ColorBuffer g_RadianceMap; // cube map with different roughness mip maps

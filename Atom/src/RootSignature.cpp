@@ -72,6 +72,28 @@ void RootSignature::InitStaticSampler(
     }
 }
 
+void RootSignature::InitStaticSampler(const D3D12_STATIC_SAMPLER_DESC& StaticSamplerDesc)
+{
+    assert(m_NumInitializedStaticSamplers < m_NumSamplers);
+    D3D12_STATIC_SAMPLER_DESC& samplerDesc = m_SamplerArray[m_NumInitializedStaticSamplers++];
+
+    samplerDesc.Filter = StaticSamplerDesc.Filter;
+    samplerDesc.AddressU = StaticSamplerDesc.AddressU;
+    samplerDesc.AddressV = StaticSamplerDesc.AddressV;
+    samplerDesc.AddressW = StaticSamplerDesc.AddressW;
+    samplerDesc.MipLODBias = StaticSamplerDesc.MipLODBias;
+    samplerDesc.MaxAnisotropy = StaticSamplerDesc.MaxAnisotropy;
+    samplerDesc.ComparisonFunc = StaticSamplerDesc.ComparisonFunc;
+    samplerDesc.BorderColor = StaticSamplerDesc.BorderColor;
+    samplerDesc.MinLOD = StaticSamplerDesc.MinLOD;
+    samplerDesc.MaxLOD = StaticSamplerDesc.MaxLOD;
+    samplerDesc.ShaderRegister = StaticSamplerDesc.ShaderRegister;
+    samplerDesc.RegisterSpace = StaticSamplerDesc.RegisterSpace;
+    samplerDesc.ShaderVisibility = StaticSamplerDesc.ShaderVisibility;
+
+
+}
+
 void RootSignature::Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAGS Flags)
 {
     if (m_Finalized)

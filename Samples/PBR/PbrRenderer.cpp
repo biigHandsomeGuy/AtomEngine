@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Renderer.h"
+#include "RootSignature.h"
 #include "PbrRenderer.h"
 #include "ConstantBuffers.h"
 #include "GraphicsCommon.h"
@@ -14,26 +15,8 @@
 #include "BufferManager.h"
 #include <dxcapi.h>
 #include <d3d12shader.h>
-#include "CommandContext.h"
-namespace VS
-{
-#include "../CompiledShaders/PBRShadingVS.h"
-#include "../CompiledShaders/SkyBoxVS.h"
-#include "../CompiledShaders/ShadowVS.h"
-#include "../CompiledShaders/DrawNormalsVS.h"
-#include "../CompiledShaders/PostProcessVS.h"
-#include "../CompiledShaders/BloomVS.h"
-}
 
-namespace PS
-{
-#include "../CompiledShaders/PBRShadingPS.h"
-#include "../CompiledShaders/SkyBoxPS.h"
-#include "../CompiledShaders/ShadowPS.h"
-#include "../CompiledShaders/DrawNormalsPS.h"
-#include "../CompiledShaders/PostProcessPS.h"
-#include "../CompiledShaders/BloomPS.h"
-}
+
 
 namespace CS
 {
@@ -49,22 +32,15 @@ namespace CS
 
 namespace
 {
-	ComPtr<ID3D12RootSignature> computeRS;
-	ComPtr<ID3D12PipelineState> cubePso;
-	ComPtr<ID3D12PipelineState> irMapPso;
-	ComPtr<ID3D12PipelineState> spMapPso;
-	ComPtr<ID3D12PipelineState> lutPso;
-	ComPtr<ID3D12PipelineState> mmPso;
-	ComPtr<ID3D12PipelineState> emuPso;
-	ComPtr<ID3D12PipelineState> eavgPso;
+	RootSignature s_IBL_RootSig;
+	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> s_IBL_PSOCache;
 }
 
 using namespace Graphics;
 using namespace Renderer;
 using namespace GameCore;
 using namespace Microsoft::WRL;
-using namespace VS;
-using namespace PS;
+
 using namespace CS;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
@@ -179,13 +155,11 @@ void PbrRenderer::Startup()
 	XMStoreFloat4(&mLightPosW, lightPos);
 	
 	//LoadTextures(gfxContext.GetCommandList());
-	BuildRootSignature();
-	BuildInputLayout();
-	BuildShapeGeometry();
-	g_IBLTexture = TextureManager::LoadHdrFromFile(L"D:/AtomEngine/Atom/Assets/Textures/EnvirMap/sun.hdr");
-	BuildPSOs();
 
-	CreateCubeMap(gfxContext.GetCommandList());
+	BuildInputLayout();
+	g_IBLTexture = TextureManager::LoadHdrFromFile(L"D:/AtomEngine/Atom/Assets/Textures/EnvirMap/sun.hdr");
+
+	PrecomputeCubemaps(gfxContext);
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -243,15 +217,6 @@ void PbrRenderer::Startup()
 
 	gfxContext.Finish(true);
 
-	{
-		computeRS.Reset();
-		cubePso.Reset();
-		irMapPso.Reset();
-		spMapPso.Reset();
-		lutPso.Reset();
-		mmPso.Reset();
-	}
-	
 }
 
 void PbrRenderer::InitResource()
@@ -399,8 +364,8 @@ void PbrRenderer::RenderScene()
 		true, &g_SceneDepthBuffer.GetDSV());
 
 
-	gfxContext.GetCommandList()->SetGraphicsRootSignature(m_RootSignature.Get());
-	gfxContext.GetCommandList()->SetPipelineState(m_PSOs["drawNormals"].Get());
+	gfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSig.GetSignature());
+	gfxContext.GetCommandList()->SetPipelineState(Renderer::m_PSOs["drawNormals"].Get());
 
 
 	{
@@ -499,7 +464,7 @@ void PbrRenderer::RenderScene()
 		m_ShadowPassGlobalConstantsBuffer->Unmap(0, nullptr);
 	}
 
-	gfxContext.GetCommandList()->SetGraphicsRootSignature(m_RootSignature.Get());
+	gfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSig.GetSignature());
 
 	gfxContext.GetCommandList()->SetPipelineState(m_PSOs["shadow_opaque"].Get());
 
@@ -540,7 +505,7 @@ void PbrRenderer::RenderScene()
 
 	
 
-	gfxContext.GetCommandList()->SetGraphicsRootSignature(m_RootSignature.Get());
+	gfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSig.GetSignature());
 	gfxContext.GetCommandList()->SetPipelineState(m_PSOs["opaque"].Get());
 
 	gfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
@@ -557,6 +522,7 @@ void PbrRenderer::RenderScene()
 
 	gfxContext.GetCommandList()->ClearRenderTargetView(
 		g_SceneColorBuffer.GetRTV(), &color.x, 0, nullptr);
+
 	gfxContext.GetCommandList()->ClearDepthStencilView(
 		g_SceneDepthBuffer.GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
@@ -614,7 +580,7 @@ void PbrRenderer::RenderScene()
 		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
 	}   
 
-	// ------------------------- postprocess -----------------------
+	// ------------------------- skybox -----------------------
 	{
 		BYTE* data = nullptr;
 		envMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
@@ -625,7 +591,7 @@ void PbrRenderer::RenderScene()
 
 	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
 
-	gfxContext.GetCommandList()->SetPipelineState(m_PSOs["sky"].Get());
+	gfxContext.GetCommandList()->SetPipelineState(s_SkyboxPSO.Get());
 	m_SkyBox.model.Draw(gfxContext.GetCommandList());
 
 	gfxContext.GetCommandList()->ResourceBarrier(1,
@@ -633,6 +599,8 @@ void PbrRenderer::RenderScene()
 			g_SceneColorBuffer.GetResource(),
 			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE));
 
+
+	// ------------------------- postprocess -----------------------
 	
 	gfxContext.GetCommandList()->OMSetRenderTargets(1,
 		&g_DisplayPlane[g_CurrentBuffer].GetRTV(), true, &g_SceneDepthBuffer.GetDSV());
@@ -760,224 +728,12 @@ void PbrRenderer::UpdateUI()
 	}
 }
 
-
-
-void PbrRenderer::BuildRootSignature()
-{
-	using namespace Renderer;
-	CD3DX12_DESCRIPTOR_RANGE materialSrv;
-	materialSrv.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 0, 0);
-
-	CD3DX12_DESCRIPTOR_RANGE commonSrv;
-	commonSrv.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 10, 0);
-
-
-	CD3DX12_DESCRIPTOR_RANGE postprocessSrv;
-	postprocessSrv.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 20, 0);
-
-	// Root parameter can be a table, root descriptor or root constants.
-	CD3DX12_ROOT_PARAMETER slotRootParameter[kNumRootBindings] = {};
-
-	// Perfomance TIP: Order from most frequent to least frequent.
-	slotRootParameter[kMeshConstants].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	slotRootParameter[kMaterialConstants].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-	slotRootParameter[kMaterialSRVs].InitAsDescriptorTable(1, &materialSrv, D3D12_SHADER_VISIBILITY_PIXEL);
-	slotRootParameter[kCommonSRVs].InitAsDescriptorTable(1, &commonSrv, D3D12_SHADER_VISIBILITY_PIXEL);
-	slotRootParameter[kPostprocessSRVs].InitAsDescriptorTable(1, &postprocessSrv, D3D12_SHADER_VISIBILITY_PIXEL);
-	slotRootParameter[kCommonCBV].InitAsConstantBufferView(1);
-	slotRootParameter[kShaderParams].InitAsConstantBufferView(2, 0, D3D12_SHADER_VISIBILITY_PIXEL);;
-
-
-	auto staticSamplers = GetStaticSamplers();
-	
-	// A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(kNumRootBindings, slotRootParameter,
-		(UINT)staticSamplers.size(), staticSamplers.data(),
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-	// create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
-	ComPtr<ID3DBlob> serializedRootSig = nullptr;
-	ComPtr<ID3DBlob> errorBlob = nullptr;
-	HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-		serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf());
-
-	if(errorBlob != nullptr)
-	{
-		::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-	}
-	ThrowIfFailed(hr);
-
-	ThrowIfFailed(g_Device->CreateRootSignature(
-		0,
-		serializedRootSig->GetBufferPointer(),
-		serializedRootSig->GetBufferSize(),
-		IID_PPV_ARGS(m_RootSignature.GetAddressOf())));
-}
-
-
-
 void PbrRenderer::BuildInputLayout()
 {
-	mInputLayout =
-	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	};
+	
 
 }
 
-void PbrRenderer::BuildShapeGeometry()
-{  
-	
-}
-
-void PbrRenderer::BuildPSOs()
-{
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC basePsoDesc;
-	
-	ZeroMemory(&basePsoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
-	basePsoDesc.InputLayout = { mInputLayout.data(), (UINT)mInputLayout.size() };
-	basePsoDesc.pRootSignature = m_RootSignature.Get();
-	basePsoDesc.VS =
-	{ 
-		g_pPBRShadingVS, 
-		sizeof(g_pPBRShadingVS)
-	};
-	basePsoDesc.PS =
-	{ 
-		g_pPBRShadingPS,
-		sizeof(g_pPBRShadingPS)
-	};
-	basePsoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	// basePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-	basePsoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	basePsoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-	basePsoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-	basePsoDesc.SampleMask = UINT_MAX;
-	basePsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	basePsoDesc.NumRenderTargets = 1;
-	basePsoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	basePsoDesc.SampleDesc.Count = 1;
-	basePsoDesc.SampleDesc.Quality = 0;
-	basePsoDesc.DSVFormat = DepthStencilFormat;
-	
-	//
-	// PSO for opaque objects.
-	//
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc = basePsoDesc;
-	//opaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-	opaquePsoDesc.DepthStencilState.DepthEnable = true;
-	opaquePsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	opaquePsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&m_PSOs["opaque"])));
-	
-	//
-	// PSO for shadow map pass.
-	//
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC smapPsoDesc = basePsoDesc;
-	smapPsoDesc.RasterizerState.DepthBias = 100000;
-	smapPsoDesc.RasterizerState.DepthBiasClamp = 0.0f;
-	smapPsoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
-	smapPsoDesc.pRootSignature = m_RootSignature.Get();
-	smapPsoDesc.VS =
-	{
-		g_pShadowVS,sizeof(g_pShadowVS)
-	};
-	smapPsoDesc.PS =
-	{
-		g_pShadowPS , sizeof(g_pShadowPS)
-	};
-	
-	// Shadow map pass does not have a render target.
-	smapPsoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
-	smapPsoDesc.NumRenderTargets = 0;
-	ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&m_PSOs["shadow_opaque"])));
-  
-
-	//
-	// PSO for drawing normals.
-	//
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC drawNormalsPsoDesc = basePsoDesc;
-	drawNormalsPsoDesc.VS =
-	{
-		g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS)
-	};
-	drawNormalsPsoDesc.PS =
-	{
-		g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS)
-	};
-	drawNormalsPsoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	drawNormalsPsoDesc.SampleDesc.Count = 1;
-	drawNormalsPsoDesc.SampleDesc.Quality = 0;
-	drawNormalsPsoDesc.DSVFormat = DepthStencilFormat;
-	ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&drawNormalsPsoDesc, IID_PPV_ARGS(&m_PSOs["drawNormals"])));
-	
- 
-	//
-	// PSO for sky.
-	//
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC skyPsoDesc = basePsoDesc;
-
-	// The camera is inside the sky sphere, so just turn off culling.
-	skyPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-
-	// Make sure the depth function is LESS_EQUAL and not just LESS.  
-	// Otherwise, the normalized depth values at z = 1 (NDC) will 
-	// fail the depth test if the depth buffer was cleared to 1.
-	skyPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	skyPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	skyPsoDesc.pRootSignature = m_RootSignature.Get();
-	//skyPsoDesc.InputLayout.NumElements = (UINT)mInputLayout_Pos_UV.size();
-	//skyPsoDesc.InputLayout.pInputElementDescs = mInputLayout_Pos_UV.data();
-	skyPsoDesc.VS =
-	{
-		g_pSkyBoxVS,sizeof(g_pSkyBoxVS)
-	};
-	skyPsoDesc.PS =
-	{
-		g_pSkyBoxPS,sizeof(g_pSkyBoxPS)
-	};
-	ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&skyPsoDesc, IID_PPV_ARGS(&m_PSOs["sky"])));
-
-	//
-	// PSO for post process.
-	//
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC ppPsoDesc = basePsoDesc;
-	ppPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-	ppPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	ppPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	ppPsoDesc.pRootSignature = m_RootSignature.Get();
-	ppPsoDesc.VS =
-	{
-		g_pPostProcessVS,sizeof(g_pPostProcessVS)
-	};
-	ppPsoDesc.PS =
-	{
-		g_pPostProcessPS,sizeof(g_pPostProcessPS)
-	};
-	ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&ppPsoDesc, IID_PPV_ARGS(&m_PSOs["postprocess"])));
-
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC bloomPsoDesc = basePsoDesc;
-	bloomPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-	bloomPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	bloomPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	bloomPsoDesc.pRootSignature = m_RootSignature.Get();
-	bloomPsoDesc.VS =
-	{
-		g_pBloomVS,sizeof(g_pBloomVS)
-	};
-	bloomPsoDesc.PS =
-	{
-		g_pBloomPS,sizeof(g_pBloomPS)
-	};
-	ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&bloomPsoDesc, IID_PPV_ARGS(&m_PSOs["bloom"])));
-
-}
 
 #define SrvOffSetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(g_PreComputeSrvHandle, x, CbvSrvUavDescriptorSize)
 #define UavOffSetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(g_PreComputeUavHandle, x, CbvSrvUavDescriptorSize)
@@ -995,44 +751,21 @@ enum UavLayout
 
 #define OffsetDescriptor(x, y) CD3DX12_CPU_DESCRIPTOR_HANDLE(x, y, CbvSrvUavDescriptorSize)
 
-void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
+void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 {
-	
-	// universal conpute root signature
+	auto CmdList = gfxContext.GetCommandList();
 
-	CD3DX12_DESCRIPTOR_RANGE range1 = {};
-	range1.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-	CD3DX12_DESCRIPTOR_RANGE range2 = {};
-	range2.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-	CD3DX12_ROOT_PARAMETER rootParameter[4];
-	rootParameter[0].InitAsDescriptorTable(1, &range1);
-	rootParameter[1].InitAsDescriptorTable(1, &range2);
-	rootParameter[2].InitAsConstants(1, 0);
-	rootParameter[3].InitAsConstants(1, 1);
-	auto staticSamplers = GetStaticSamplers();
-
-	// A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, rootParameter,
-		(UINT)staticSamplers.size(), staticSamplers.data(),
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-	// create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
-	ComPtr<ID3DBlob> serializedRootSig = nullptr;
-	ComPtr<ID3DBlob> errorBlob = nullptr;
-	ThrowIfFailed(D3D12SerializeRootSignature(
-		&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-		serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf()));
-
-	if (errorBlob != nullptr)
-	{
-		::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-	}
-	
-	ThrowIfFailed(g_Device->CreateRootSignature(
-		0,
-		serializedRootSig->GetBufferPointer(),
-		serializedRootSig->GetBufferSize(),
-		IID_PPV_ARGS(&computeRS)));
+	s_IBL_RootSig.Reset(4, 5);
+	s_IBL_RootSig.InitStaticSampler(SamplerLinearWrapDesc);
+	s_IBL_RootSig.InitStaticSampler(SamplerLinearClampDesc);
+	s_IBL_RootSig.InitStaticSampler(SamplerAnisotropicWrapDesc);
+	s_IBL_RootSig.InitStaticSampler(SamplerAnisotropicClampDesc);
+	s_IBL_RootSig.InitStaticSampler(SamplerShadowDesc);
+	s_IBL_RootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1);
+	s_IBL_RootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
+	s_IBL_RootSig[2].InitAsConstants(0, 1);
+	s_IBL_RootSig[3].InitAsConstants(1, 1);
+	s_IBL_RootSig.Finalize(L"s_IBL_RootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 
 	// create cube map compute pso
@@ -1044,14 +777,14 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 			g_pEquirectToCubeCS,sizeof(g_pEquirectToCubeCS)
 		};
 		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-		psoDesc.pRootSignature = computeRS.Get();
-		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&cubePso)));
+		psoDesc.pRootSignature = s_IBL_RootSig.GetSignature();
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_IBL_PSOCache["EquirectToCube"])));
 
 		psoDesc.CS =
 		{
 			g_pGenerateMipMapCS, sizeof(g_pGenerateMipMapCS)
 		};
-		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&mmPso)));
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_IBL_PSOCache["GenerateMipMap"])));
 
 		ID3D12DescriptorHeap* descriptorHeaps[] = { s_TextureHeap.GetHeapPointer()};
 		CmdList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
@@ -1132,8 +865,8 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 			UavSourceCounts, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 
-		CmdList->SetComputeRootSignature(computeRS.Get());
-		CmdList->SetPipelineState(cubePso.Get());
+		CmdList->SetComputeRootSignature(s_IBL_RootSig.GetSignature());
+		CmdList->SetPipelineState(s_IBL_PSOCache["EquirectToCube"].Get());
 
 		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
 			g_EnvirMap.GetResource(),
@@ -1152,7 +885,7 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 
 		//// =======================  Generic MipMap
 		CmdList->SetComputeRootDescriptorTable(0, SrvOffSetHandle(env));
-		CmdList->SetPipelineState(mmPso.Get());
+		CmdList->SetPipelineState(s_IBL_PSOCache["GenerateMipMap"].Get());
 		for (UINT level = 1, size = 256; level < 10; ++level, size /= 2)
 		{
 			
@@ -1184,12 +917,12 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 		   g_pSpecularMapCS,
 		   sizeof(g_pSpecularMapCS)
 		};
-		psoDesc.pRootSignature = computeRS.Get();
+		psoDesc.pRootSignature = s_IBL_RootSig.GetSignature();
 		
-		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&spMapPso)));
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_IBL_PSOCache["PrefilterSpecularMap"])));
 
 		
-		CmdList->SetPipelineState(spMapPso.Get());
+		CmdList->SetPipelineState(s_IBL_PSOCache["PrefilterSpecularMap"].Get());
 		CmdList->SetComputeRootDescriptorTable(0, SrvOffSetHandle(env));
 		
 		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
@@ -1224,11 +957,11 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 			sizeof(g_pIrradianceMapCS)
 		};
 		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-		psoDesc.pRootSignature = computeRS.Get();
-		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&irMapPso)));
+		psoDesc.pRootSignature = s_IBL_RootSig.GetSignature();
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_IBL_PSOCache["PrecomputeIrradianceMap"])));
 		
 		
-		CmdList->SetPipelineState(irMapPso.Get());
+		CmdList->SetPipelineState(s_IBL_PSOCache["PrecomputeIrradianceMap"].Get());
 		
 		CmdList->SetComputeRootDescriptorTable(0, SrvOffSetHandle(env));
 		
@@ -1248,11 +981,11 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 			sizeof(g_pSpecularBRDFCS)
 		};
 		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-		psoDesc.pRootSignature = computeRS.Get();
-		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&lutPso)));
+		psoDesc.pRootSignature = s_IBL_RootSig.GetSignature();
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_IBL_PSOCache["PrecomputeBRDF"])));
 		
 		
-		CmdList->SetPipelineState(lutPso.Get());
+		CmdList->SetPipelineState(s_IBL_PSOCache["PrecomputeBRDF"].Get());
 		
 		CmdList->SetComputeRootDescriptorTable(1, UavOffSetHandle(20));
 		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_LUT.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
@@ -1268,11 +1001,11 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 			sizeof(g_pEmu)
 		};
 		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-		psoDesc.pRootSignature = computeRS.Get();
-		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&emuPso)));
+		psoDesc.pRootSignature = s_IBL_RootSig.GetSignature();
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_IBL_PSOCache["emu"])));
 		
 		
-		CmdList->SetPipelineState(emuPso.Get());
+		CmdList->SetPipelineState(s_IBL_PSOCache["emu"].Get());
 		CmdList->SetComputeRootDescriptorTable(1, UavOffSetHandle(21));
 		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_Emu.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 		CmdList->Dispatch(512 / 32, 512 / 32, 1);
@@ -1287,11 +1020,11 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 			sizeof(g_pEavg)
 		};
 		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-		psoDesc.pRootSignature = computeRS.Get();
-		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&eavgPso)));
+		psoDesc.pRootSignature = s_IBL_RootSig.GetSignature();
+		ThrowIfFailed(g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&s_IBL_PSOCache["eavg"])));
 		
 		
-		CmdList->SetPipelineState(eavgPso.Get());
+		CmdList->SetPipelineState(s_IBL_PSOCache["eavg"].Get());
 		CmdList->SetComputeRootDescriptorTable(1, UavOffSetHandle(22));
 		CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(g_Eavg.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 		CmdList->Dispatch(512 / 32, 512 / 32, 1);
@@ -1300,76 +1033,5 @@ void PbrRenderer::CreateCubeMap(ID3D12GraphicsCommandList* CmdList)
 
 }
 
-
-
-std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> PbrRenderer::GetStaticSamplers()
-{
-	// GameCores usually only need a handful of samplers.  So just define them all up front
-	// and keep them available as part of the root signature.  
-
-	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
-		0, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
-		1, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC linearWrap(
-		2, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC linearClamp(
-		3, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC anisotropicWrap(
-		4, // shaderRegister
-		D3D12_FILTER_ANISOTROPIC, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressW
-		0.0f,                             // mipLODBias
-		8);                               // maxAnisotropy
-
-	const CD3DX12_STATIC_SAMPLER_DESC anisotropicClamp(
-		5, // shaderRegister
-		D3D12_FILTER_ANISOTROPIC, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressW
-		0.0f,                              // mipLODBias
-		8);                                // maxAnisotropy
-
-	const CD3DX12_STATIC_SAMPLER_DESC shadow(
-		6, // shaderRegister
-		D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressW
-		0.0f,                               // mipLODBias
-		16,                                 // maxAnisotropy
-		D3D12_COMPARISON_FUNC_LESS_EQUAL,
-		D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK);
-
-	return { 
-		pointWrap, pointClamp,
-		linearWrap, linearClamp, 
-		anisotropicWrap, anisotropicClamp,
-		shadow 
-	};
-}
 
 

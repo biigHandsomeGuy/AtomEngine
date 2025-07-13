@@ -4,6 +4,7 @@
 
 class DescriptorHeap;
 class DescriptorHandle;
+class RootSignature;
 namespace Renderer
 {
 
@@ -25,7 +26,9 @@ namespace Renderer
     extern DescriptorHandle g_SSAOUavHeap;
     extern DescriptorHandle g_PostprocessHeap;
     extern DescriptorHandle g_NullDescriptor;
-
+    extern RootSignature s_RootSig;
+    extern std::unordered_map<std::string, Microsoft::WRL::ComPtr<ID3D12PipelineState>> m_PSOs;
+    extern Microsoft::WRL::ComPtr<ID3D12PipelineState> s_SkyboxPSO;
     void Initialize(void);
     void Shutdown(void);
     void UpdateGlobalDescriptors(void);

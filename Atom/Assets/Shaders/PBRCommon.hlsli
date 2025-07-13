@@ -41,6 +41,27 @@ float F_Schlick(float3 F0, float cosTheta)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float a = roughness;
+    float k = (a * a) / 2.0;
+
+    float nom = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+}
+float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+
 // Visibility = G2(v,l,a) / (4 * (n,v) * (n,l))
 // see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf
 float V_SmithGGXCorrelated(float NdotL, float NdotV, float AlphaRoughness)
