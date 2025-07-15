@@ -7,7 +7,7 @@
 #include "RootSignature.h"
 #include "GraphicsCommon.h"
 #include "Display.h"
-
+#include "PipelineState.h"
 
 #include "../CompiledShaders/PBRShadingVS.h"
 #include "../CompiledShaders/SkyBoxVS.h"
@@ -37,8 +37,8 @@ namespace Renderer
 	DescriptorHandle g_NullDescriptor;
 
 	RootSignature s_RootSig;
-	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> m_PSOs;
-	ComPtr<ID3D12PipelineState> s_SkyboxPSO;
+	std::unordered_map<std::string, GraphicsPSO> s_PSOs;
+	GraphicsPSO s_SkyboxPSO;
 
 
 	void Initialize(void)
@@ -58,6 +58,10 @@ namespace Renderer
 		s_RootSig[kShaderParams].InitAsConstantBuffer(2);
 		s_RootSig.Finalize(L"RootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
+		DXGI_FORMAT ColorFormat = g_SceneColorBuffer.GetFormat();
+		DXGI_FORMAT DepthFormat = g_SceneDepthBuffer.GetFormat();
+		DXGI_FORMAT NormalFormat = g_SceneNormalBuffer.GetFormat();
+
 
 		D3D12_INPUT_ELEMENT_DESC DefaultInputLayout[] =
 		{
@@ -68,137 +72,65 @@ namespace Renderer
 			{ "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC basePsoDesc = {};
+		// Default PSO
 
-		basePsoDesc.InputLayout = { DefaultInputLayout, _countof(DefaultInputLayout)};
-		basePsoDesc.pRootSignature = s_RootSig.GetSignature();
-		basePsoDesc.VS =
-		{
-			g_pPBRShadingVS,
-			sizeof(g_pPBRShadingVS)
-		};
-		basePsoDesc.PS =
-		{
-			g_pPBRShadingPS,
-			sizeof(g_pPBRShadingPS)
-		};
-		basePsoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		basePsoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		basePsoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-		basePsoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-		basePsoDesc.SampleMask = UINT_MAX;
-		basePsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		basePsoDesc.NumRenderTargets = 1;
-		basePsoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		basePsoDesc.SampleDesc.Count = 1;
-		basePsoDesc.SampleDesc.Quality = 0;
-		basePsoDesc.DSVFormat = DepthStencilFormat;
+		GraphicsPSO defaultPSO(L"Renderer::opaque PSO");
+		defaultPSO.SetRootSignature(s_RootSig);
+		defaultPSO.SetRasterizerState(RasterizerDefault);
+		defaultPSO.SetBlendState(BlendNoColorWrite);
+		defaultPSO.SetDepthStencilState(DepthStateReadWrite);
+		defaultPSO.SetInputLayout(_countof(DefaultInputLayout), DefaultInputLayout);
+		defaultPSO.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+		defaultPSO.SetRenderTargetFormats(1, &ColorFormat, DepthFormat);
+		defaultPSO.SetVertexShader(g_pPBRShadingVS, sizeof(g_pPBRShadingVS));
+		defaultPSO.SetPixelShader(g_pPBRShadingPS, sizeof(g_pPBRShadingPS));
+		defaultPSO.Finalize();
+		s_PSOs["opaque"] = defaultPSO;
 
-		//
-		// PSO for opaque objects.
-		//
+		// shadow map PSO
 
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc = basePsoDesc;
-		//opaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-		opaquePsoDesc.DepthStencilState.DepthEnable = true;
-		opaquePsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		opaquePsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&m_PSOs["opaque"])));
+		GraphicsPSO shadowPSO(L"Renderer::shadow PSO");
+		shadowPSO = defaultPSO;
+		shadowPSO.SetRasterizerState(RasterizerShadow);
+		shadowPSO.SetRenderTargetFormats(0, nullptr, g_ShadowBuffer.GetFormat());
+		shadowPSO.SetVertexShader(g_pShadowVS, sizeof(g_pShadowVS));
+		shadowPSO.SetPixelShader(g_pShadowPS, sizeof(g_pShadowPS));
+		shadowPSO.Finalize();
+		s_PSOs["shadow"] = shadowPSO;
 
-		//
-		// PSO for shadow map pass.
-		//
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC smapPsoDesc = basePsoDesc;
-		smapPsoDesc.RasterizerState.DepthBias = 100000;
-		smapPsoDesc.RasterizerState.DepthBiasClamp = 0.0f;
-		smapPsoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
-		smapPsoDesc.pRootSignature = s_RootSig.GetSignature();
-		smapPsoDesc.VS =
-		{
-			g_pShadowVS,sizeof(g_pShadowVS)
-		};
-		smapPsoDesc.PS =
-		{
-			g_pShadowPS , sizeof(g_pShadowPS)
-		};
-
-		// Shadow map pass does not have a render target.
-		smapPsoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
-		smapPsoDesc.NumRenderTargets = 0;
-		ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&m_PSOs["shadow_opaque"])));
-
-
-		//
-		// PSO for drawing normals.
-		//
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC drawNormalsPsoDesc = basePsoDesc;
-		drawNormalsPsoDesc.VS =
-		{
-			g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS)
-		};
-		drawNormalsPsoDesc.PS =
-		{
-			g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS)
-		};
-		drawNormalsPsoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		drawNormalsPsoDesc.SampleDesc.Count = 1;
-		drawNormalsPsoDesc.SampleDesc.Quality = 0;
-		drawNormalsPsoDesc.DSVFormat = DepthStencilFormat;
-		ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&drawNormalsPsoDesc, IID_PPV_ARGS(&m_PSOs["drawNormals"])));
+		// draw normal PSO
+		GraphicsPSO drawNormalPSO(L"Renderer::drawNormal PSO");
+		drawNormalPSO = defaultPSO;
+		drawNormalPSO.SetRenderTargetFormats(1, &NormalFormat, DepthFormat);
+		drawNormalPSO.SetVertexShader(g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS));
+		drawNormalPSO.SetPixelShader(g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS));
+		drawNormalPSO.Finalize();
+		s_PSOs["drawNormals"] = drawNormalPSO;
 
 
 		//
 		// PSO for sky.
 		//
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC skyPsoDesc = basePsoDesc;
-		skyPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-
-		skyPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		skyPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-		skyPsoDesc.pRootSignature = s_RootSig.GetSignature();
-		skyPsoDesc.VS =
-		{
-			g_pSkyBoxVS,sizeof(g_pSkyBoxVS)
-		};
-		skyPsoDesc.PS =
-		{
-			g_pSkyBoxPS,sizeof(g_pSkyBoxPS)
-		};
-		ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&skyPsoDesc, IID_PPV_ARGS(&s_SkyboxPSO)));
+		
+		s_SkyboxPSO = defaultPSO;
+		s_SkyboxPSO.SetRasterizerState(RasterizerTwoSided);
+		s_SkyboxPSO.SetDepthStencilState(DepthStateReadOnly);
+		s_SkyboxPSO.SetVertexShader(g_pSkyBoxVS, sizeof(g_pSkyBoxVS));
+		s_SkyboxPSO.SetPixelShader(g_pSkyBoxPS, sizeof(g_pSkyBoxPS));
+		s_SkyboxPSO.Finalize();
 
 		//
 		// PSO for post process.
 		//
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC ppPsoDesc = basePsoDesc;
-		ppPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		ppPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		ppPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-		ppPsoDesc.pRootSignature = s_RootSig.GetSignature();
-		ppPsoDesc.VS =
-		{
-			g_pPostProcessVS,sizeof(g_pPostProcessVS)
-		};
-		ppPsoDesc.PS =
-		{
-			g_pPostProcessPS,sizeof(g_pPostProcessPS)
-		};
-		ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&ppPsoDesc, IID_PPV_ARGS(&m_PSOs["postprocess"])));
 
-
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC bloomPsoDesc = basePsoDesc;
-		bloomPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		bloomPsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		bloomPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-		bloomPsoDesc.pRootSignature = s_RootSig.GetSignature();
-		bloomPsoDesc.VS =
-		{
-			g_pBloomVS,sizeof(g_pBloomVS)
-		};
-		bloomPsoDesc.PS =
-		{
-			g_pBloomPS,sizeof(g_pBloomPS)
-		};
-		ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&bloomPsoDesc, IID_PPV_ARGS(&m_PSOs["bloom"])));
+		GraphicsPSO postprocessPSO(L"Renderer::postprocess PSO");
+		postprocessPSO = defaultPSO;
+		postprocessPSO.SetRasterizerState(RasterizerTwoSided);
+		postprocessPSO.SetDepthStencilState(DepthStateReadOnly);
+		postprocessPSO.SetVertexShader(g_pPostProcessVS, sizeof(g_pPostProcessVS));
+		postprocessPSO.SetPixelShader(g_pPostProcessPS, sizeof(g_pPostProcessPS));
+		postprocessPSO.Finalize();
+		s_PSOs["postprocess"] = postprocessPSO;
 
 
 		TextureManager::Initialize(L"");

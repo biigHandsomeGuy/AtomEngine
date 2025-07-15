@@ -13,6 +13,14 @@ namespace Graphics
 	SamplerDesc SamplerShadowDesc;
 
 
+	D3D12_RASTERIZER_DESC RasterizerDefault;
+	D3D12_RASTERIZER_DESC RasterizerTwoSided;
+	D3D12_RASTERIZER_DESC RasterizerShadow;
+
+	D3D12_BLEND_DESC BlendNoColorWrite;
+
+	D3D12_DEPTH_STENCIL_DESC DepthStateReadWrite;
+	D3D12_DEPTH_STENCIL_DESC DepthStateReadOnly; 
 	// UNDONE:(Ã»×ù!)
 
 	
@@ -47,5 +55,47 @@ void Graphics::InitializeCommonState()
 	SamplerShadowDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 	SamplerShadowDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 	SamplerShadowDesc.SetTextureAddressMode(D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+
+
+	// CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	RasterizerDefault.FillMode = D3D12_FILL_MODE_SOLID;
+	RasterizerDefault.CullMode = D3D12_CULL_MODE_BACK;
+	RasterizerDefault.FrontCounterClockwise = FALSE;
+	RasterizerDefault.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+	RasterizerDefault.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+	RasterizerDefault.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+	RasterizerDefault.DepthClipEnable = TRUE;
+	RasterizerDefault.MultisampleEnable = FALSE;
+	RasterizerDefault.AntialiasedLineEnable = FALSE;
+	RasterizerDefault.ForcedSampleCount = 0;
+	RasterizerDefault.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+	RasterizerTwoSided = RasterizerDefault;
+	RasterizerTwoSided.CullMode = D3D12_CULL_MODE_NONE;
+
+	RasterizerShadow = RasterizerDefault;
+	RasterizerShadow.DepthBias = 100000;
+	RasterizerShadow.DepthBiasClamp = 0.0f;
+	RasterizerShadow.SlopeScaledDepthBias = 1.0f;
+
+	BlendNoColorWrite = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+
+	// CD3DX12_DEPTH_STENCIL_DESC(CD3DX12_DEFAULT)
+	DepthStateReadWrite.DepthEnable = TRUE;
+	DepthStateReadWrite.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	DepthStateReadWrite.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+	DepthStateReadWrite.StencilEnable = FALSE;
+	DepthStateReadWrite.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	DepthStateReadWrite.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	DepthStateReadWrite.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	DepthStateReadWrite.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	DepthStateReadWrite.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	DepthStateReadWrite.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	DepthStateReadWrite.BackFace = DepthStateReadWrite.FrontFace;
+
+	DepthStateReadOnly = DepthStateReadWrite;
+	DepthStateReadOnly.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+
 }
 

@@ -5,6 +5,7 @@
 #include "ConstantBuffers.h"
 #include "GraphicsCommon.h"
 #include "GraphicsCore.h"
+#include "PipelineState.h"
 #include <utility>
 #include "stb_image/stb_image.h"
 #include "imgui/imgui.h"
@@ -362,7 +363,7 @@ void PbrRenderer::RenderScene()
 
 
 	gfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSig.GetSignature());
-	gfxContext.GetCommandList()->SetPipelineState(Renderer::m_PSOs["drawNormals"].Get());
+	gfxContext.GetCommandList()->SetPipelineState(s_PSOs["drawNormals"].GetPipelineStateObject());
 
 
 	{
@@ -463,7 +464,7 @@ void PbrRenderer::RenderScene()
 
 	gfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSig.GetSignature());
 
-	gfxContext.GetCommandList()->SetPipelineState(m_PSOs["shadow_opaque"].Get());
+	gfxContext.GetCommandList()->SetPipelineState(s_PSOs["shadow"].GetPipelineStateObject());
 
 
 	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
@@ -503,7 +504,7 @@ void PbrRenderer::RenderScene()
 	
 
 	gfxContext.GetCommandList()->SetGraphicsRootSignature(s_RootSig.GetSignature());
-	gfxContext.GetCommandList()->SetPipelineState(m_PSOs["opaque"].Get());
+	gfxContext.GetCommandList()->SetPipelineState(s_PSOs["opaque"].GetPipelineStateObject());
 
 	gfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
 	
@@ -588,7 +589,7 @@ void PbrRenderer::RenderScene()
 
 	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
 
-	gfxContext.GetCommandList()->SetPipelineState(s_SkyboxPSO.Get());
+	gfxContext.GetCommandList()->SetPipelineState(s_SkyboxPSO.GetPipelineStateObject());
 	m_SkyBox.model.Draw(gfxContext.GetCommandList());
 
 	gfxContext.GetCommandList()->ResourceBarrier(1,
@@ -612,7 +613,7 @@ void PbrRenderer::RenderScene()
 	}
 
 
-	gfxContext.GetCommandList()->SetPipelineState(m_PSOs["postprocess"].Get());
+	gfxContext.GetCommandList()->SetPipelineState(s_PSOs["postprocess"].GetPipelineStateObject());
 
 	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(kMaterialConstants, ppBuffer->GetGPUVirtualAddress());
 
