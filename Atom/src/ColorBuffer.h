@@ -26,6 +26,9 @@ public:
     const D3D12_CPU_DESCRIPTOR_HANDLE& GetSRV(void) const { return m_SRVHandle; }
     const D3D12_CPU_DESCRIPTOR_HANDLE& GetRTV(void) const { return m_RTVHandle; }
     const D3D12_CPU_DESCRIPTOR_HANDLE& GetUAV(void) const { return m_UAVHandle[0]; }
+    const D3D12_CPU_DESCRIPTOR_HANDLE* GetUAVArray(void) const { return m_UAVHandle; }
+    Color GetClearColor(void) const { return m_ClearColor; }
+
 
 protected:
     void CreateDerivedViews(ID3D12Device* device, DXGI_FORMAT format, uint32_t arraySize, uint32_t numMips = 1);

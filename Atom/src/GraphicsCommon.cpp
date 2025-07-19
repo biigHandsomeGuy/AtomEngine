@@ -19,6 +19,7 @@ namespace Graphics
 
 	D3D12_BLEND_DESC BlendNoColorWrite;
 
+	D3D12_DEPTH_STENCIL_DESC DepthStateDisabled;
 	D3D12_DEPTH_STENCIL_DESC DepthStateReadWrite;
 	D3D12_DEPTH_STENCIL_DESC DepthStateReadOnly; 
 	// UNDONE:(Ã»×ù!)
@@ -81,17 +82,24 @@ void Graphics::InitializeCommonState()
 	BlendNoColorWrite = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 
 	// CD3DX12_DEPTH_STENCIL_DESC(CD3DX12_DEFAULT)
+
+	DepthStateDisabled.DepthEnable = FALSE;
+	DepthStateDisabled.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	DepthStateDisabled.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	DepthStateDisabled.StencilEnable = FALSE;
+	DepthStateDisabled.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	DepthStateDisabled.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	DepthStateDisabled.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	DepthStateDisabled.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	DepthStateDisabled.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	DepthStateDisabled.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	DepthStateDisabled.BackFace = DepthStateDisabled.FrontFace;
+
+	DepthStateReadWrite = DepthStateDisabled;
 	DepthStateReadWrite.DepthEnable = TRUE;
 	DepthStateReadWrite.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 	DepthStateReadWrite.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	DepthStateReadWrite.StencilEnable = FALSE;
-	DepthStateReadWrite.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	DepthStateReadWrite.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	DepthStateReadWrite.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	DepthStateReadWrite.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-	DepthStateReadWrite.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	DepthStateReadWrite.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	DepthStateReadWrite.BackFace = DepthStateReadWrite.FrontFace;
+
 
 	DepthStateReadOnly = DepthStateReadWrite;
 	DepthStateReadOnly.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;

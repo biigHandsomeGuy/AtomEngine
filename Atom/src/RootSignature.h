@@ -91,6 +91,8 @@ protected:
 
 class RootSignature
 {
+	friend class DynamicDescriptorHeap;
+
 public:
 	RootSignature(UINT NumRootParams = 0, UINT NumStaticSamplers = 0)
 		:m_Finalized(FALSE), m_NumParameters(NumRootParams), m_NumSamplers(NumStaticSamplers)

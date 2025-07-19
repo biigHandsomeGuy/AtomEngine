@@ -10,6 +10,7 @@
 #include "DescriptorHeap.h"
 #include "RootSignature.h"
 #include "GraphicsCommon.h"
+#include "PipelineState.h"
 
 namespace shader
 {
@@ -28,7 +29,7 @@ namespace
 {
 
     RootSignature m_RootSig;
-    ComPtr<ID3D12PipelineState> s_SsaoPso;
+    GraphicsPSO s_SsaoPso(L"SSAO PSO");
 
     ComPtr<ID3D12Resource> s_RandomVectorMapUploadBuffer;
 
@@ -90,37 +91,21 @@ void SSAO::Initialize()
     m_RootSig[2].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 2);
     m_RootSig[3].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 1);
     m_RootSig.Finalize(L"SSAO_RootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-    //
-    // PSO for SSAO.  
-    //
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC ssaoPsoDesc = {};
 
-    ssaoPsoDesc.InputLayout = { nullptr, 0 };
-    ssaoPsoDesc.pRootSignature = m_RootSig.GetSignature();
-    ssaoPsoDesc.VS =
-    {
-        g_pSsaoVS,sizeof(g_pSsaoVS)
-    };
-    ssaoPsoDesc.PS =
-    {
-        g_pSsaoPS,sizeof(g_pSsaoPS)
-    };
-    ssaoPsoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    ssaoPsoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-    ssaoPsoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-    ssaoPsoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    ssaoPsoDesc.SampleMask = UINT_MAX;
-    ssaoPsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    ssaoPsoDesc.NumRenderTargets = 1;
-    // SSAO effect does not need the depth buffer.
-    ssaoPsoDesc.DepthStencilState.DepthEnable = false;
-    ssaoPsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-    ssaoPsoDesc.RTVFormats[0] = DXGI_FORMAT_R8_UNORM;
-    ssaoPsoDesc.SampleDesc.Count = 1;
-    ssaoPsoDesc.SampleDesc.Quality = 0;
-    ssaoPsoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
-    ThrowIfFailed(g_Device->CreateGraphicsPipelineState(&ssaoPsoDesc, IID_PPV_ARGS(&s_SsaoPso)));
+    DXGI_FORMAT Format = DXGI_FORMAT_R8_UNORM;
 
+    s_SsaoPso.SetRootSignature(m_RootSig);
+    s_SsaoPso.SetRasterizerState(RasterizerDefault);
+    s_SsaoPso.SetBlendState(BlendNoColorWrite);
+    s_SsaoPso.SetDepthStencilState(DepthStateDisabled);
+    s_SsaoPso.SetInputLayout(0, nullptr);
+    s_SsaoPso.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+    s_SsaoPso.SetRenderTargetFormats(1, &Format, DXGI_FORMAT_UNKNOWN);
+    s_SsaoPso.SetVertexShader(g_pSsaoVS, sizeof(g_pSsaoVS));
+    s_SsaoPso.SetPixelShader(g_pSsaoPS, sizeof(g_pSsaoPS));
+    s_SsaoPso.Finalize();
+
+ 
 
     ThrowIfFailed(g_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -140,7 +125,7 @@ void SSAO::Initialize()
 
 #define OffsetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(Renderer::g_SSAOSrvHeap, x, CbvSrvUavDescriptorSize)
 
-void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
+void SSAO::Render(GraphicsContext& GfxContext, const Camera& camera)
 {
     {
 
@@ -216,8 +201,8 @@ void SSAO::Render(CommandContext& GfxContext, const Camera& camera)
         s_SsaoCbuffer->Unmap(0, nullptr);
     }
 
-    GfxContext.GetCommandList()->SetGraphicsRootSignature(m_RootSig.GetSignature());
-    GfxContext.GetCommandList()->SetPipelineState(s_SsaoPso.Get());
+    GfxContext.SetRootSignature(m_RootSig);
+    GfxContext.SetPipelineState(s_SsaoPso);
 
     GfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(0, s_SsaoCbuffer->GetGPUVirtualAddress());
     GfxContext.GetCommandList()->SetGraphicsRoot32BitConstant(1, 0, 0);
@@ -295,7 +280,6 @@ void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
 void SSAO::Shutdown()
 {
     s_SsaoCbuffer.Reset();
-    s_SsaoPso.Reset();
 }
 
 void BuildOffsetVectors()

@@ -50,4 +50,5 @@
 #include <iostream>
 
 #include "d3dUtil.h"
+#include "VectorMath.h"
 

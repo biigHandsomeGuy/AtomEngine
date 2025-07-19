@@ -34,8 +34,7 @@ __declspec(align(256)) struct ShaderParams
 };
 
 TextureRef g_IBLTexture;
-DescriptorHandle g_PreComputeSrvHandle;
-DescriptorHandle g_PreComputeUavHandle;
+
 class PbrRenderer : public GameCore::IGameApp
 {
 public:

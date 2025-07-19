@@ -1,4 +1,3 @@
-
 #include "pch.h"
 #include "Model.h"
 #include "GraphicsCore.h"

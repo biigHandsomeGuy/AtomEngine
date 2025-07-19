@@ -12,8 +12,8 @@ using namespace Graphics;
 using Microsoft::WRL::ComPtr;
 using namespace std;
 
-static map< size_t, ComPtr<ID3D12PipelineState> > s_GraphicsPSOHashMap;
-static map< size_t, ComPtr<ID3D12PipelineState> > s_ComputePSOHashMap;
+static map<size_t, ComPtr<ID3D12PipelineState> > s_GraphicsPSOHashMap;
+static map<size_t, ComPtr<ID3D12PipelineState> > s_ComputePSOHashMap;
 
 void PSO::DestroyAll(void)
 {

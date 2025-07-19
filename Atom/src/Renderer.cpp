@@ -99,6 +99,7 @@ namespace Renderer
 		s_PSOs["shadow"] = shadowPSO;
 
 		// draw normal PSO
+
 		GraphicsPSO drawNormalPSO(L"Renderer::drawNormal PSO");
 		drawNormalPSO = defaultPSO;
 		drawNormalPSO.SetRenderTargetFormats(1, &NormalFormat, DepthFormat);
@@ -108,9 +109,7 @@ namespace Renderer
 		s_PSOs["drawNormals"] = drawNormalPSO;
 
 
-		//
 		// PSO for sky.
-		//
 		
 		s_SkyboxPSO = defaultPSO;
 		s_SkyboxPSO.SetRasterizerState(RasterizerTwoSided);
@@ -119,9 +118,8 @@ namespace Renderer
 		s_SkyboxPSO.SetPixelShader(g_pSkyBoxPS, sizeof(g_pSkyBoxPS));
 		s_SkyboxPSO.Finalize();
 
-		//
+
 		// PSO for post process.
-		//
 
 		GraphicsPSO postprocessPSO(L"Renderer::postprocess PSO");
 		postprocessPSO = defaultPSO;
