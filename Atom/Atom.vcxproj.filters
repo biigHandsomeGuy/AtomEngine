@@ -145,6 +145,19 @@
     <ClInclude Include="src\DepthBuffer.h" />
     <ClInclude Include="src\ShadowBuffer.h" />
     <ClInclude Include="src\SamplerManager.h" />
+    <ClInclude Include="src\DynamicDescriptorHeap.h" />
+    <ClInclude Include="src\Math\Matrix3.h" />
+    <ClInclude Include="src\Math\Matrix4.h" />
+    <ClInclude Include="src\Math\Quaternion.h" />
+    <ClInclude Include="src\Math\Scalar.h" />
+    <ClInclude Include="src\Math\Transform.h" />
+    <ClInclude Include="src\Math\Vector.h" />
+    <ClInclude Include="src\VectorMath.h" />
+    <ClInclude Include="src\Math\BoundingBox.h" />
+    <ClInclude Include="src\Math\BoundingPlane.h" />
+    <ClInclude Include="src\Math\BoundingSphere.h" />
+    <ClInclude Include="src\Math\Frustum.h" />
+    <ClInclude Include="src\Math\Random.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -204,7 +217,7 @@
     <ClCompile Include="src\Texture.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\CommandContex.cpp">
+    <ClCompile Include="src\CommandContext.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\Renderer.cpp" />
@@ -214,6 +227,11 @@
     <ClCompile Include="src\PixelBuffer.cpp" />
     <ClCompile Include="src\ColorBuffer.cpp" />
     <ClCompile Include="src\DepthBuffer.cpp" />
+    <ClCompile Include="src\DynamicDescriptorHeap.cpp" />
+    <ClCompile Include="src\Color.cpp" />
+    <ClCompile Include="src\Math\BoundingSphere.cpp" />
+    <ClCompile Include="src\Math\Frustum.cpp" />
+    <ClCompile Include="src\Math\Random.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">
@@ -292,5 +310,7 @@
     <None Include="Assets\Shaders\PBRCommon.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
+    <None Include="src\Functions.inl" />
+    <None Include="src\Math\Functions.inl" />
   </ItemGroup>
 </Project>

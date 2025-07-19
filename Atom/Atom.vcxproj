@@ -60,7 +60,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>DX_BUILD_DLL;ATOM_PLATFORM_WINDOWS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;include;Vendor\tinyobjloader;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;src;Vendor\tinyobjloader;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -79,7 +79,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>DX_BUILD_DLL;ATOM_PLATFORM_WINDOWS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;include;Vendor\assimp\build\include;Vendor\tinyobjloader;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>Vendor\spdlog\include;Vendor;Vendor\stb_image;src;Vendor\assimp\build\include;Vendor\tinyobjloader;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>MaxSpeed</Optimization>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -100,6 +100,7 @@
     <ClInclude Include="src\d3dApp.h" />
     <ClInclude Include="src\DepthBuffer.h" />
     <ClInclude Include="src\DescriptorHeap.h" />
+    <ClInclude Include="src\DynamicDescriptorHeap.h" />
     <ClInclude Include="src\GameCore.h" />
     <ClInclude Include="src\Camera.h" />
     <ClInclude Include="src\CommandAllocatorPool.h" />
@@ -120,7 +121,18 @@
     <ClInclude Include="src\Log.h" />
     <ClInclude Include="src\Material.h" />
     <ClInclude Include="src\MathHelper.h" />
+    <ClInclude Include="src\Math\BoundingBox.h" />
+    <ClInclude Include="src\Math\BoundingPlane.h" />
+    <ClInclude Include="src\Math\BoundingSphere.h" />
     <ClInclude Include="src\Math\Common.h" />
+    <ClInclude Include="src\Math\Frustum.h" />
+    <ClInclude Include="src\Math\Matrix3.h" />
+    <ClInclude Include="src\Math\Matrix4.h" />
+    <ClInclude Include="src\Math\Quaternion.h" />
+    <ClInclude Include="src\Math\Random.h" />
+    <ClInclude Include="src\Math\Scalar.h" />
+    <ClInclude Include="src\Math\Transform.h" />
+    <ClInclude Include="src\Math\Vector.h" />
     <ClInclude Include="src\Mesh.h" />
     <ClInclude Include="src\Model.h" />
     <ClInclude Include="src\pch.h" />
@@ -136,16 +148,22 @@
     <ClInclude Include="src\Texture.h" />
     <ClInclude Include="src\TextureManager.h" />
     <ClInclude Include="src\UploadBuffer.h" />
+    <ClCompile Include="src\Color.cpp" />
     <ClCompile Include="src\ColorBuffer.cpp" />
     <ClCompile Include="src\DepthBuffer.cpp" />
+    <ClCompile Include="src\DynamicDescriptorHeap.cpp" />
     <ClCompile Include="src\GraphicsCommon.cpp" />
     <ClCompile Include="src\LinearAllocator.cpp" />
+    <ClCompile Include="src\Math\BoundingSphere.cpp" />
+    <ClCompile Include="src\Math\Frustum.cpp" />
+    <ClCompile Include="src\Math\Random.cpp" />
     <ClCompile Include="src\PixelBuffer.cpp" />
     <ClCompile Include="src\Renderer.cpp" />
     <ClCompile Include="src\BufferManager.cpp" />
-    <ClCompile Include="src\CommandContex.cpp" />
+    <ClCompile Include="src\CommandContext.cpp" />
     <ClCompile Include="src\DescriptorHeap.cpp" />
     <ClCompile Include="src\Display.cpp" />
+    <ClInclude Include="src\VectorMath.h" />
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h" />
     <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h" />
   </ItemGroup>
@@ -532,6 +550,8 @@
   <ItemGroup>
     <None Include="Assets\Shaders\Common.hlsli" />
     <None Include="Assets\Shaders\PBRCommon.hlsli" />
+    <None Include="src\Functions.inl" />
+    <None Include="src\Math\Functions.inl" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="Vendor\imgui\Imgui.vcxproj">
