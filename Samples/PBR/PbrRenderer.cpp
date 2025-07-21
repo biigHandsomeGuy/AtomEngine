@@ -316,52 +316,27 @@ void PbrRenderer::Update(float gt)
 	Renderer::UpdateGlobalDescriptors();
 }
 
-
+void Postprocess();
 void PbrRenderer::RenderScene()
 {
 	GraphicsContext& gfxContext = GraphicsContext::Begin(L"Scene Render");
 
-	ID3D12DescriptorHeap* descriptorHeaps[] = { s_TextureHeap.GetHeapPointer() };
-	gfxContext.GetCommandList()->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+	gfxContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, s_TextureHeap.GetHeapPointer());
 
-	gfxContext.GetCommandList()->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(g_DisplayPlane[g_CurrentBuffer].GetResource(),
-		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
+	gfxContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	gfxContext.GetCommandList()->RSSetViewports(1, &g_ViewPort);
-	gfxContext.GetCommandList()->RSSetScissorRects(1, &g_Rect);
-
-
+	gfxContext.SetViewportAndScissor(g_ViewPort, g_Rect);
 
 	// ------------------------------------------ Z PrePass -------------------------------------------------
 
 	
-	
-	gfxContext.GetCommandList()->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_SceneNormalBuffer.GetResource(),
-			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET));
+	gfxContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-	gfxContext.GetCommandList()->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_SceneDepthBuffer.GetResource(),
-			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+	gfxContext.ClearColor(g_SceneNormalBuffer);
+	gfxContext.ClearDepthAndStencil(g_SceneDepthBuffer);
 
-	// Clear the screen normal map and depth buffer.
-	static XMFLOAT4 color = XMFLOAT4(0, 0, 0, 0);
-	gfxContext.GetCommandList()->ClearRenderTargetView(
-		g_SceneNormalBuffer.GetRTV(),
-		&color.x, 0, nullptr);
-
-	gfxContext.GetCommandList()->ClearDepthStencilView(
-		g_SceneDepthBuffer.GetDSV(),
-		D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
-		1.0f, 0, 0, nullptr);
-
-	// Specify the buffers we are going to render to.
-	gfxContext.GetCommandList()->OMSetRenderTargets(1,
-		&g_SceneNormalBuffer.GetRTV(),
-		true, &g_SceneDepthBuffer.GetDSV());
+	gfxContext.SetRenderTarget(g_SceneNormalBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
 
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_PSOs["drawNormals"]);
@@ -387,10 +362,8 @@ void PbrRenderer::RenderScene()
 		memcpy(data, &m_LightPassGlobalConstants, GlobalConstantsBufferSize);
 		m_LightPassGlobalConstantsBuffer->Unmap(0, nullptr);
 	}
+	gfxContext.SetConstantBuffer(kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
 
-
-	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
-		kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
@@ -404,35 +377,20 @@ void PbrRenderer::RenderScene()
 			memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
 			m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
 		}
-		gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
-			kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
+		gfxContext.SetConstantBuffer(kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
 
 		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
 	}
-	gfxContext.GetCommandList()->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_SceneNormalBuffer.GetResource(),
-			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON));
-
-	
+	gfxContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_COMMON);
 
 	// --------------------------------- Shadow Map ----------------------------------
 	
 
-	gfxContext.GetCommandList()->ResourceBarrier(1, 
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_ShadowBuffer.GetResource(),
-		D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+	gfxContext.TransitionResource(g_ShadowBuffer,D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
+	gfxContext.ClearDepthAndStencil(g_ShadowBuffer);
 
-	gfxContext.GetCommandList()->ClearDepthStencilView(
-		g_ShadowBuffer.GetDSV(),
-		D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 
-		1.0f, 0, 0, nullptr);
-
-	gfxContext.GetCommandList()->OMSetRenderTargets(
-		0, nullptr, false, &g_ShadowBuffer.GetDSV());
-
+	gfxContext.SetDepthStencilTarget(g_ShadowBuffer.GetDSV());
 
 	{
 		XMVECTOR lightPos = XMLoadFloat4(&mLightPosW);
@@ -467,8 +425,7 @@ void PbrRenderer::RenderScene()
 	gfxContext.SetPipelineState(s_PSOs["shadow"]);
 
 
-	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
-		kCommonCBV, m_ShadowPassGlobalConstantsBuffer->GetGPUVirtualAddress());
+	gfxContext.SetConstantBuffer(kCommonCBV, m_ShadowPassGlobalConstantsBuffer->GetGPUVirtualAddress());
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
@@ -482,16 +439,12 @@ void PbrRenderer::RenderScene()
 			m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
 		}
 
-		gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
-			kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
+		gfxContext.SetConstantBuffer(kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
 		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
 
 	}
 
-	gfxContext.GetCommandList()->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_ShadowBuffer.GetResource(),
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON));
+	gfxContext.TransitionResource(g_ShadowBuffer, D3D12_RESOURCE_STATE_COMMON);
 
 	
 	
@@ -512,23 +465,13 @@ void PbrRenderer::RenderScene()
 	gfxContext.GetCommandList()->RSSetScissorRects(1, &g_Rect);
 
 
-	gfxContext.GetCommandList()->ResourceBarrier(1, 
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_SceneColorBuffer.GetResource(),
-		D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET));
+	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
+	gfxContext.ClearColor(g_SceneColorBuffer);
+	gfxContext.ClearDepthAndStencil(g_SceneDepthBuffer);
+	gfxContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
 
-	gfxContext.GetCommandList()->ClearRenderTargetView(
-		g_SceneColorBuffer.GetRTV(), &color.x, 0, nullptr);
-
-	gfxContext.GetCommandList()->ClearDepthStencilView(
-		g_SceneDepthBuffer.GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-
-	gfxContext.GetCommandList()->OMSetRenderTargets(1, 
-		&g_SceneColorBuffer.GetRTV(), true, &g_SceneDepthBuffer.GetDSV());
-
-	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
-		kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
+	gfxContext.SetConstantBuffer(kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
 
 	
 	{        
@@ -539,7 +482,7 @@ void PbrRenderer::RenderScene()
 		shaderParamsCbuffer->Unmap(0, nullptr);
 		
 	}
-	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
+	gfxContext.SetConstantBuffer(
 		kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
@@ -570,9 +513,9 @@ void PbrRenderer::RenderScene()
 			memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
 			m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
 		}
-		gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
+		gfxContext.SetConstantBuffer(
 			kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
-		gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(
+		gfxContext.SetConstantBuffer(
 			kMaterialConstants, m_MaterialConstantsBuffers[i]->GetGPUVirtualAddress());
 
 		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
@@ -587,21 +530,16 @@ void PbrRenderer::RenderScene()
 		envMapBuffer->Unmap(0, nullptr);
 	}
 
-	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
+	gfxContext.SetConstantBuffer(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
 	gfxContext.SetRootSignature(s_RootSig);
-	gfxContext.GetCommandList()->SetPipelineState(s_SkyboxPSO.GetPipelineStateObject());
+	gfxContext.SetPipelineState(s_SkyboxPSO);
 	m_SkyBox.model.Draw(gfxContext.GetCommandList());
 
-	gfxContext.GetCommandList()->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_SceneColorBuffer.GetResource(),
-			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE));
+	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 
 	// ------------------------- postprocess -----------------------
-	
-	gfxContext.GetCommandList()->OMSetRenderTargets(1,
-		&g_DisplayPlane[g_CurrentBuffer].GetRTV(), true, &g_SceneDepthBuffer.GetDSV());
+	gfxContext.SetRenderTarget(g_DisplayPlane[g_CurrentBuffer].GetRTV(), g_SceneDepthBuffer.GetDSV());
 
 	
 	{
@@ -615,43 +553,33 @@ void PbrRenderer::RenderScene()
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_PSOs["postprocess"]);
 
-
-	gfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(kMaterialConstants, ppBuffer->GetGPUVirtualAddress());
-
+	gfxContext.SetConstantBuffer(kMaterialConstants, ppBuffer->GetGPUVirtualAddress());
 	g_Device->CopyDescriptorsSimple(1, g_PostprocessHeap, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	gfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
 
-	gfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kPostprocessSRVs, Renderer::g_PostprocessHeap);
-
-	gfxContext.GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	
-	gfxContext.GetCommandList()->DrawInstanced(4, 1, 0, 0);
+	gfxContext.SetDescriptorTable(kPostprocessSRVs, g_PostprocessHeap);
+	//gfxContext.SetDynamicDescriptor(kPostprocessSRVs, 0, g_SceneColorBuffer.GetSRV());
+	gfxContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	gfxContext.DrawInstanced(4, 1, 0, 0);
 
 	ImGui::Render();
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), gfxContext.GetCommandList());
 
 
-	gfxContext.GetCommandList()->ResourceBarrier(1, 
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_SceneDepthBuffer.GetResource(),
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COMMON));
+	gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_COMMON);
 
-	gfxContext.GetCommandList()->ResourceBarrier(1, 
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_DisplayPlane[g_CurrentBuffer].GetResource(),
-		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+	gfxContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_PRESENT);
 	
-	gfxContext.GetCommandList()->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			g_SceneColorBuffer.GetResource(),
-			D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON));
+	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_COMMON);
 
 
 	gfxContext.Finish(true);
 }
 
+void Postprocess()
+{
 
+}
 
 void PbrRenderer::UpdateUI()
 {

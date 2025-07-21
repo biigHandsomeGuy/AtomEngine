@@ -59,19 +59,9 @@ private:
 
 
 private:
-
-    std::unordered_map<std::string, ComPtr<ID3DBlob>> m_Shaders;
-    std::unordered_map<std::string, std::unique_ptr<Texture>> m_Textures;
-    
-    std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
-
-    CD3DX12_GPU_DESCRIPTOR_HANDLE mNullSrv;
-
     Camera m_Camera;
 
-
     DirectX::BoundingSphere mSceneBounds;
-
 
     XMFLOAT4 mLightPosW;
     XMFLOAT4X4 mShadowTransform = MathHelper::Identity4x4();

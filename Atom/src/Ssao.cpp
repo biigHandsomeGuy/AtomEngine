@@ -148,25 +148,15 @@ void SSAO::Render(GraphicsContext& GfxContext, const Camera& camera)
     s_ViewPort = { 0,0,g_DisplayWidth / 2.0f,g_DisplayHeight / 2.0f,0,1 };
     s_Rect = { 0,0,(long)g_DisplayWidth / 2,(long)g_DisplayHeight / 2 };
 
-    GfxContext.GetCommandList()->RSSetViewports(1, &s_ViewPort);
-    GfxContext.GetCommandList()->RSSetScissorRects(1, &s_Rect);
+    GfxContext.SetViewportAndScissor(s_ViewPort, s_Rect);
 
+    GfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
+    GfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
-    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        g_SSAOFullScreen.GetResource(),
-        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET));
+    GfxContext.ClearColor(g_SSAOFullScreen);
 
-    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        g_SceneDepthBuffer.GetResource(),
-        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE));
-
-
-    float clearValue[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    GfxContext.GetCommandList()->ClearRenderTargetView(g_SSAOFullScreen.GetRTV(), clearValue, 0, nullptr);
-
-    // Specify the buffers we are going to render to.
-    GfxContext.GetCommandList()->OMSetRenderTargets(1, &g_SSAOFullScreen.GetRTV(), true, nullptr);
+    GfxContext.SetRenderTarget(g_SSAOFullScreen.GetRTV());
 
   
     {
@@ -204,28 +194,20 @@ void SSAO::Render(GraphicsContext& GfxContext, const Camera& camera)
     GfxContext.SetRootSignature(m_RootSig);
     GfxContext.SetPipelineState(s_SsaoPso);
 
-    GfxContext.GetCommandList()->SetGraphicsRootConstantBufferView(0, s_SsaoCbuffer->GetGPUVirtualAddress());
-    GfxContext.GetCommandList()->SetGraphicsRoot32BitConstant(1, 0, 0);
+    GfxContext.SetConstantBuffer(0, s_SsaoCbuffer->GetGPUVirtualAddress());
+    GfxContext.SetConstant(1, 0, 0);
 
     // Bind the normal and depth maps.
-    GfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(2, OffsetHandle(0));
+    GfxContext.SetDescriptorTable(2, OffsetHandle(0));
+    GfxContext.SetDescriptorTable(3, OffsetHandle(2));
 
-    GfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(3, OffsetHandle(2));
 
+    GfxContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    GfxContext.DrawInstanced(6, 1, 0, 0);
 
-    // Draw fullscreen quad.
-    GfxContext.GetCommandList()->IASetVertexBuffers(0, 0, nullptr);
-    GfxContext.GetCommandList()->IASetIndexBuffer(nullptr);
-    GfxContext.GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    GfxContext.GetCommandList()->DrawInstanced(6, 1, 0, 0);
+    GfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_COMMON);
 
-    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        g_SSAOFullScreen.GetResource(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON));
-
-    GfxContext.GetCommandList()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        g_SceneDepthBuffer.GetResource(),
-        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+    GfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 }
 
 

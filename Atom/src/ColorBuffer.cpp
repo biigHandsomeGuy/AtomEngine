@@ -116,7 +116,6 @@ void ColorBuffer::Create(const std::wstring& Name, uint32_t Width, uint32_t Heig
     ClearValue.Color[2] = m_ClearColor.B();
     ClearValue.Color[3] = m_ClearColor.A();
 
-
     CreateTextureResource(Graphics::g_Device, Name, ResourceDesc, ClearValue);
     CreateDerivedViews(Graphics::g_Device, Format, 1, NumMips);
 }
