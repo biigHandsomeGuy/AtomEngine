@@ -14,8 +14,9 @@ TextureCube gIrradianceMap : register(t12);
 Texture2D gSsaoMap : register(t13);
 Texture2D gShadowMap : register(t14);
 Texture2D<float2> gLUTMap : register(t15);
-Texture2D gEmu : register(t16);
-Texture2D gEavg : register(t17);
+Texture2D<float4> gSSSLUTMap : register(t16);
+Texture2D gEmu : register(t17);
+Texture2D gEavg : register(t18);
 
 cbuffer MaterialConstants : register(b0)
 {
@@ -43,6 +44,10 @@ cbuffer ShaderParams : register(b2)
     float3 Albedo;
     float Metallic;
     bool UseEmu;
+    bool UseSSS;
+    float Intensity;
+    float Thickness;
+    float Strength;
 };
 static const float3 g_Fdielectric = 0.04;
 
@@ -57,6 +62,16 @@ struct VertexOut
     float3 Normal : NORMAL;
     float3 Tangent : TANGENT;
 };
+
+float3 GetFakeSSS(float3 normal, float3 lightDir, float3 worldPos, float intensity, float thickness)
+{ 
+    float NdotL = dot(normal, lightDir);
+    float t = (1.0 - thickness) * saturate(dot(-normal, lightDir));
+    float cuv = length(fwidth(normal)) / length(fwidth(worldPos));
+    float3 dif = gSSSLUTMap.Sample(gsamLinearClamp, float2(NdotL + t, intensity * cuv));
+
+    return dif * (1 + t);
+}
 
 // Returns number of mipmap levels for specular IBL environment map.
 uint querySpecularTextureLevels()
@@ -99,7 +114,7 @@ float4 main(VertexOut pin) : SV_Target
         N = normalize(pin.Normal);
         //return float4(N, 1);
     }
-    
+    N = normalize(pin.Normal);
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.PosW);
     
@@ -166,7 +181,14 @@ float4 main(VertexOut pin) : SV_Target
             //if(UseEmu)
                // BRDF += (Fms);
 		    // Total contribution for this light.
-            directLighting += BRDF * Lradiance * NoL;
+            
+            float2 uv = float2(NoL * 0.5 + 0.5, 1/R);
+            float3 sss = GetFakeSSS(N, Li, pin.PosW, Intensity, Thickness);
+            //float3 sss = gSSSLUTMap.Sample(gsamLinearWrap, uv);
+            directLighting = BRDF * Lradiance * NoL;
+            if (UseSSS)
+                directLighting = lerp(directLighting, sss, Strength);
+
         }
     }
 

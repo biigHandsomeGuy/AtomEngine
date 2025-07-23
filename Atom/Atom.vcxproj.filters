@@ -302,6 +302,7 @@
     </FxCompile>
     <FxCompile Include="Assets\Shaders\Emu.hlsl" />
     <FxCompile Include="Assets\Shaders\Eavg.hlsl" />
+    <FxCompile Include="Assets\Shaders\PreIntegralSSSCS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Shaders\Common.hlsli">

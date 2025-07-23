@@ -31,6 +31,11 @@ __declspec(align(256)) struct ShaderParams
     float metallic = 0;
     bool UseEmu;
     char pad3[3]{ 0,0,0 };
+    bool UseSSS;
+    char pad4[3]{ 0,0,0 };
+    float Intensity = {};
+    float Thickness = {};
+    float S = {};
 };
 
 TextureRef g_IBLTexture;

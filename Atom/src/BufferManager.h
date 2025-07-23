@@ -20,6 +20,8 @@ namespace Graphics
     extern ColorBuffer g_Emu;
     extern ColorBuffer g_Eavg;
 
+    extern ColorBuffer g_SSSLut;
+
     void InitializeRenderingBuffers(uint32_t NativeWidth, uint32_t NativeHeight);
     void ResizeDisplayDependentBuffers(uint32_t NativeWidth, uint32_t NativeHeight);
     void DestroyRenderingBuffers();

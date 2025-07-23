@@ -28,6 +28,7 @@ namespace CS
 #include "../CompiledShaders/GenerateMipMapCS.h"
 #include "../CompiledShaders/Emu.h"
 #include "../CompiledShaders/Eavg.h"
+#include "../CompiledShaders/PreIntegralSSSCS.h"
 
 }
 
@@ -190,11 +191,11 @@ void PbrRenderer::Startup()
 	Model skyBox, pbrModel, pbrModel2;
 
 	skyBox.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
+	pbrModel.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/suzanze.obj"), g_Device, gfxContext.GetCommandList());
 	//pbrModel2.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device, gfxContext.GetCommandList());
 
 	pbrModel.modelMatrix = XMMatrixRotationY(-80);
-	pbrModel.modelMatrix *= XMMatrixScaling(0.3, 0.3, 0.3);
+	pbrModel.modelMatrix *= XMMatrixScaling(2, 2, 2);
 	pbrModel2.modelMatrix = XMMatrixScaling(4, 4, 4);
 	pbrModel2.modelMatrix *= XMMatrixTranslation(0, -2, 0);
 
@@ -620,6 +621,14 @@ void PbrRenderer::UpdateUI()
 		ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);       
 		ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);       
 		ImGui::Checkbox("UseEmu", &m_ShaderAttribs.UseEmu);       
+
+		if (ImGui::Checkbox("UseSSS", &m_ShaderAttribs.UseSSS))
+		{
+			
+		}
+		ImGui::SliderFloat("Intensity", &m_ShaderAttribs.Intensity, 1, 10);
+		ImGui::SliderFloat("Trickness", &m_ShaderAttribs.Thickness, 0, 1);
+		ImGui::SliderFloat("S", &m_ShaderAttribs.S, 0, 1);
 		if (m_ShaderAttribs.UseTexture == false)
 		{
 			ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
@@ -637,7 +646,7 @@ void PbrRenderer::UpdateUI()
 			// ImGui::SliderFloat("SurfaceEpsilon",&ssaoCB.SurfaceEpsilon, 0.0f, 1.0f);
 		}
 
-		
+		ImGui::Image(ImTextureID(CD3DX12_CPU_DESCRIPTOR_HANDLE(m_CommonTextures,  6, CbvSrvUavDescriptorSize).ptr), ImVec2(256, 256));
 
 		if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
 		  counter++;
@@ -698,6 +707,10 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 	s_IBL_PSOCache["eavg"].SetRootSignature(s_IBL_RootSig);
 	s_IBL_PSOCache["eavg"].SetComputeShader(g_pEavg, sizeof(g_pEavg));
 	s_IBL_PSOCache["eavg"].Finalize();
+
+	s_IBL_PSOCache["PreintegralSSS"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PreintegralSSS"].SetComputeShader(g_pPreIntegralSSSCS, sizeof(g_pPreIntegralSSSCS));
+	s_IBL_PSOCache["PreintegralSSS"].Finalize();
 
 	{
 
@@ -802,6 +815,15 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		GfxContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
 		GfxContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	}
+
+	{
+		GfxContext.SetPipelineState(s_IBL_PSOCache["PreintegralSSS"]);
+
+		GfxContext.SetDynamicDescriptor(1, 0, g_SSSLut.GetUAV());
+		GfxContext.TransitionResource(g_SSSLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
+		GfxContext.TransitionResource(g_SSSLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 	GfxContext.Finish();
 }

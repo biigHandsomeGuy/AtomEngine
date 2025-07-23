@@ -135,7 +135,7 @@ namespace Renderer
 
 		s_TextureHeap.Create(L"Scene Texture Descriptors", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128);
 
-		m_CommonTextures = s_TextureHeap.Alloc(8);
+		m_CommonTextures = s_TextureHeap.Alloc(9);
 		g_PostprocessHeap = s_TextureHeap.Alloc();
 
 		g_NullDescriptor = s_TextureHeap.Alloc();
@@ -148,8 +148,8 @@ namespace Renderer
 		desc.Texture2D.ResourceMinLODClamp = 0;
 		g_Device->CreateShaderResourceView(nullptr, &desc, g_NullDescriptor);
 
-		uint32_t DestCount = 8;
-		uint32_t SourceCounts[] = { 1, 1, 1, 1, 1, 1, 1, 1};
+		uint32_t DestCount = 9;
+		uint32_t SourceCounts[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 
 		D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[] =
@@ -160,6 +160,7 @@ namespace Renderer
 			g_SSAOFullScreen.GetSRV(),
 			g_ShadowBuffer.GetDepthSRV(),
 			g_LUT.GetSRV(),
+			g_SSSLut.GetSRV(),
 			g_Emu.GetSRV(),
 			g_Eavg.GetSRV(),
 		};
