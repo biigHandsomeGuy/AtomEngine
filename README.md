@@ -17,6 +17,8 @@
 - [ ] Depth of Field
 - [ ] Motion Blur
 - [ ] MultiThread
+- [x] Pre-integral SSS
+- [ ] SSSS
 
 #### Refrence
 
