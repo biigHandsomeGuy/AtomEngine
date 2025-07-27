@@ -65,11 +65,14 @@ struct VertexOut
 
 float3 GetFakeSSS(float3 normal, float3 lightDir, float3 worldPos, float intensity, float thickness)
 { 
-    float NdotL = dot(normal, lightDir);
-    float t = (1.0 - thickness) * saturate(dot(-normal, lightDir));
-    float cuv = length(fwidth(normal)) / length(fwidth(worldPos));
-    float3 dif = gSSSLUTMap.Sample(gsamLinearClamp, float2(NdotL + t, intensity * cuv));
+    float NdotL = saturate(dot(normal, lightDir));
+    float backscatter = saturate(dot(-normal, lightDir));
+    float t = (1.0 - thickness) * backscatter;
 
+    float sssU = saturate(0.5 * NdotL + 0.5);   // 横轴: 法线与光线夹角
+    float sssV = saturate(t * intensity);       // 纵轴: 散射强度（调节）
+    
+    float3 dif = gSSSLUTMap.Sample(gsamAnisotropicClamp, float2(sssU, sssV));
     return dif * (1 + t);
 }
 
@@ -180,14 +183,15 @@ float4 main(VertexOut pin) : SV_Target
             float3 BRDF = diffuseBRDF + specularBRDF;
             //if(UseEmu)
                // BRDF += (Fms);
-		    // Total contribution for this light.
+
             
-            float2 uv = float2(NoL * 0.5 + 0.5, 1/R);
-            float3 sss = GetFakeSSS(N, Li, pin.PosW, Intensity, Thickness);
-            //float3 sss = gSSSLUTMap.Sample(gsamLinearWrap, uv);
+            float invR = saturate(Intensity*length(fwidth(pin.Normal)) * 0.05 / length(fwidth(pin.PosW)));
+            float3 dif = gSSSLUTMap.Sample(gsamLinearClamp, float2(0.5*NoL + 0.5, invR));
+
+            dif *= float3(1.0, 0.5, 0.4); // 红色偏移
             directLighting = BRDF * Lradiance * NoL;
             if (UseSSS)
-                directLighting = lerp(directLighting, sss, Strength);
+                directLighting = lerp(directLighting, dif, Strength);
 
         }
     }

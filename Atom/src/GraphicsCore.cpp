@@ -39,7 +39,7 @@ namespace Graphics
 		{		
 			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
 			debugController->EnableDebugLayer();
-			debugController->SetEnableGPUBasedValidation(true);
+			debugController->SetEnableGPUBasedValidation(false);
 		}
 #endif
 		Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;

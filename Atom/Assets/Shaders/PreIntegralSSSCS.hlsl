@@ -39,10 +39,9 @@ void main(uint2 ThreadID : SV_DispatchThreadID)
         //weight = float3(0.3, 0.9, 0.5);
         scatteringFactor += saturate(cos(x + theta)).xxx * weight;
         normalizationFactor += weight;
-        
     }
     float3 result = scatteringFactor / normalizationFactor;
-    result = pow(result, 1 / 2.2);
+    //result = pow(result, 1 / 2.2);
     LUT[ThreadID] = float4(result, 1.0f);
 
 }

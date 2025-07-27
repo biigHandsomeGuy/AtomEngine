@@ -49,15 +49,6 @@ using namespace DirectX::PackedVector;
 
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) 
 {
-#if defined(DEBUG) || defined(_DEBUG) 
-	AllocConsole();
-
-	FILE* fp;
-	freopen_s(&fp, "CONOUT$", "w", stdout);
-	freopen_s(&fp, "CONOUT$", "w", stderr);
-	freopen_s(&fp, "CONIN$", "r", stdin);
-#endif
-
 	return GameCore::RunApplication(PbrRenderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
 }
 
@@ -191,11 +182,11 @@ void PbrRenderer::Startup()
 	Model skyBox, pbrModel, pbrModel2;
 
 	skyBox.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/suzanze.obj"), g_Device, gfxContext.GetCommandList());
+	pbrModel.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/head.obj"), g_Device, gfxContext.GetCommandList());
 	//pbrModel2.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device, gfxContext.GetCommandList());
 
-	pbrModel.modelMatrix = XMMatrixRotationY(-80);
-	pbrModel.modelMatrix *= XMMatrixScaling(2, 2, 2);
+	pbrModel.modelMatrix = XMMatrixRotationY(45);
+	pbrModel.modelMatrix *= XMMatrixScaling(8, 8, 8);
 	pbrModel2.modelMatrix = XMMatrixScaling(4, 4, 4);
 	pbrModel2.modelMatrix *= XMMatrixTranslation(0, -2, 0);
 
@@ -205,12 +196,9 @@ void PbrRenderer::Startup()
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
 	//m_Scene.Models.push_back(std::move(pbrModel2));
-
 	m_MeshConstants.resize(m_Scene.Models.size());
-	m_MeshConstantsBuffers.resize(m_Scene.Models.size());
 	m_MaterialConstants.resize(m_Scene.Models.size());
-	m_MaterialConstantsBuffers.resize(m_Scene.Models.size());
-	InitResource();
+
 	mSceneBounds.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	mSceneBounds.Radius = 15;
 
@@ -220,88 +208,6 @@ void PbrRenderer::Startup()
 
 }
 
-void PbrRenderer::InitResource()
-{
-	
-	shaderParamBufferSize = sizeof(ShaderParams);
-
-	ThrowIfFailed(g_Device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(shaderParamBufferSize),
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(shaderParamsCbuffer.GetAddressOf())
-	));
-
-	
-	PostProcessBufferSize = sizeof(EnvMapRenderer::RenderAttribs);
-
-	ThrowIfFailed(g_Device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(PostProcessBufferSize),
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(ppBuffer.GetAddressOf())
-	));
-
-   
-	EnvMapAttribsBufferSize = sizeof(EnvMapRenderer::RenderAttribs);
-
-	ThrowIfFailed(g_Device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(EnvMapAttribsBufferSize),
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(envMapBuffer.GetAddressOf())
-	));
-
-
-	ThrowIfFailed(g_Device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(GlobalConstantsBufferSize),
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(m_LightPassGlobalConstantsBuffer.GetAddressOf())
-	));
-
-	ThrowIfFailed(g_Device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(GlobalConstantsBufferSize),
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(m_ShadowPassGlobalConstantsBuffer.GetAddressOf())
-	));
-
-	for (int i = 0; i < m_Scene.Models.size(); i++)
-	{
-		ThrowIfFailed(g_Device->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3DX12_RESOURCE_DESC::Buffer(MeshConstantsBufferSize),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_MeshConstantsBuffers[i].GetAddressOf())
-		));
-	}
-
-
-	for (int i = 0; i < m_Scene.Models.size(); i++)
-	{
-		ThrowIfFailed(g_Device->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3DX12_RESOURCE_DESC::Buffer(MaterialConstantsBufferSize),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_MaterialConstantsBuffers[i].GetAddressOf())
-		));
-	}
-}
 
 
 void PbrRenderer::OnResize()
@@ -317,20 +223,17 @@ void PbrRenderer::Update(float gt)
 	Renderer::UpdateGlobalDescriptors();
 }
 
-void Postprocess();
 void PbrRenderer::RenderScene()
 {
 	GraphicsContext& gfxContext = GraphicsContext::Begin(L"Scene Render");
 
 	gfxContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, s_TextureHeap.GetHeapPointer());
+	gfxContext.SetViewportAndScissor(g_ViewPort, g_Rect);
 
 	gfxContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	gfxContext.SetViewportAndScissor(g_ViewPort, g_Rect);
-
 	// ------------------------------------------ Z PrePass -------------------------------------------------
 
-	
 	gfxContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
@@ -338,16 +241,11 @@ void PbrRenderer::RenderScene()
 	gfxContext.ClearDepthAndStencil(g_SceneDepthBuffer);
 
 	gfxContext.SetRenderTarget(g_SceneNormalBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
-
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_PSOs["drawNormals"]);
 
 
 	{
-		BYTE* data = nullptr;
-		m_LightPassGlobalConstantsBuffer->Map(0,
-			nullptr, reinterpret_cast<void**>(&data));
-
 		XMMATRIX view = m_Camera.GetView();
 		XMMATRIX proj = m_Camera.GetProj();
 		XMMATRIX viewProj = XMMatrixMultiply(view, proj);
@@ -359,11 +257,8 @@ void PbrRenderer::RenderScene()
 		m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition3f();
 		m_LightPassGlobalConstants.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z };
 
-
-		memcpy(data, &m_LightPassGlobalConstants, GlobalConstantsBufferSize);
-		m_LightPassGlobalConstantsBuffer->Unmap(0, nullptr);
 	}
-	gfxContext.SetConstantBuffer(kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
+	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
@@ -371,14 +266,8 @@ void PbrRenderer::RenderScene()
 		{
 			XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
 			XMStoreFloat4x4(&m_MeshConstants[i].NormalMatrix, m_Scene.Models[i].normalMatrix);
-
-			BYTE* data = nullptr;
-			m_MeshConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-			memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
-			m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
 		}
-		gfxContext.SetConstantBuffer(kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
+		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
 		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
 	}
@@ -413,34 +302,20 @@ void PbrRenderer::RenderScene()
 
 		XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
 		XMStoreFloat4x4(&m_ShadowPassGlobalConstants.ProjMatrix, lightProj);
-
-
-		BYTE* data = nullptr;
-		ThrowIfFailed(m_ShadowPassGlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
-
-		memcpy(data, &m_ShadowPassGlobalConstants, GlobalConstantsBufferSize);
-		m_ShadowPassGlobalConstantsBuffer->Unmap(0, nullptr);
 	}
 
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_PSOs["shadow"]);
 
-
-	gfxContext.SetConstantBuffer(kCommonCBV, m_ShadowPassGlobalConstantsBuffer->GetGPUVirtualAddress());
+	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_ShadowPassGlobalConstants);
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
-		{
-			XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
+		
+		XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
 
-			BYTE* data = nullptr;
-			m_MeshConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
+		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
-			memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
-			m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
-		}
-
-		gfxContext.SetConstantBuffer(kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
 		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
 
 	}
@@ -453,9 +328,6 @@ void PbrRenderer::RenderScene()
 	SSAO::Render(gfxContext, m_Camera);
 
 	// ----------------------------------- Render Color ------------------------------
-
-
-	
 
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_PSOs["opaque"]);
@@ -472,29 +344,16 @@ void PbrRenderer::RenderScene()
 	gfxContext.ClearDepthAndStencil(g_SceneDepthBuffer);
 	gfxContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
 
-	gfxContext.SetConstantBuffer(kCommonCBV, m_LightPassGlobalConstantsBuffer->GetGPUVirtualAddress());
+	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 
 	
-	{        
-		BYTE* data = nullptr;
-		shaderParamsCbuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-		//m_ShaderAttribs.roughness *= 0.5;
-		memcpy(data, &m_ShaderAttribs, shaderParamBufferSize);
-		shaderParamsCbuffer->Unmap(0, nullptr);
-		
-	}
-	gfxContext.SetConstantBuffer(
-		kShaderParams, shaderParamsCbuffer->GetGPUVirtualAddress());
+
+	gfxContext.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &m_ShaderAttribs);
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		{
-			BYTE* data = nullptr;
-			m_MaterialConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
 			m_MaterialConstants[i].gMatIndex = i;
-			memcpy(data, &m_MaterialConstants[i].gMatIndex, MaterialConstantsBufferSize);
-			m_MaterialConstantsBuffers[i]->Unmap(0, nullptr);
 
 		}
 		{
@@ -508,30 +367,16 @@ void PbrRenderer::RenderScene()
 			XMMATRIX viewProjTex = m_Camera.GetView() * m_Camera.GetProj() * T;
 			XMStoreFloat4x4(&m_MeshConstants[i].ViewProjTex, viewProjTex);
 
-			BYTE* data = nullptr;
-			m_MeshConstantsBuffers[i]->Map(0, nullptr, reinterpret_cast<void**>(&data));
-
-			memcpy(data, &m_MeshConstants[i].ModelMatrix, MeshConstantsBufferSize);
-			m_MeshConstantsBuffers[i]->Unmap(0, nullptr);
 		}
-		gfxContext.SetConstantBuffer(
-			kMeshConstants, m_MeshConstantsBuffers[i]->GetGPUVirtualAddress());
-		gfxContext.SetConstantBuffer(
-			kMaterialConstants, m_MaterialConstantsBuffers[i]->GetGPUVirtualAddress());
+		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
+		gfxContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_MaterialConstants[i]);
 
 		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
 	}   
 
-	// ------------------------- skybox -----------------------
-	{
-		BYTE* data = nullptr;
-		envMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
 
-		memcpy(data, &m_EnvMapAttribs, EnvMapAttribsBufferSize);
-		envMapBuffer->Unmap(0, nullptr);
-	}
+	gfxContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_EnvMapAttribs);
 
-	gfxContext.SetConstantBuffer(kMaterialConstants, envMapBuffer->GetGPUVirtualAddress());
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_SkyboxPSO);
 	m_SkyBox.model.Draw(gfxContext.GetCommandList());
@@ -543,23 +388,15 @@ void PbrRenderer::RenderScene()
 	gfxContext.SetRenderTarget(g_DisplayPlane[g_CurrentBuffer].GetRTV(), g_SceneDepthBuffer.GetDSV());
 
 	
-	{
-		BYTE* data = nullptr;
-		ppBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data));
-	
-		memcpy(data, &m_ppAttribs, PostProcessBufferSize);
-		ppBuffer->Unmap(0, nullptr);
-	}
-
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_PSOs["postprocess"]);
 
-	gfxContext.SetConstantBuffer(kMaterialConstants, ppBuffer->GetGPUVirtualAddress());
+	gfxContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(EnvMapRenderer::RenderAttribs), &m_ppAttribs);
+
 	g_Device->CopyDescriptorsSimple(1, g_PostprocessHeap, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 
 	gfxContext.SetDescriptorTable(kPostprocessSRVs, g_PostprocessHeap);
-	//gfxContext.SetDynamicDescriptor(kPostprocessSRVs, 0, g_SceneColorBuffer.GetSRV());
 	gfxContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	gfxContext.DrawInstanced(4, 1, 0, 0);
 
@@ -568,18 +405,11 @@ void PbrRenderer::RenderScene()
 
 
 	gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_COMMON);
-
 	gfxContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_PRESENT);
-	
 	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_COMMON);
 
 
 	gfxContext.Finish(true);
-}
-
-void Postprocess()
-{
-
 }
 
 void PbrRenderer::UpdateUI()
@@ -587,27 +417,16 @@ void PbrRenderer::UpdateUI()
 	// Start the Dear ImGui frame
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-
-	static bool show_demo_window = false;
-	static bool show_another_window = false;
- 
-	if (show_demo_window)
-		ImGui::ShowDemoWindow(&show_demo_window);
-	static int b = 0;
-	
+	ImGui::NewFrame();	
 	{
 		static float f = 0.0f;
 		static int counter = 0;
 
-		ImGui::Begin("debug");                          // Create a window called "Hello, world!" and append into it.
+		ImGui::Begin("debug");
  
-		ImGui::Text("Welcome to my renderer!");               // Display some text (you can use a format strings too)
-		ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-		ImGui::Checkbox("Another Window", &show_another_window);
-
-		ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-		ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+		ImGui::Text("Welcome to my renderer!");
+		ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
+		ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
 		ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
 		ImGui::Checkbox("UseReinhard", &m_ppAttribs.reinhard);
 		ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
@@ -636,24 +455,9 @@ void PbrRenderer::UpdateUI()
 			ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 
 		   
-		}
-		if (m_ShaderAttribs.UseSSAO == true)
-		{
-			// // Coordinates given in view space.
-			// ImGui::SliderFloat("OcclusionRadius",&ssaoCB.OcclusionRadius, 0.0f, 1.0f);
-			// ImGui::SliderFloat("OcclusionFadeStart",&ssaoCB.OcclusionFadeStart, 0.0f, 1.0f);
-			// ImGui::SliderFloat("OcclusionFadeEnd",&ssaoCB.OcclusionFadeEnd, 0.0f, 1.0f);
-			// ImGui::SliderFloat("SurfaceEpsilon",&ssaoCB.SurfaceEpsilon, 0.0f, 1.0f);
-		}
-
-		ImGui::Image(ImTextureID(CD3DX12_CPU_DESCRIPTOR_HANDLE(m_CommonTextures,  6, CbvSrvUavDescriptorSize).ptr), ImVec2(256, 256));
-
-		if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-		  counter++;
+		}	
 		ImGui::SameLine();
 		ImGui::Text("counter = %d", counter);
-
-
 
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
@@ -662,6 +466,8 @@ void PbrRenderer::UpdateUI()
 		ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 		ImGui::End();
 	}
+	// ImGui::Image(ImTextureID(CD3DX12_CPU_DESCRIPTOR_HANDLE(m_CommonTextures, 6, CbvSrvUavDescriptorSize).ptr), ImVec2(256, 256));
+
 }
 
 void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
@@ -827,6 +633,3 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 	}
 	GfxContext.Finish();
 }
-
-
-

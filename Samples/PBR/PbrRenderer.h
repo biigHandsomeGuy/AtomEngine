@@ -52,8 +52,7 @@ public:
     void OnResize() override;
     void Startup() override;
     void Cleanup()override {};
-    // init all resource
-    void InitResource();
+
 private:
     virtual void Update(float gt)override;
     virtual void RenderScene()override;
@@ -75,39 +74,16 @@ private:
 
     XMFLOAT3 mRotatedLightDirections[3];
 
-    BYTE* data = nullptr;
 
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
     PostProcess::RenderAttribs m_ppAttribs;
-    
-    // ComPtr<ID3D12Resource> m_
-    ComPtr<ID3D12Resource> m_ShadowPassGlobalConstantsBuffer;
-    ComPtr<ID3D12Resource> m_LightPassGlobalConstantsBuffer;
-    std::vector<ComPtr<ID3D12Resource>> m_MaterialConstantsBuffers;
+
     GlobalConstants m_ShadowPassGlobalConstants = {};
     GlobalConstants m_LightPassGlobalConstants = {};
     std::vector<MeshConstants> m_MeshConstants;
-    std::vector<ComPtr<ID3D12Resource>> m_MeshConstantsBuffers;
 
-    std::vector <MaterialConstants> m_MaterialConstants;
-
-    const UINT64 GlobalConstantsBufferSize = sizeof(GlobalConstants);
-    const UINT64 MeshConstantsBufferSize = sizeof(MeshConstants);
-    const UINT64 MaterialConstantsBufferSize = sizeof(MaterialConstants);
-
-    // shaderParameter cbuffer
-    ComPtr<ID3D12Resource> shaderParamsCbuffer;
-    // Post Process
-    ComPtr<ID3D12Resource> ppBuffer;
-    // material cbuffer
-    ComPtr<ID3D12Resource> envMapBuffer;
-
-    UINT64 shaderParamBufferSize = 0;
-
-    UINT64 PostProcessBufferSize = 0;
-    UINT64 EnvMapAttribsBufferSize = 0;
-
+    std::vector<MaterialConstants> m_MaterialConstants;
 
     Scene m_Scene;
     SkyBox m_SkyBox;
