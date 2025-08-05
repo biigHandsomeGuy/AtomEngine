@@ -187,7 +187,10 @@
     <ClCompile Include="src\MathHelper.cpp" />
     <ClCompile Include="src\Ssao.cpp" />
     <ClCompile Include="src\d3dUtil.cpp" />
-    <ClCompile Include="Vendor\tinyobjloader\tiny_obj_loader.cc" />
+    <ClCompile Include="Vendor\tinyobjloader\tiny_obj_loader.cc">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\BloomPS.hlsl">
