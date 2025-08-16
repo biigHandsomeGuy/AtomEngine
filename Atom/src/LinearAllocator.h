@@ -1,15 +1,3 @@
-//
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY
-// IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR
-// PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.
-//
-// Developed by Minigraph
-//
-// Author:  James Stanard 
-//
 // Description:  This is a dynamic graphics memory allocator for DX12.  It's designed to work in concert
 // with the CommandContext class and to do so in a thread-safe manner.  There may be many command contexts,
 // each with its own linear allocators.  They act as windows into a global memory pool by reserving a
