@@ -25,8 +25,8 @@ namespace Graphics
 	ColorBuffer g_Emu;
 	ColorBuffer g_Eavg;
 
-	ColorBuffer g_SSSLut;
-	
+	ColorBuffer g_SSSDiffuseLut;
+	ColorBuffer g_SSSSpecularLut;
 }
 
 void Graphics::InitializeRenderingBuffers(uint32_t bufferWidth, uint32_t bufferHeight)
@@ -44,7 +44,8 @@ void Graphics::InitializeRenderingBuffers(uint32_t bufferWidth, uint32_t bufferH
 	g_LUT.Create(L"Specular BRDF", 512, 512, 1, DXGI_FORMAT_R16G16_FLOAT);
 	g_Emu.Create(L"emu", 512, 512, 1, DXGI_FORMAT_R32_FLOAT);
 	g_Eavg.Create(L"eavg", 512, 512, 1, DXGI_FORMAT_R32_FLOAT);
-	g_SSSLut.Create(L"Pre-integral SSS", 512, 512, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
+	g_SSSDiffuseLut.Create(L"Pre-integral diffuse SSS", 512, 512, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
+	g_SSSSpecularLut.Create(L"Pre-integral specular SSS", 512, 512, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
 }
 
 void Graphics::ResizeDisplayDependentBuffers(uint32_t bufferWidth, uint32_t bufferHeight)

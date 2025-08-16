@@ -28,7 +28,8 @@ namespace CS
 #include "../CompiledShaders/GenerateMipMapCS.h"
 #include "../CompiledShaders/Emu.h"
 #include "../CompiledShaders/Eavg.h"
-#include "../CompiledShaders/PreIntegralSSSCS.h"
+#include "../CompiledShaders/PreIntegralDiffuseSSSCS.h"
+#include "../CompiledShaders/PreIntegralSpecularSSSCS.h"
 
 }
 
@@ -445,28 +446,24 @@ void PbrRenderer::UpdateUI()
 		{
 			
 		}
-		ImGui::SliderFloat("Intensity", &m_ShaderAttribs.Intensity, 1, 10);
-		ImGui::SliderFloat("Trickness", &m_ShaderAttribs.Thickness, 0, 1);
-		ImGui::SliderFloat("S", &m_ShaderAttribs.S, 0, 1);
+		ImGui::SliderFloat("CurveFactor", &m_ShaderAttribs.CurveFactor, 0, 10);
+		ImGui::SliderFloat("SpecularFactor", &m_ShaderAttribs.SpecularFactor, 0, 1);
 		if (m_ShaderAttribs.UseTexture == false)
 		{
 			ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
-			ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-			ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-
-		   
+			ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);
+			ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);
 		}	
 		ImGui::SameLine();
 		ImGui::Text("counter = %d", counter);
 
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
-		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
 		ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 		ImGui::End();
 	}
-	// ImGui::Image(ImTextureID(CD3DX12_CPU_DESCRIPTOR_HANDLE(m_CommonTextures, 6, CbvSrvUavDescriptorSize).ptr), ImVec2(256, 256));
 
 }
 
@@ -514,9 +511,13 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 	s_IBL_PSOCache["eavg"].SetComputeShader(g_pEavg, sizeof(g_pEavg));
 	s_IBL_PSOCache["eavg"].Finalize();
 
-	s_IBL_PSOCache["PreintegralSSS"].SetRootSignature(s_IBL_RootSig);
-	s_IBL_PSOCache["PreintegralSSS"].SetComputeShader(g_pPreIntegralSSSCS, sizeof(g_pPreIntegralSSSCS));
-	s_IBL_PSOCache["PreintegralSSS"].Finalize();
+	s_IBL_PSOCache["PreintegralDiffuseSSS"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PreintegralDiffuseSSS"].SetComputeShader(g_pPreIntegralDiffuseSSSCS, sizeof(g_pPreIntegralDiffuseSSSCS));
+	s_IBL_PSOCache["PreintegralDiffuseSSS"].Finalize();
+
+	s_IBL_PSOCache["PreintegralSpecularSSS"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PreintegralSpecularSSS"].SetComputeShader(g_pPreIntegralSpecularSSSCS, sizeof(g_pPreIntegralSpecularSSSCS));
+	s_IBL_PSOCache["PreintegralSpecularSSS"].Finalize();
 
 	{
 
@@ -624,12 +625,21 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 	}
 
 	{
-		GfxContext.SetPipelineState(s_IBL_PSOCache["PreintegralSSS"]);
+		GfxContext.SetPipelineState(s_IBL_PSOCache["PreintegralDiffuseSSS"]);
 
-		GfxContext.SetDynamicDescriptor(1, 0, g_SSSLut.GetUAV());
-		GfxContext.TransitionResource(g_SSSLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		GfxContext.SetDynamicDescriptor(1, 0, g_SSSDiffuseLut.GetUAV());
+		GfxContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
-		GfxContext.TransitionResource(g_SSSLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		GfxContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	}
+
+	{
+		GfxContext.SetPipelineState(s_IBL_PSOCache["PreintegralSpecularSSS"]);
+
+		GfxContext.SetDynamicDescriptor(1, 0, g_SSSSpecularLut.GetUAV());
+		GfxContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
+		GfxContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 	GfxContext.Finish();
 }

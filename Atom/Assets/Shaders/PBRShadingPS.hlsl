@@ -14,9 +14,10 @@ TextureCube gIrradianceMap : register(t12);
 Texture2D gSsaoMap : register(t13);
 Texture2D gShadowMap : register(t14);
 Texture2D<float2> gLUTMap : register(t15);
-Texture2D<float4> gSSSLUTMap : register(t16);
-Texture2D gEmu : register(t17);
-Texture2D gEavg : register(t18);
+Texture2D<float4> gSSSDiffuseLUTMap : register(t16);
+Texture2D<float4> gSSSSpecularLUTMap : register(t17);
+Texture2D gEmu : register(t18);
+Texture2D gEavg : register(t19);
 
 cbuffer MaterialConstants : register(b0)
 {
@@ -45,9 +46,8 @@ cbuffer ShaderParams : register(b2)
     float Metallic;
     bool UseEmu;
     bool UseSSS;
-    float Intensity;
-    float Thickness;
-    float Strength;
+    float CurveFactor;
+    float SpecularFactor;
 };
 static const float3 g_Fdielectric = 0.04;
 
@@ -62,19 +62,6 @@ struct VertexOut
     float3 Normal : NORMAL;
     float3 Tangent : TANGENT;
 };
-
-float3 GetFakeSSS(float3 normal, float3 lightDir, float3 worldPos, float intensity, float thickness)
-{ 
-    float NdotL = saturate(dot(normal, lightDir));
-    float backscatter = saturate(dot(-normal, lightDir));
-    float t = (1.0 - thickness) * backscatter;
-
-    float sssU = saturate(0.5 * NdotL + 0.5);   // 横轴: 法线与光线夹角
-    float sssV = saturate(t * intensity);       // 纵轴: 散射强度（调节）
-    
-    float3 dif = gSSSLUTMap.Sample(gsamAnisotropicClamp, float2(sssU, sssV));
-    return dif * (1 + t);
-}
 
 // Returns number of mipmap levels for specular IBL environment map.
 uint querySpecularTextureLevels()
@@ -169,6 +156,26 @@ float4 main(VertexOut pin) : SV_Target
 		    // Cook-Torrance specular microfacet BRDF.
             float3 specularBRDF = (F * D * G);
             
+            if (!UseSSS)
+            {
+                float3 BRDF = diffuseBRDF + specularBRDF;
+                directLighting = BRDF * Lradiance * NoL;
+            }
+            else
+            {
+                float invR = saturate(CurveFactor * length(fwidth(pin.Normal)) / length(fwidth(pin.PosW)));
+                float3 subsurfaceDiffuse = gSSSDiffuseLUTMap.Sample(gsamLinearClamp, float2(0.5 * NoL + 0.5, invR));
+                //    float PH = pow(2.0 * texture(KelemenLUT,vec2(NoH, _smooth)).r, 10.0 );
+                //    float F = 0.028;//fresnelReflectance( H, viewDir, 0.028 );
+                //    vec3 specular = vec3(max( PH * F / dot( _h, _h ), 0 ) * _SpecularScale);
+                
+                float subsurfaceSpecular = pow(gSSSSpecularLUTMap.Sample(gsamLinearClamp, float2(0.5 * NoH + 0.5, roughness)), 1).r;
+                float frSpec = max(subsurfaceSpecular * F / dot(Lh, Lh), 0);
+                directLighting = subsurfaceDiffuse * albedo * Lradiance + 
+                                    subsurfaceSpecular * Lradiance * NoL * SpecularFactor;
+
+            }
+            
             //float3 EmuL = gEmu.Sample(gsamAnisotropicClamp, float2(NoL, roughness)).rrr;
             //float3 EmuV = gEmu.Sample(gsamAnisotropicClamp, float2(NoV, roughness)).rrr;
             //
@@ -180,18 +187,10 @@ float4 main(VertexOut pin) : SV_Target
             //float OneMinusEavg = 1.0 - E_avg;
             //float3 Fms = (1.0 - EmuL) * (1.0 - EmuV) * OneMinusEavg * Favg / (PI * OneMinusEavg * (1.0 - Favg * E_avg));
             
-            float3 BRDF = diffuseBRDF + specularBRDF;
+            
+            // I think this effect(in my engine) is wrong
             //if(UseEmu)
                // BRDF += (Fms);
-
-            
-            float invR = saturate(Intensity*length(fwidth(pin.Normal)) * 0.05 / length(fwidth(pin.PosW)));
-            float3 dif = gSSSLUTMap.Sample(gsamLinearClamp, float2(0.5*NoL + 0.5, invR));
-
-            dif *= float3(1.0, 0.5, 0.4); // 红色偏移
-            directLighting = BRDF * Lradiance * NoL;
-            if (UseSSS)
-                directLighting = lerp(directLighting, dif, Strength);
 
         }
     }

@@ -33,9 +33,8 @@ __declspec(align(256)) struct ShaderParams
     char pad3[3]{ 0,0,0 };
     bool UseSSS;
     char pad4[3]{ 0,0,0 };
-    float Intensity = {};
-    float Thickness = {};
-    float S = {};
+    float CurveFactor = {};
+    float SpecularFactor = {};
 };
 
 TextureRef g_IBLTexture;
