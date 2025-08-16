@@ -3,7 +3,8 @@
 
 ![](./screenshot/pbr.jpg)
 > pbr
-
+![](./screenshot/skin.png)
+> skin shading
 
 #### TODO
 - [x] PBR
