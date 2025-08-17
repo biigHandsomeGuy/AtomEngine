@@ -142,6 +142,7 @@
     <ClInclude Include="src\RootSignature.h" />
     <ClInclude Include="src\SamplerManager.h" />
     <ClInclude Include="src\Scene.h" />
+    <ClInclude Include="src\Scene\Scene.h" />
     <ClInclude Include="src\ShadowBuffer.h" />
     <ClInclude Include="src\SkyBox.h" />
     <ClInclude Include="src\Ssao.h" />
@@ -164,6 +165,7 @@
     <ClCompile Include="src\DescriptorHeap.cpp" />
     <ClCompile Include="src\Display.cpp" />
     <ClInclude Include="src\VectorMath.h" />
+    <ClInclude Include="Vendor\entt\entt.hpp" />
     <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h" />
     <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h" />
   </ItemGroup>
@@ -178,6 +180,7 @@
     </ClCompile>
     <ClCompile Include="src\PipelineState.cpp" />
     <ClCompile Include="src\RootSignature.cpp" />
+    <ClCompile Include="src\Scene\Scene.cpp" />
     <ClCompile Include="src\Texture.cpp" />
     <ClCompile Include="src\TextureManager.cpp" />
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp" />

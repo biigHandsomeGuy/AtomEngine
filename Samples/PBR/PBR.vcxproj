@@ -95,6 +95,9 @@
     <ProjectReference Include="..\..\Atom\Atom.vcxproj">
       <Project>{56b0827c-42e7-830d-ebd3-6910d7e9ff0e}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\Atom\Vendor\imgui\ImGui.vcxproj">
+      <Project>{62b952dd-82cf-461e-b97d-60dfea4249be}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -73,7 +73,6 @@ private:
 
     XMFLOAT3 mRotatedLightDirections[3];
 
-
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
     PostProcess::RenderAttribs m_ppAttribs;
@@ -86,6 +85,7 @@ private:
 
     Scene m_Scene;
     SkyBox m_SkyBox;
+    DescriptorHandle m_BackBufferHandle[3];
 };
 
 namespace

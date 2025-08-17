@@ -158,6 +158,8 @@
     <ClInclude Include="src\Math\BoundingSphere.h" />
     <ClInclude Include="src\Math\Frustum.h" />
     <ClInclude Include="src\Math\Random.h" />
+    <ClInclude Include="Vendor\entt\entt.hpp" />
+    <ClInclude Include="src\Scene\Scene.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
@@ -232,6 +234,7 @@
     <ClCompile Include="src\Math\BoundingSphere.cpp" />
     <ClCompile Include="src\Math\Frustum.cpp" />
     <ClCompile Include="src\Math\Random.cpp" />
+    <ClCompile Include="src\Scene\Scene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">

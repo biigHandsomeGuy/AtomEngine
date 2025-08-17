@@ -41,13 +41,12 @@ namespace
 
 using namespace Graphics;
 using namespace Renderer;
-using namespace GameCore;
 using namespace Microsoft::WRL;
 
 using namespace CS;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
-
+float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) 
 {
 	return GameCore::RunApplication(PbrRenderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
@@ -158,27 +157,55 @@ void PbrRenderer::Startup()
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_IsSRGB;
-	auto size = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	DescriptorHandle ImGuiHandle[3] = { Renderer::s_TextureHeap.Alloc(),
-	Renderer::s_TextureHeap.Alloc(), 
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
+	//io.ConfigViewportsNoAutoMerge = true;
+	//io.ConfigViewportsNoTaskBarIcon = true;
+
+	// Setup Dear ImGui style
+	ImGui::StyleColorsDark();
+	//ImGui::StyleColorsLight();
+
+	// Setup scaling
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
+	style.FontScaleDpi = main_scale;        // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
+	io.ConfigDpiScaleFonts = true;          // [Experimental] Automatically overwrite style.FontScaleDpi in Begin() when Monitor DPI changes. This will scale fonts but _NOT_ scale sizes/padding for now.
+	io.ConfigDpiScaleViewports = true;      // [Experimental] Scale Dear ImGui and Platform Windows when Monitor DPI changes.
+	io.Fonts->AddFontDefault();
+	io.Fonts->Build();
+
+	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		style.WindowRounding = 0.0f;
+		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+	}
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplWin32_Init(GameCore::g_hWnd);
+
+	DescriptorHandle ImGuiHandle[3] = 
+	{ Renderer::s_TextureHeap.Alloc(),
+	Renderer::s_TextureHeap.Alloc(),
 	Renderer::s_TextureHeap.Alloc(), };
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srv[3] = { AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
-	AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV), 
+	AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
 	AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV), };
 
 	g_Device->CopyDescriptorsSimple(1, ImGuiHandle[0], srv[0], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	g_Device->CopyDescriptorsSimple(1, ImGuiHandle[1], srv[1], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	g_Device->CopyDescriptorsSimple(1, ImGuiHandle[2], srv[2], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	// Setup Platform/PbrRenderer backends
-	ImGui_ImplWin32_Init(g_hWnd);
 	ImGui_ImplDX12_Init(g_Device, 3,
 		DXGI_FORMAT_R16G16B16A16_FLOAT, Renderer::s_TextureHeap.GetHeapPointer(),
-		ImGuiHandle[0],
-		ImGuiHandle[0]);
-	
+		*ImGuiHandle,
+		*ImGuiHandle);
+
+	m_BackBufferHandle[0] = Renderer::s_TextureHeap.Alloc();
+	m_BackBufferHandle[1] = Renderer::s_TextureHeap.Alloc();
+	m_BackBufferHandle[2] = Renderer::s_TextureHeap.Alloc();
 
 	Model skyBox, pbrModel, pbrModel2;
 
@@ -213,20 +240,126 @@ void PbrRenderer::Startup()
 
 void PbrRenderer::OnResize()
 {
-	m_Camera.SetLens(0.25f*MathHelper::Pi, (float)g_DisplayWidth / g_DisplayHeight, 1.0f, 1000.0f);
+	m_Camera.SetLens(0.25f*MathHelper::Pi, (float)g_RendererSize.x / g_RendererSize.y, 1.0f, 1000.0f);
 }
 
 void PbrRenderer::Update(float gt)
 {
-	UpdateUI();
-	m_Camera.Update(gt);
 
 	Renderer::UpdateGlobalDescriptors();
+	
+	m_Camera.Update(gt);
+
 }
 
 void PbrRenderer::RenderScene()
 {
+	
 	GraphicsContext& gfxContext = GraphicsContext::Begin(L"Scene Render");
+
+	// Start the Dear ImGui frame
+	ImGui_ImplDX12_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
+	static bool opt_fullscreen = true;
+	static bool dockspaceOpen = true;
+	static bool opt_padding = false;
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
+
+	// We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
+	// because it would be confusing to have two docking targets within each others.
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+	if (opt_fullscreen)
+	{
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->WorkPos);
+		ImGui::SetNextWindowSize(viewport->WorkSize);
+		ImGui::SetNextWindowViewport(viewport->ID);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+		window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+	}
+
+	// When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will render our background
+	// and handle the pass-thru hole, so we ask Begin() to not render a background.
+	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
+		window_flags |= ImGuiWindowFlags_NoBackground;
+
+	// Important: note that we proceed even if Begin() returns false (aka window is collapsed).
+	// This is because we want to keep our DockSpace() active. If a DockSpace() is inactive,
+	// all active windows docked into it will lose their parent and become undocked.
+	// We cannot preserve the docking relationship between an active window and an inactive docking, otherwise
+	// any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::Begin("DockSpace Demo", &dockspaceOpen, window_flags);
+	ImGui::PopStyleVar();
+
+	if (opt_fullscreen)
+		ImGui::PopStyleVar(2);
+
+	// Submit the DockSpace
+	ImGuiIO& io = ImGui::GetIO();
+	if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
+	{
+		ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+	}
+
+
+	if (ImGui::BeginMenuBar())
+	{
+		if (ImGui::BeginMenu("File"))
+		{
+
+			if (ImGui::MenuItem("Close", NULL, false, dockspaceOpen != NULL))
+				dockspaceOpen = false;
+			ImGui::EndMenu();
+		}
+
+		ImGui::EndMenuBar();
+	}
+
+	
+	static float f = 0.0f;
+
+	ImGui::Begin("debug");
+
+	ImGui::Text("Welcome to my renderer!");
+	ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
+	ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
+	ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
+	ImGui::Checkbox("UseReinhard", &m_ppAttribs.reinhard);
+	ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
+	ImGui::Checkbox("UseAces", &m_ppAttribs.aces);
+
+
+	ImGui::DragFloat4("LightPosition", &mLightPosW.x, 0.3f, -90, 90);
+	ImGui::DragFloat4("CameraPosition", &(m_Camera.GetPosition3f().x));
+
+	ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
+	ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);
+	ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);
+	ImGui::Checkbox("UseEmu", &m_ShaderAttribs.UseEmu);
+	ImGui::Checkbox("UseSSS", &m_ShaderAttribs.UseSSS);
+	if (m_ShaderAttribs.UseSSS)
+	{
+		ImGui::SliderFloat("CurveFactor", &m_ShaderAttribs.CurveFactor, 0, 10);
+		ImGui::SliderFloat("SpecularFactor", &m_ShaderAttribs.SpecularFactor, 0, 1);
+	}
+	
+	if (m_ShaderAttribs.UseTexture == false)
+	{
+		ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
+		ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);
+		ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);
+	}
+
+
+	UINT PrevBufferIndex = (g_CurrentBuffer + 3 - 1) % 3;
+
 
 	gfxContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, s_TextureHeap.GetHeapPointer());
 	gfxContext.SetViewportAndScissor(g_ViewPort, g_Rect);
@@ -347,15 +480,12 @@ void PbrRenderer::RenderScene()
 
 	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 
-	
-
 	gfxContext.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &m_ShaderAttribs);
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		{
 			m_MaterialConstants[i].gMatIndex = i;
-
 		}
 		{
 			XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
@@ -401,69 +531,53 @@ void PbrRenderer::RenderScene()
 	gfxContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	gfxContext.DrawInstanced(4, 1, 0, 0);
 
-	ImGui::Render();
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), gfxContext.GetCommandList());
-
-
 	gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_COMMON);
 	gfxContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_PRESENT);
 	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_COMMON);
+	ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
+	ImGui::End();
+	
+	
+
+	ImGui::Begin("ViewPort");
+
+	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+
+	if (viewportPanelSize.x != g_RendererSize.x || viewportPanelSize.y != g_RendererSize.y)
+	{
+		g_RendererSize = { viewportPanelSize.x , viewportPanelSize.y };
+		m_Camera.SetLens(0.25f * MathHelper::Pi, (float)g_RendererSize.x / g_RendererSize.y, 1.0f, 1000.0f);
+	}
+	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	auto texID = (ImTextureID)m_BackBufferHandle[g_CurrentBuffer].GetGpuPtr();
+	ImGui::Image(texID, viewportPanelSize);
+	ImGui::End();
+	
+	ImGui::Begin("S");
+
+	ImGui::End();
+
+	ImGui::End();
+
+	ImGui::Render();
+
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), gfxContext.GetCommandList());
+
+	// Update and Render additional Platform Windows
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+	}
 
 	gfxContext.Finish(true);
 }
 
 void PbrRenderer::UpdateUI()
 {
-	// Start the Dear ImGui frame
-	ImGui_ImplDX12_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();	
-	{
-		static float f = 0.0f;
-		static int counter = 0;
-
-		ImGui::Begin("debug");
- 
-		ImGui::Text("Welcome to my renderer!");
-		ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
-		ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
-		ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
-		ImGui::Checkbox("UseReinhard", &m_ppAttribs.reinhard);
-		ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
-		ImGui::Checkbox("UseAces", &m_ppAttribs.aces);
-	   
-		
-		ImGui::DragFloat4("LightPosition", &mLightPosW.x,0.3f,-90,90);
-		ImGui::DragFloat4("CameraPosition", &(m_Camera.GetPosition3f().x));
-
-		ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
-		ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);       
-		ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);       
-		ImGui::Checkbox("UseEmu", &m_ShaderAttribs.UseEmu);       
-
-		if (ImGui::Checkbox("UseSSS", &m_ShaderAttribs.UseSSS))
-		{
-			
-		}
-		ImGui::SliderFloat("CurveFactor", &m_ShaderAttribs.CurveFactor, 0, 10);
-		ImGui::SliderFloat("SpecularFactor", &m_ShaderAttribs.SpecularFactor, 0, 1);
-		if (m_ShaderAttribs.UseTexture == false)
-		{
-			ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
-			ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);
-			ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);
-		}	
-		ImGui::SameLine();
-		ImGui::Text("counter = %d", counter);
-
-		ImGuiIO& io = ImGui::GetIO(); (void)io;
-		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
-		ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-		ImGui::End();
-	}
+	
 
 }
 

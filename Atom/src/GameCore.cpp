@@ -87,7 +87,7 @@ namespace GameCore
 		}
 		game.Update(1);
 		game.RenderScene();
-
+		
 		Display::Present();
 		return 1;
 	}

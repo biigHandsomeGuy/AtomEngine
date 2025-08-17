@@ -18,6 +18,7 @@ namespace Graphics
     extern uint32_t g_DisplayWidth;
     extern uint32_t g_DisplayHeight;
 
+    extern DirectX::XMFLOAT2 g_RendererSize;
     extern D3D12_VIEWPORT g_ViewPort;
     extern D3D12_RECT g_Rect;
 

@@ -34,12 +34,8 @@ namespace GameCore
 		virtual void OnResize() = 0;
 		virtual void RenderScene(void) = 0;
 	public:
-		
 
 		GameTimer m_Timer;
-
-		int mCurrBackBuffer = 0;
-
 		
 	};
 }
