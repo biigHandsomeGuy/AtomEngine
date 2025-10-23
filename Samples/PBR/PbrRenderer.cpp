@@ -8,9 +8,9 @@
 #include "PipelineState.h"
 #include <utility>
 #include "stb_image/stb_image.h"
-#include "imgui/imgui.h"
-#include "imgui/backends/imgui_impl_win32.h"
-#include "imgui/backends/imgui_impl_dx12.h"
+#include <Imgui/imgui.h>
+#include <Imgui/backends/imgui_impl_dx12.h>
+#include <Imgui/backends/imgui_impl_win32.h>
 #include "Display.h"
 #include "CommandListManager.h"
 #include "BufferManager.h"
@@ -147,7 +147,7 @@ void PbrRenderer::Startup()
 	XMStoreFloat4(&mLightPosW, lightPos);
 	
 
-	g_IBLTexture = TextureManager::LoadHdrFromFile(L"D:/AtomEngine/Atom/Assets/Textures/EnvirMap/sun.hdr");
+	g_IBLTexture = TextureManager::LoadHdrFromFile(L"G:/code/AtomEngine/Assets/Textures/EnvirMap/sun.hdr");
 
 	PrecomputeCubemaps(gfxContext);
 
@@ -209,8 +209,8 @@ void PbrRenderer::Startup()
 
 	Model skyBox, pbrModel, pbrModel2;
 
-	skyBox.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel.Load(std::wstring(L"D:/AtomEngine/Atom/Assets/Models/head.obj"), g_Device, gfxContext.GetCommandList());
+	skyBox.Load(std::wstring(L"G:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
+	pbrModel.Load(std::wstring(L"G:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
 	//pbrModel2.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device, gfxContext.GetCommandList());
 
 	pbrModel.modelMatrix = XMMatrixRotationY(45);

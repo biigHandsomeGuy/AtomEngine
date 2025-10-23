@@ -1,15 +1,15 @@
-[submodule "Atom/Vendor/spdlog"]
-	path = Atom/Vendor/spdlog
+[submodule "Dependencies/spdlog"]
+	path = Dependencies/spdlog
 	url = https://github.com/gabime/spdlog
 
-[submodule "Atom/Vendor/ImGuizmo"]
-	path = Atom/Vendor/ImGuizmo
+[submodule "Dependencies/ImGuizmo"]
+	path = Dependencies/ImGuizmo
 	url = https://github.com/biigHandsomeGuy/ImGuizmo.git
-[submodule "Atom/Vendor/tinyobjloader"]
-	path = Atom/Vendor/tinyobjloader
+[submodule "Dependencies/tinyobjloader"]
+	path = Dependencies/tinyobjloader
 	url = https://github.com/biigHandsomeGuy/tinyobjloader.git
 
-[submodule "Atom/Vendor/imgui"]
-	path = Atom/Vendor/imgui
+[submodule "Dependencies/imgui"]
+	path = Dependencies/imgui
 	url = https://github.com/biigHandsomeGuy/imgui
 	branch = docking

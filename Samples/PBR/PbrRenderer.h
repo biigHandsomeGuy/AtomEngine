@@ -10,13 +10,11 @@
 #include "SkyBox.h"
 #include <DirectXCollision.h>
 #include "GameCore.h"
+#include <iostream>
 
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
-
-
-
 
 __declspec(align(256)) struct ShaderParams
 {

@@ -7,32 +7,17 @@
     <Filter Include="Assets\Shaders">
       <UniqueIdentifier>{1101E1D1-FDCE-D4D7-E662-45FED2CFB03C}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Vendor">
-      <UniqueIdentifier>{935FDCD7-7F01-07AE-68BC-1A0254FD8DFE}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vendor\stb_image">
-      <UniqueIdentifier>{EDE315D3-D9DC-3425-020F-1AAAEE661431}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vendor\stb_image\stb_image">
-      <UniqueIdentifier>{C7209C99-B330-486A-1CEA-AC8808193703}</UniqueIdentifier>
-    </Filter>
     <Filter Include="src">
       <UniqueIdentifier>{2DAB880B-99B4-887C-2230-9F7C8E38947C}</UniqueIdentifier>
     </Filter>
     <Filter Include="include">
       <UniqueIdentifier>{116228e3-5234-4809-b870-791070093e82}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Vendor\TinyObjLoader">
-      <UniqueIdentifier>{44fee6a4-88c7-40ec-854f-d2995df78022}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Assets\Shaders\ShadingModel">
       <UniqueIdentifier>{df1c5dd0-cbc1-4bdd-a7ae-dc589bb7e67e}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Vendor\stb_image\stb_image\stb_image.h">
-      <Filter>Vendor\stb_image\stb_image</Filter>
-    </ClInclude>
     <ClInclude Include="src\GameCore.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -92,9 +77,6 @@
     </ClInclude>
     <ClInclude Include="src\UploadBuffer.h">
       <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="Vendor\tinyobjloader\tiny_obj_loader.h">
-      <Filter>Vendor\TinyObjLoader</Filter>
     </ClInclude>
     <ClInclude Include="src\CommandAllocatorPool.h">
       <Filter>include</Filter>
@@ -158,13 +140,9 @@
     <ClInclude Include="src\Math\BoundingSphere.h" />
     <ClInclude Include="src\Math\Frustum.h" />
     <ClInclude Include="src\Math\Random.h" />
-    <ClInclude Include="Vendor\entt\entt.hpp" />
     <ClInclude Include="src\Scene\Scene.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Vendor\stb_image\stb_image\stb_image.cpp">
-      <Filter>Vendor\stb_image\stb_image</Filter>
-    </ClCompile>
     <ClCompile Include="src\Camera.cpp">
       <Filter>src</Filter>
     </ClCompile>
@@ -188,9 +166,6 @@
     </ClCompile>
     <ClCompile Include="src\GameCore.cpp">
       <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="Vendor\tinyobjloader\tiny_obj_loader.cc">
-      <Filter>Vendor\TinyObjLoader</Filter>
     </ClCompile>
     <ClCompile Include="src\CommandAllocatorPool.cpp">
       <Filter>src</Filter>
@@ -237,85 +212,93 @@
     <ClCompile Include="src\Scene\Scene.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Assets\Shaders\DrawNormalsPS.hlsl">
+    <FxCompile Include="Shaders\SsaoVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\DrawNormalsVS.hlsl">
+    <FxCompile Include="Shaders\SsaoPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\EquirectToCubeCS.hlsl">
+    <FxCompile Include="Shaders\SsaoBlurCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\IrradianceMapCS.hlsl">
+    <FxCompile Include="Shaders\SpecularMapCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\ShadowPS.hlsl">
+    <FxCompile Include="Shaders\SpecularBRDFCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\ShadowVS.hlsl">
+    <FxCompile Include="Shaders\SkyBoxVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\SkyBoxPS.hlsl">
+    <FxCompile Include="Shaders\SkyBoxPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\SkyBoxVS.hlsl">
+    <FxCompile Include="Shaders\ShadowVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\SpecularBRDFCS.hlsl">
+    <FxCompile Include="Shaders\ShadowPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\SpecularMapCS.hlsl">
+    <FxCompile Include="Shaders\PreIntegralSpecularSSSCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\SsaoPS.hlsl">
+    <FxCompile Include="Shaders\PreIntegralDiffuseSSSCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\SsaoVS.hlsl">
+    <FxCompile Include="Shaders\PostProcessVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\PBRShadingPS.hlsl">
+    <FxCompile Include="Shaders\PostProcessPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\PBRShadingVS.hlsl">
+    <FxCompile Include="Shaders\PBRShadingVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\BloomPS.hlsl">
+    <FxCompile Include="Shaders\PBRShadingPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\BloomVS.hlsl">
+    <FxCompile Include="Shaders\LambertModelVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\PostProcessPS.hlsl">
+    <FxCompile Include="Shaders\LambertModelPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\PostProcessVS.hlsl">
+    <FxCompile Include="Shaders\IrradianceMapCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\LambertModelVS.hlsl">
-      <Filter>Assets\Shaders\ShadingModel</Filter>
-    </FxCompile>
-    <FxCompile Include="Assets\Shaders\LambertModelPS.hlsl">
-      <Filter>Assets\Shaders\ShadingModel</Filter>
-    </FxCompile>
-    <FxCompile Include="Assets\Shaders\SsaoBlurCS.hlsl">
+    <FxCompile Include="Shaders\GenerateMipMapCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\GenerateMipMapCS.hlsl">
+    <FxCompile Include="Shaders\EquirectToCubeCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Assets\Shaders\Emu.hlsl" />
-    <FxCompile Include="Assets\Shaders\Eavg.hlsl" />
-    <FxCompile Include="Assets\Shaders\PreIntegralDiffuseSSSCS.hlsl" />
-    <FxCompile Include="Assets\Shaders\PreIntegralSpecularSSSCS.hlsl" />
+    <FxCompile Include="Shaders\Eavg.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\Emu.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\DrawNormalsVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\DrawNormalsPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\BloomVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\BloomPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Assets\Shaders\Common.hlsli">
-      <Filter>Assets\Shaders</Filter>
-    </None>
-    <None Include="Assets\Shaders\PBRCommon.hlsli">
-      <Filter>Assets\Shaders</Filter>
-    </None>
     <None Include="src\Functions.inl" />
     <None Include="src\Math\Functions.inl" />
+    <None Include="Shaders\PBRCommon.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
+    <None Include="Shaders\Common.hlsli">
+      <Filter>Assets\Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

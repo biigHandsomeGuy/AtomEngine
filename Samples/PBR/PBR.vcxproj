@@ -57,13 +57,15 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Atom\src;$(SolutionDir)Atom\Vendor;$(SolutionDir)Atom\Vendor\stb_image</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\tinyobjloader;$(SolutionDir)Dependencies\;$(SolutionDir)Dependencies\Imgui;$(SolutionDir)Dependencies\Imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -74,7 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Atom\src;$(SolutionDir)Atom\Vendor;$(SolutionDir)Atom\Vendor\stb_image</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\tinyobjloader;$(SolutionDir)Dependencies\;$(SolutionDir)Dependencies\Imgui;$(SolutionDir)Dependencies\Imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -86,7 +88,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="PbrRenderer.cpp" />
+    <ClCompile Include="PbrRenderer.cpp">
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)Atom\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)Atom\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PbrRenderer.h" />
@@ -95,8 +100,14 @@
     <ProjectReference Include="..\..\Atom\Atom.vcxproj">
       <Project>{56b0827c-42e7-830d-ebd3-6910d7e9ff0e}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\Atom\Vendor\imgui\ImGui.vcxproj">
-      <Project>{62b952dd-82cf-461e-b97d-60dfea4249be}</Project>
+    <ProjectReference Include="..\..\Dependencies\Imgui\imgui.vcxproj">
+      <Project>{e582a143-5d2d-443f-af35-a6673f41ba6d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Dependencies\stb_image\stb_image\stb_image.vcxproj">
+      <Project>{60ed286f-45cc-4f89-80a3-9406b0ee1487}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Dependencies\tinyobjloader\tinyobjloader.vcxproj">
+      <Project>{a6eeed2e-c128-47e4-8741-2c398e659fb1}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
