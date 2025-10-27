@@ -4,7 +4,7 @@
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_dx12.h"
 #include "imgui/backends/imgui_impl_win32.h"
-
+#include "GameInput.h"
 #include "CommandListManager.h"
 #include "Display.h"
 
@@ -42,30 +42,6 @@ LRESULT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-// void GameCore::CalculateFrameStats()
-// {
-// 	// 该代码计算每秒帧速，并计算每一帧渲染需要的时间，显示在窗口标题
-// 	static int frameCnt = 0;
-// 	static float timeElapsed = 0.0f;
-// 
-// 	frameCnt++;
-// 
-// 	if ((m_Timer.TotalTime() - timeElapsed) >= 1.0f) {
-// 		float fps = (float)frameCnt; // fps = frameCnt / 1
-// 		float mspf = 1000.0f / fps;
-// 
-// 		std::wostringstream outs;
-// 		outs.precision(6);
-// 		outs << mMainWndCaption << L"    "
-// 			<< L"FPS: " << fps << L"    "
-// 			<< L"Frame Time: " << mspf << L" (ms)";
-// 		SetWindowText(g_hWnd, outs.str().c_str());
-// 
-// 		// Reset for next average.
-// 		frameCnt = 0;
-// 		timeElapsed += 1.0f;
-// 	}
-// }
 namespace GameCore
 {
 	bool isResize = false;
@@ -74,7 +50,7 @@ namespace GameCore
 	void InitializeApplication(IGameApp& game)
 	{
 		Graphics::Initialize();
-
+		GameInput::Initialize();
 		game.Startup();
 	}
 
@@ -85,6 +61,7 @@ namespace GameCore
 			game.OnResize();
 			isResize = false;
 		}
+		GameInput::Update(1);
 		game.Update(1);
 		game.RenderScene();
 		

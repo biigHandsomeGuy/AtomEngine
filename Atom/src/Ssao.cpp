@@ -24,6 +24,7 @@ using namespace DirectX::PackedVector;
 using namespace Microsoft::WRL;
 using namespace Graphics;
 using namespace shader;
+using namespace Math;
 
 namespace
 {
@@ -125,7 +126,7 @@ void SSAO::Initialize()
 
 #define OffsetHandle(x) CD3DX12_GPU_DESCRIPTOR_HANDLE(Renderer::g_SSAOSrvHeap, x, CbvSrvUavDescriptorSize)
 
-void SSAO::Render(GraphicsContext& GfxContext, const Camera& camera)
+void SSAO::Render(GraphicsContext& GfxContext, const Math::Camera& camera)
 {
     {
 
@@ -160,26 +161,26 @@ void SSAO::Render(GraphicsContext& GfxContext, const Camera& camera)
 
   
     {
-        XMMATRIX P = camera.GetProj();
+        Matrix4 P = camera.GetProjMatrix();
 
         // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
-        XMMATRIX T(
-            0.5f, 0.0f, 0.0f, 0.0f,
-            0.0f, -0.5f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.5f, 0.5f, 0.0f, 1.0f);
+        Matrix4 T(
+            { 0.5f, 0.0f, 0.0f, 0.0f },
+            { 0.0f, -0.5f, 0.0f, 0.0f },
+            { 0.0f, 0.0f, 1.0f, 0.0f },
+            { 0.5f, 0.5f, 0.0f, 1.0f });
 
-        XMStoreFloat4x4(&s_SsaoConstants.Proj, P);
-        XMMATRIX invProj = XMMatrixInverse(nullptr, P);
-        XMStoreFloat4x4(&s_SsaoConstants.InvProj, invProj);
+        s_SsaoConstants.Proj = P;
+        Matrix4 invProj = Math::Invert(P);
+        s_SsaoConstants.InvProj = invProj;
 
-        XMStoreFloat4x4(&s_SsaoConstants.ProjTex, P * T);
+        s_SsaoConstants.ProjTex = P * T;
 
         
         auto blurWeights = CalcGaussWeights(2.5f);
-        s_SsaoConstants.BlurWeights[0] = XMFLOAT4(&blurWeights[0]);
-        s_SsaoConstants.BlurWeights[1] = XMFLOAT4(&blurWeights[4]);
-        s_SsaoConstants.BlurWeights[2] = XMFLOAT4(&blurWeights[8]);
+        s_SsaoConstants.BlurWeights[0];
+        s_SsaoConstants.BlurWeights[1];
+        s_SsaoConstants.BlurWeights[2];
         
         s_SsaoConstants.InvRenderTargetSize = XMFLOAT2((1.0f / g_DisplayWidth * 2), 1.0f / g_DisplayHeight * 2);
 
@@ -270,38 +271,38 @@ void BuildOffsetVectors()
     // and the 6 center points along each cube face.  We always alternate the points on 
     // opposites sides of the cubes.  This way we still get the vectors spread out even
     // if we choose to use less than 14 samples.
-    DirectX::XMFLOAT4 mOffsets[14];
+    Vector4 mOffsets[14];
 
     // 8 cube corners
-    mOffsets[0] = XMFLOAT4(+1.0f, +1.0f, +1.0f, 0.0f);
-    mOffsets[1] = XMFLOAT4(-1.0f, -1.0f, -1.0f, 0.0f);
+    mOffsets[0] = Vector4(+1.0f, +1.0f, +1.0f, 0.0f);
+    mOffsets[1] = Vector4(-1.0f, -1.0f, -1.0f, 0.0f);
 
-    mOffsets[2] = XMFLOAT4(-1.0f, +1.0f, +1.0f, 0.0f);
-    mOffsets[3] = XMFLOAT4(+1.0f, -1.0f, -1.0f, 0.0f);
+    mOffsets[2] = Vector4(-1.0f, +1.0f, +1.0f, 0.0f);
+    mOffsets[3] = Vector4(+1.0f, -1.0f, -1.0f, 0.0f);
 
-    mOffsets[4] = XMFLOAT4(+1.0f, +1.0f, -1.0f, 0.0f);
-    mOffsets[5] = XMFLOAT4(-1.0f, -1.0f, +1.0f, 0.0f);
+    mOffsets[4] = Vector4(+1.0f, +1.0f, -1.0f, 0.0f);
+    mOffsets[5] = Vector4(-1.0f, -1.0f, +1.0f, 0.0f);
 
-    mOffsets[6] = XMFLOAT4(-1.0f, +1.0f, -1.0f, 0.0f);
-    mOffsets[7] = XMFLOAT4(+1.0f, -1.0f, +1.0f, 0.0f);
+    mOffsets[6] = Vector4(-1.0f, +1.0f, -1.0f, 0.0f);
+    mOffsets[7] = Vector4(+1.0f, -1.0f, +1.0f, 0.0f);
 
     // 6 centers of cube faces
-    mOffsets[8] = XMFLOAT4(-1.0f, 0.0f, 0.0f, 0.0f);
-    mOffsets[9] = XMFLOAT4(+1.0f, 0.0f, 0.0f, 0.0f);
+    mOffsets[8] = Vector4(-1.0f, 0.0f, 0.0f, 0.0f);
+    mOffsets[9] = Vector4(+1.0f, 0.0f, 0.0f, 0.0f);
 
-    mOffsets[10] = XMFLOAT4(0.0f, -1.0f, 0.0f, 0.0f);
-    mOffsets[11] = XMFLOAT4(0.0f, +1.0f, 0.0f, 0.0f);
+    mOffsets[10] = Vector4(0.0f, -1.0f, 0.0f, 0.0f);
+    mOffsets[11] = Vector4(0.0f, +1.0f, 0.0f, 0.0f);
 
-    mOffsets[12] = XMFLOAT4(0.0f, 0.0f, -1.0f, 0.0f);
-    mOffsets[13] = XMFLOAT4(0.0f, 0.0f, +1.0f, 0.0f);
+    mOffsets[12] = Vector4(0.0f, 0.0f, -1.0f, 0.0f);
+    mOffsets[13] = Vector4(0.0f, 0.0f, +1.0f, 0.0f);
 
     for (int i = 0; i < 14; ++i)
     {
         // Create random lengths in [0.25, 1.0].
         float s = MathHelper::RandF(0.25f, 1.0f);
 
-        XMVECTOR v = s * XMVector4Normalize(XMLoadFloat4(&mOffsets[i]));
+        Vector4 v = s * Math::Normalize(mOffsets[i]);
 
-        XMStoreFloat4(&s_SsaoConstants.OffsetVectors[i], v);
+        s_SsaoConstants.OffsetVectors[i] = v;
     }
 }

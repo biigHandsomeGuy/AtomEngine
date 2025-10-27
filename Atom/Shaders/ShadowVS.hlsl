@@ -8,6 +8,7 @@ cbuffer GlobalConstants : register(b1)
 {
     float4x4 gView;
     float4x4 gProj;
+    float4x4 gViewProj;
 };
 
 struct VertexIn
@@ -27,7 +28,7 @@ VertexOut main(VertexIn vin)
 	VertexOut vout = (VertexOut)0.0f;
 
     // Transform to homogeneous clip space.
-    vout.PosH = mul(gProj,(mul(gView,(mul(gModelMatrix, float4(vin.PosL, 1.0f))))));
+    vout.PosH = mul(gViewProj,mul(gModelMatrix, float4(vin.PosL, 1.0f)));
 	
 	// Output vertex attributes for interpolation across triangle.
     vout.TexC = vin.TexC;

@@ -2,7 +2,7 @@
 
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "Mesh.h"
-
+#include "Math/Matrix4.h"
 #include "DescriptorHeap.h"
 #include "TextureManager.h"
 
@@ -15,8 +15,8 @@ public:
 	void Load(const std::wstring& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
 	void Draw(ID3D12GraphicsCommandList* commandList);
 	std::vector<Mesh> meshes;
-	DirectX::XMMATRIX modelMatrix;
-	DirectX::XMMATRIX normalMatrix;
+	Math::Matrix4 modelMatrix;
+	Math::Matrix4 normalMatrix;
 
 	void LoadTextures(const std::wstring& basePath);
 private:

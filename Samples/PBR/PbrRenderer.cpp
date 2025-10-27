@@ -52,74 +52,6 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
 	return GameCore::RunApplication(PbrRenderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
 }
 
-void ReflectDXIL(const void* dxilData, size_t dxilSize)
-{
-	ComPtr<IDxcContainerReflection> pReflection;
-	if (FAILED(DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&pReflection))))
-	{
-		std::cerr << "Failed to create DXC Container Reflection instance." << std::endl;
-		return;
-	}
-
-	
-	ComPtr<IDxcBlobEncoding> pBlob;
-	ComPtr<IDxcLibrary> pLibrary;
-	if (FAILED(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary))))
-	{
-		std::cerr << "Failed to create DXC Library instance." << std::endl;
-		return;
-	}
-
-	if (FAILED(pLibrary->CreateBlobWithEncodingFromPinned(dxilData, (UINT32)dxilSize, 0, &pBlob)))
-	{
-		std::cerr << "Failed to create DXC Blob from DXIL data." << std::endl;
-		return;
-	}
-
-	// 2. 让 pReflection 解析 DXIL
-	if (FAILED(pReflection->Load(pBlob.Get())))
-	{
-		std::cerr << "Failed to load DXIL reflection." << std::endl;
-		return;
-	}
-
-	// 3. 查找 DXIL 代码部分
-	UINT32 shaderIdx;
-	if (FAILED(pReflection->FindFirstPartKind(DXC_PART_DXIL, &shaderIdx)))
-	{
-		std::cerr << "Failed to find DXIL part." << std::endl;
-		return;
-	}
-
-	// 4. 获取 Shader Reflection
-	ComPtr<ID3D12ShaderReflection> pShaderReflection;
-	if (FAILED(pReflection->GetPartReflection(shaderIdx, IID_PPV_ARGS(&pShaderReflection))))
-	{
-		std::cerr << "Failed to get shader reflection." << std::endl;
-		return;
-	}
-
-	// 5. 获取 Shader 描述信息
-	D3D12_SHADER_DESC shaderDesc;
-	if (FAILED(pShaderReflection->GetDesc(&shaderDesc)))
-	{
-		std::cerr << "Failed to get shader description." << std::endl;
-		return;
-	}
-
-	std::cout << "着色器输入参数数量: " << shaderDesc.InputParameters << std::endl;
-	std::cout << "着色器输出参数数量: " << shaderDesc.OutputParameters << std::endl;
-
-	// 6. 遍历绑定资源
-	for (UINT i = 0; i < shaderDesc.BoundResources; i++)
-	{
-		D3D12_SHADER_INPUT_BIND_DESC bindDesc;
-		pShaderReflection->GetResourceBindingDesc(i, &bindDesc);
-		std::cout << "资源绑定: " << bindDesc.Name << "，寄存器: " << bindDesc.BindPoint << std::endl;
-	}
-}
-
-
 
 PbrRenderer::PbrRenderer(HINSTANCE hInstance)
 {    
@@ -139,13 +71,9 @@ void PbrRenderer::Startup()
 
 	CommandContext& gfxContext = CommandContext::Begin(L"Scene Startup");
 
-	m_Camera.SetPosition(0.0f, 2.0f, -5.0f);
-	m_Camera.SetLens(0.25f * MathHelper::Pi, (float)g_DisplayWidth / g_DisplayHeight, 1.0f, 1000.0f);
-
-	XMFLOAT4 pos{ 0.0f, 5.0f, 2.0f, 1.0f };
-	XMVECTOR lightPos = XMLoadFloat4(&pos);
-	XMStoreFloat4(&mLightPosW, lightPos);
-	
+	m_Camera.SetEyeAtUp(Vector3(0.0f, 3.0f, -5.0f), Vector3(kZero), Vector3(kYUnitVector));
+	m_Camera.SetZRange(1.0f, 10000.0f);
+	m_CameraController.reset(new FlyingFPSCamera(m_Camera, Vector3(kYUnitVector)));
 
 	g_IBLTexture = TextureManager::LoadHdrFromFile(L"G:/code/AtomEngine/Assets/Textures/EnvirMap/sun.hdr");
 
@@ -211,24 +139,17 @@ void PbrRenderer::Startup()
 
 	skyBox.Load(std::wstring(L"G:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
 	pbrModel.Load(std::wstring(L"G:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
-	//pbrModel2.Load(std::string("D:/AtomEngine/Atom/Assets/Models/plane.obj"), g_Device, gfxContext.GetCommandList());
 
-	pbrModel.modelMatrix = XMMatrixRotationY(45);
-	pbrModel.modelMatrix *= XMMatrixScaling(8, 8, 8);
-	pbrModel2.modelMatrix = XMMatrixScaling(4, 4, 4);
-	pbrModel2.modelMatrix *= XMMatrixTranslation(0, -2, 0);
+	pbrModel.modelMatrix = OrthogonalTransform::MakeYRotation(45.0f);
+	pbrModel.modelMatrix = pbrModel.modelMatrix * Matrix4::MakeScale(8.0f);
 
-	pbrModel.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel.modelMatrix));
-	pbrModel2.normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, pbrModel2.modelMatrix));
+	pbrModel.normalMatrix = InverseTranspose(pbrModel.normalMatrix.Get3x3());
 
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
 	//m_Scene.Models.push_back(std::move(pbrModel2));
 	m_MeshConstants.resize(m_Scene.Models.size());
 	m_MaterialConstants.resize(m_Scene.Models.size());
-
-	mSceneBounds.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	mSceneBounds.Radius = 15;
 
 	s_IBL_PSOCache.clear();
 
@@ -240,15 +161,14 @@ void PbrRenderer::Startup()
 
 void PbrRenderer::OnResize()
 {
-	m_Camera.SetLens(0.25f*MathHelper::Pi, (float)g_RendererSize.x / g_RendererSize.y, 1.0f, 1000.0f);
+
 }
 
 void PbrRenderer::Update(float gt)
 {
-
 	Renderer::UpdateGlobalDescriptors();
 	
-	m_Camera.Update(gt);
+	m_CameraController->Update(gt);
 
 }
 
@@ -335,10 +255,6 @@ void PbrRenderer::RenderScene()
 	ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
 	ImGui::Checkbox("UseAces", &m_ppAttribs.aces);
 
-
-	ImGui::DragFloat4("LightPosition", &mLightPosW.x, 0.3f, -90, 90);
-	ImGui::DragFloat4("CameraPosition", &(m_Camera.GetPosition3f().x));
-
 	ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
 	ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);
 	ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);
@@ -380,16 +296,19 @@ void PbrRenderer::RenderScene()
 
 
 	{
-		XMMATRIX view = m_Camera.GetView();
-		XMMATRIX proj = m_Camera.GetProj();
-		XMMATRIX viewProj = XMMatrixMultiply(view, proj);
+		m_SunShadowCamera.UpdateMatrix(Vector3({ 15.0f, 15.5f, -15.0f }), Vector3(kOrigin), Vector3(5000, 3000, 3000),
+			(uint32_t)g_ShadowBuffer.GetWidth(), (uint32_t)g_ShadowBuffer.GetHeight(), 16);
 
-		XMStoreFloat4x4(&m_LightPassGlobalConstants.ViewMatrix, view);
-		XMStoreFloat4x4(&m_LightPassGlobalConstants.ProjMatrix, proj);
-		XMStoreFloat4x4(&m_LightPassGlobalConstants.ViewProjMatrix, viewProj);
-		m_LightPassGlobalConstants.SunShadowMatrix = mShadowTransform;
-		m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition3f();
-		m_LightPassGlobalConstants.SunPos = { mLightPosW.x,mLightPosW.y,mLightPosW.z };
+		Matrix4 view = m_Camera.GetViewMatrix();
+		Matrix4 proj = m_Camera.GetProjMatrix();
+		Matrix4 viewProj = m_Camera.GetViewProjMatrix();
+
+		m_LightPassGlobalConstants.ViewMatrix = view;
+		m_LightPassGlobalConstants.ProjMatrix = proj;
+		m_LightPassGlobalConstants.ViewProjMatrix = viewProj;
+		m_LightPassGlobalConstants.SunShadowMatrix = m_SunShadowCamera.GetShadowMatrix();
+		m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition();
+		m_LightPassGlobalConstants.SunPos = m_SunShadowCamera.GetPosition();
 
 	}
 	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
@@ -398,8 +317,8 @@ void PbrRenderer::RenderScene()
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		{
-			XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
-			XMStoreFloat4x4(&m_MeshConstants[i].NormalMatrix, m_Scene.Models[i].normalMatrix);
+			m_MeshConstants[i].ModelMatrix = m_Scene.Models[i].modelMatrix;
+			m_MeshConstants[i].NormalMatrix = m_Scene.Models[i].normalMatrix;
 		}
 		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
@@ -417,25 +336,8 @@ void PbrRenderer::RenderScene()
 	gfxContext.SetDepthStencilTarget(g_ShadowBuffer.GetDSV());
 
 	{
-		XMVECTOR lightPos = XMLoadFloat4(&mLightPosW);
-		XMVECTOR targetPos = XMLoadFloat3(&mSceneBounds.Center);
-		targetPos = XMVectorSetW(targetPos, 1);
-		XMVECTOR lightUp = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-		XMMATRIX lightView = XMMatrixLookAtLH(lightPos, targetPos, lightUp);
-		XMStoreFloat4x4(&m_ShadowPassGlobalConstants.ViewMatrix, lightView);
-
-		XMFLOAT3 sphereCenterLS;
-		XMStoreFloat3(&sphereCenterLS, XMVector3TransformCoord(targetPos, lightView));
-
-		float l = sphereCenterLS.x - mSceneBounds.Radius;
-		float b = sphereCenterLS.y - mSceneBounds.Radius;
-		float n = sphereCenterLS.z - mSceneBounds.Radius;
-		float r = sphereCenterLS.x + mSceneBounds.Radius;
-		float t = sphereCenterLS.y + mSceneBounds.Radius;
-		float f = sphereCenterLS.z + mSceneBounds.Radius;
-
-		XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
-		XMStoreFloat4x4(&m_ShadowPassGlobalConstants.ProjMatrix, lightProj);
+		
+		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetShadowMatrix();
 	}
 
 	gfxContext.SetRootSignature(s_RootSig);
@@ -446,7 +348,7 @@ void PbrRenderer::RenderScene()
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		
-		XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
+		m_MeshConstants[i].ModelMatrix = m_Scene.Models[i].modelMatrix;
 
 		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
@@ -488,15 +390,15 @@ void PbrRenderer::RenderScene()
 			m_MaterialConstants[i].gMatIndex = i;
 		}
 		{
-			XMStoreFloat4x4(&m_MeshConstants[i].ModelMatrix, m_Scene.Models[i].modelMatrix);
-			XMStoreFloat4x4(&m_MeshConstants[i].NormalMatrix, m_Scene.Models[i].normalMatrix);
-			XMMATRIX T(
-				0.5f, 0.0f, 0.0f, 0.0f,
-				0.0f, -0.5f, 0.0f, 0.0f,
-				0.0f, 0.0f, 1.0f, 0.0f,
-				0.5f, 0.5f, 0.0f, 1.0f);
-			XMMATRIX viewProjTex = m_Camera.GetView() * m_Camera.GetProj() * T;
-			XMStoreFloat4x4(&m_MeshConstants[i].ViewProjTex, viewProjTex);
+			m_MeshConstants[i].ModelMatrix = m_Scene.Models[i].modelMatrix;
+			m_MeshConstants[i].NormalMatrix = m_Scene.Models[i].normalMatrix;
+			Matrix4 T(
+				{ 0.5f, 0.0f, 0.0f, 0.0f },
+				{ 0.0f, -0.5f, 0.0f, 0.0f },
+				{ 0.0f, 0.0f, 1.0f, 0.0f },
+				{ 0.5f, 0.5f, 0.0f, 1.0f });
+			Matrix4 viewProjTex = m_Camera.GetViewProjMatrix() * T;
+			m_MeshConstants[i].ViewProjTex = viewProjTex;
 
 		}
 		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
@@ -547,7 +449,7 @@ void PbrRenderer::RenderScene()
 	if (viewportPanelSize.x != g_RendererSize.x || viewportPanelSize.y != g_RendererSize.y)
 	{
 		g_RendererSize = { viewportPanelSize.x , viewportPanelSize.y };
-		m_Camera.SetLens(0.25f * MathHelper::Pi, (float)g_RendererSize.x / g_RendererSize.y, 1.0f, 1000.0f);
+
 	}
 	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 

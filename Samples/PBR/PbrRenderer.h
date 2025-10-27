@@ -1,8 +1,9 @@
 #pragma once
 #include "CommandContext.h"
 #include "MathHelper.h"
-#include "GeometryGenerator.h"
 #include "Camera.h"
+#include "CameraController.h"
+#include "ShadowCamera.h"
 #include "Ssao.h"
 
 #include "d3dUtil.h"
@@ -22,11 +23,11 @@ __declspec(align(256)) struct ShaderParams
     char pad0[3]{ 0,0,0 };
     bool UseShadow = false;
     char pad1[3]{ 0,0,0 };
-    bool UseTexture = true;
+    bool UseTexture = false;
     char pad2[3]{ 0,0,0 };
-    float roughness = 0;
-    float albedo[3] = { 0,0,0 };
-    float metallic = 0;
+    float roughness = 0.5;
+    float albedo[3] = { 0.5,0.3,0.1 };
+    float metallic = 0.5;
     bool UseEmu;
     char pad3[3]{ 0,0,0 };
     bool UseSSS;
@@ -60,16 +61,13 @@ private:
 
 
 private:
-    Camera m_Camera;
-
-    DirectX::BoundingSphere mSceneBounds;
-
-    XMFLOAT4 mLightPosW;
-    XMFLOAT4X4 mShadowTransform = MathHelper::Identity4x4();
+    Math::Camera m_Camera;
+    std::unique_ptr<CameraController> m_CameraController;
+    ShadowCamera m_SunShadowCamera;
 
     float mLightRotationAngle = 0.0f;
 
-    XMFLOAT3 mRotatedLightDirections[3];
+    Vector3 mRotatedLightDirections{ kIdentity };
 
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;

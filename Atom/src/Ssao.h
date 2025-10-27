@@ -2,13 +2,13 @@
  
 #include "d3dUtil.h"
 #include "ConstantBuffers.h"
-class Camera;
+#include "Camera.h"
 class GraphicsContext;
 namespace SSAO
 {
     void Initialize();
 
-    void Render(GraphicsContext& GfxContext, const Camera& camera);
+    void Render(GraphicsContext& GfxContext, const Math::Camera& camera);
 
     void Shutdown();
  };
