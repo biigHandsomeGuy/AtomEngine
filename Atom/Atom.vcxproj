@@ -146,6 +146,7 @@
     <ClInclude Include="src\ShadowCamera.h" />
     <ClInclude Include="src\SkyBox.h" />
     <ClInclude Include="src\Ssao.h" />
+    <ClInclude Include="src\SystemTime.h" />
     <ClInclude Include="src\Texture.h" />
     <ClInclude Include="src\TextureManager.h" />
     <ClInclude Include="src\UploadBuffer.h" />
@@ -181,6 +182,7 @@
     <ClCompile Include="src\RootSignature.cpp" />
     <ClCompile Include="src\Scene\Scene.cpp" />
     <ClCompile Include="src\ShadowCamera.cpp" />
+    <ClCompile Include="src\SystemTime.cpp" />
     <ClCompile Include="src\Texture.cpp" />
     <ClCompile Include="src\TextureManager.cpp" />
     <ClCompile Include="src\GameCore.cpp" />

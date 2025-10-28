@@ -30,7 +30,7 @@ void Model::Load(const std::wstring& filepath, ID3D12Device* device, ID3D12Graph
         meshes.push_back(ProcessMesh(attrib, shape, device, commandList));
     }  
 
-    LoadTextures(L"G:/code/AtomEngine/Assets/Textures/skin/");
+    LoadTextures(L"D:/code/AtomEngine/Assets/Textures/silver/");
 
 }
 

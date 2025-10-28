@@ -25,4 +25,16 @@ namespace Graphics
     extern DXGI_FORMAT SwapChainFormat;
     extern DXGI_FORMAT DepthStencilFormat;
 
+    // Returns the number of elapsed frames since application start
+    uint64_t GetFrameCount(void);
+
+    // The amount of time elapsed during the last completed frame.  The CPU and/or
+    // GPU may be idle during parts of the frame.  The frame time measures the time
+    // between calls to present each frame.
+    float GetFrameTime(void);
+
+    // The total number of frames per second
+    float GetFrameRate(void);
+
+
 }

@@ -52,7 +52,7 @@ FlyingFPSCamera::FlyingFPSCamera(Camera& camera, Vector3 worldUp) : CameraContro
 void FlyingFPSCamera::Update(float deltaTime)
 {
     (deltaTime);
-
+    deltaTime *= 100;
     float timeScale = 1.0f;
 
     if (GameInput::IsFirstPressed(GameInput::kLThumbClick) || GameInput::IsFirstPressed(GameInput::kKey_lshift))

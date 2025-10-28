@@ -23,7 +23,7 @@ __declspec(align(256)) struct ShaderParams
     char pad0[3]{ 0,0,0 };
     bool UseShadow = false;
     char pad1[3]{ 0,0,0 };
-    bool UseTexture = false;
+    bool UseTexture = true;
     char pad2[3]{ 0,0,0 };
     float roughness = 0.5;
     float albedo[3] = { 0.5,0.3,0.1 };

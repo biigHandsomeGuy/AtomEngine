@@ -5,9 +5,9 @@
 
 __declspec(align(256)) struct MeshConstants
 {
-    Math::Matrix4 ModelMatrix;
-    Math::Matrix4 NormalMatrix;
-    Math::Matrix4 ViewProjTex;
+    Math::Matrix4 ModelMatrix{ Math::kIdentity };
+    Math::Matrix4 NormalMatrix{ Math::kIdentity };
+    Math::Matrix4 ViewProjTex{ Math::kIdentity };
 };
 __declspec(align(256)) struct MaterialConstants
 {
@@ -16,20 +16,19 @@ __declspec(align(256)) struct MaterialConstants
 
 __declspec(align(256)) struct GlobalConstants
 {
-    Math::Matrix4 ViewMatrix;
-    Math::Matrix4 ProjMatrix;
-    Math::Matrix4 ViewProjMatrix;
-    Math::Matrix4 SunShadowMatrix;
+    Math::Matrix4 ViewMatrix{ Math::kIdentity };
+    Math::Matrix4 ProjMatrix{ Math::kIdentity };
+    Math::Matrix4 ViewProjMatrix{ Math::kIdentity };
+    Math::Matrix4 SunShadowMatrix{ Math::kIdentity };
     Math::Vector3 CameraPos = { 0.0f, 0.0f, 0.0f };
-    float pad0 = 0;
     Math::Vector3 SunPos = { 0.0f, 0.0f, 0.0f };
 };
 
 __declspec(align(256)) struct SsaoConstants
 {
-    Math::Matrix4 Proj;
-    Math::Matrix4 InvProj;
-    Math::Matrix4 ProjTex;
+    Math::Matrix4 Proj{ Math::kIdentity };
+    Math::Matrix4 InvProj{ Math::kIdentity };
+    Math::Matrix4 ProjTex{ Math::kIdentity };
     Math::Vector4   OffsetVectors[14];
 
     // For SsaoBlur.hlsl

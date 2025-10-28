@@ -141,6 +141,7 @@
     <ClInclude Include="src\GameInput.h" />
     <ClInclude Include="src\CameraController.h" />
     <ClInclude Include="src\ShadowCamera.h" />
+    <ClInclude Include="src\SystemTime.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Camera.cpp">
@@ -213,6 +214,7 @@
     <ClCompile Include="src\GameInput.cpp" />
     <ClCompile Include="src\CameraController.cpp" />
     <ClCompile Include="src\ShadowCamera.cpp" />
+    <ClCompile Include="src\SystemTime.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\SsaoVS.hlsl">

@@ -5,6 +5,7 @@
 #include "CommandListManager.h"
 #include "BufferManager.h"
 #include "ColorBuffer.h"
+#include "SystemTime.h"
 using namespace Graphics;
 using namespace Microsoft::WRL;
 
@@ -17,6 +18,11 @@ namespace GameCore
 
 namespace Graphics
 {
+    float s_FrameTime = 0.0f;
+    uint64_t s_FrameIndex = 0;
+    int64_t s_FrameStartTick = 0;
+
+
     DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     DXGI_FORMAT DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
@@ -149,5 +155,27 @@ void Display::Present(void)
 {
     s_SwapChain1->Present(0, 0);
     g_CurrentBuffer = (g_CurrentBuffer + 1) % SWAP_CHAIN_BUFFER_COUNT;
+    int64_t CurrentTick = SystemTime::GetCurrentTick();
+    s_FrameTime = (float)SystemTime::TimeBetweenTicks(s_FrameStartTick, CurrentTick);
 
+
+    s_FrameStartTick = CurrentTick;
+
+    ++s_FrameIndex;
+
+
+}
+uint64_t Graphics::GetFrameCount(void)
+{
+    return s_FrameIndex;
+}
+
+float Graphics::GetFrameTime(void)
+{
+    return s_FrameTime;
+}
+
+float Graphics::GetFrameRate(void)
+{
+    return s_FrameTime == 0.0f ? 0.0f : 1.0f / s_FrameTime;
 }

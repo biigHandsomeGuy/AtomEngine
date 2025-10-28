@@ -5,6 +5,7 @@
 #include "imgui/backends/imgui_impl_dx12.h"
 #include "imgui/backends/imgui_impl_win32.h"
 #include "GameInput.h"
+#include "SystemTime.h"
 #include "CommandListManager.h"
 #include "Display.h"
 
@@ -50,6 +51,7 @@ namespace GameCore
 	void InitializeApplication(IGameApp& game)
 	{
 		Graphics::Initialize();
+		SystemTime::Initialize();
 		GameInput::Initialize();
 		game.Startup();
 	}
@@ -61,8 +63,9 @@ namespace GameCore
 			game.OnResize();
 			isResize = false;
 		}
-		GameInput::Update(1);
-		game.Update(1);
+		float DeltaTime = Graphics::GetFrameTime();
+		GameInput::Update(DeltaTime);
+		game.Update(DeltaTime);
 		game.RenderScene();
 		
 		Display::Present();

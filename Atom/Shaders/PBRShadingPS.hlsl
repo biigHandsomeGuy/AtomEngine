@@ -56,7 +56,7 @@ struct VertexOut
     float4 PosH : SV_POSITION;
     float4 ShadowPosH : POSITION0;
     float4 SsaoPosH : POSITION1;
-    float3 PosW : POSITION2;
+    float3 WorldPosition : POSITION2;
     float2 TexC : TEXCOORD;
     float3x3 tangentBasis : TAASIC;
     float3 Normal : NORMAL;
@@ -80,7 +80,6 @@ float3 AverageFresnel(float3 r, float3 g)
 }
 float4 main(VertexOut pin) : SV_Target
 {
-
     float3 albedo = 0;
     float metalness = 0;
     float roughness = 0;
@@ -94,7 +93,7 @@ float4 main(VertexOut pin) : SV_Target
         // Get current fragment's normal and transform to world space.
         N = normalize(2.0 * gNormalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0);
 	
-        N = normalize(mul(pin.tangentBasis, N));
+        N = normalize(mul(N, pin.tangentBasis));
     }
 	else
     {
@@ -104,9 +103,10 @@ float4 main(VertexOut pin) : SV_Target
         N = normalize(pin.Normal);
         //return float4(N, 1);
     }
-    N = normalize(pin.Normal);
+    //N = normalize(pin.Normal);
+    //return float4(N, 1);
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
-    float3 Lo = normalize(gCameraPos - pin.PosW);
+    float3 Lo = normalize(gCameraPos - pin.WorldPosition);
     
 	
 	// Angle between surface normal and outgoing light direction.
@@ -124,7 +124,7 @@ float4 main(VertexOut pin) : SV_Target
     {
         float alphaRoughness = roughness * roughness;
         
-        float3 Li = normalize(gSunPosition - pin.PosW);
+        float3 Li = normalize(gSunPosition - pin.WorldPosition);
         float3 Lradiance = { 1, 1, 1 };
 
 		// Half-vector between Li and Lo.
@@ -163,7 +163,7 @@ float4 main(VertexOut pin) : SV_Target
             }
             else
             {
-                float invR = saturate(CurveFactor * length(fwidth(pin.Normal)) / length(fwidth(pin.PosW)));
+                float invR = saturate(CurveFactor * length(fwidth(pin.Normal)) / length(fwidth(pin.WorldPosition)));
                 float3 subsurfaceDiffuse = gSSSDiffuseLUTMap.Sample(gsamLinearClamp, float2(0.5 * NoL + 0.5, invR));
                 //    float PH = pow(2.0 * texture(KelemenLUT,vec2(NoH, _smooth)).r, 10.0 );
                 //    float F = 0.028;//fresnelReflectance( H, viewDir, 0.028 );

@@ -15,8 +15,8 @@ public:
 	void Load(const std::wstring& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
 	void Draw(ID3D12GraphicsCommandList* commandList);
 	std::vector<Mesh> meshes;
-	Math::Matrix4 modelMatrix;
-	Math::Matrix4 normalMatrix;
+	Math::Matrix4 modelMatrix{ Math::kIdentity };
+	Math::Matrix4 normalMatrix{ Math::kIdentity };
 
 	void LoadTextures(const std::wstring& basePath);
 private:

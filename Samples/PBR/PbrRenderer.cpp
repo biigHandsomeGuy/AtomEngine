@@ -71,11 +71,11 @@ void PbrRenderer::Startup()
 
 	CommandContext& gfxContext = CommandContext::Begin(L"Scene Startup");
 
-	m_Camera.SetEyeAtUp(Vector3(0.0f, 3.0f, -5.0f), Vector3(kZero), Vector3(kYUnitVector));
-	m_Camera.SetZRange(1.0f, 10000.0f);
+	m_Camera.SetEyeAtUp(Vector3(0.0f, 0.0f, -20.0f), Vector3(kZero), Vector3(kYUnitVector));
+	m_Camera.SetZRange(0.1f, 10000.0f);
 	m_CameraController.reset(new FlyingFPSCamera(m_Camera, Vector3(kYUnitVector)));
 
-	g_IBLTexture = TextureManager::LoadHdrFromFile(L"G:/code/AtomEngine/Assets/Textures/EnvirMap/sun.hdr");
+	g_IBLTexture = TextureManager::LoadHdrFromFile(L"D:/code/AtomEngine/Assets/Textures/EnvirMap/sun.hdr");
 
 	PrecomputeCubemaps(gfxContext);
 
@@ -137,17 +137,21 @@ void PbrRenderer::Startup()
 
 	Model skyBox, pbrModel, pbrModel2;
 
-	skyBox.Load(std::wstring(L"G:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel.Load(std::wstring(L"G:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
+	skyBox.Load(std::wstring(L"D:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
+	pbrModel.Load(std::wstring(L"D:/code/AtomEngine/Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
+	pbrModel2.Load(std::wstring(L"D:/code/AtomEngine/Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
 
-	pbrModel.modelMatrix = OrthogonalTransform::MakeYRotation(45.0f);
-	pbrModel.modelMatrix = pbrModel.modelMatrix * Matrix4::MakeScale(8.0f);
 
-	pbrModel.normalMatrix = InverseTranspose(pbrModel.normalMatrix.Get3x3());
+	//pbrModel.modelMatrix = OrthogonalTransform::MakeYRotation(45.0f);
+	pbrModel.modelMatrix = pbrModel.modelMatrix * Matrix4::MakeScale(1.0f);
+	pbrModel2.modelMatrix = pbrModel.modelMatrix * OrthogonalTransform(Vector3{ 15,0,0 });
+
+	pbrModel.normalMatrix = InverseTranspose(pbrModel.modelMatrix.Get3x3());
+	pbrModel2.normalMatrix = InverseTranspose(pbrModel2.modelMatrix.Get3x3());
 
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
-	//m_Scene.Models.push_back(std::move(pbrModel2));
+	m_Scene.Models.push_back(std::move(pbrModel2));
 	m_MeshConstants.resize(m_Scene.Models.size());
 	m_MaterialConstants.resize(m_Scene.Models.size());
 
@@ -246,7 +250,12 @@ void PbrRenderer::RenderScene()
 	static float f = 0.0f;
 
 	ImGui::Begin("debug");
+	XMVECTOR pos = m_Camera.GetPosition();
+	XMFLOAT4 temp;
+	XMStoreFloat4(&temp, pos);
 
+	// ”√ImGui ‰≥ˆ
+	ImGui::Text("Vector: (%.3f, %.3f, %.3f, %.3f)", temp.x, temp.y, temp.z, temp.w);
 	ImGui::Text("Welcome to my renderer!");
 	ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
 	ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
@@ -296,19 +305,15 @@ void PbrRenderer::RenderScene()
 
 
 	{
-		m_SunShadowCamera.UpdateMatrix(Vector3({ 15.0f, 15.5f, -15.0f }), Vector3(kOrigin), Vector3(5000, 3000, 3000),
+		m_SunShadowCamera.UpdateMatrix(Vector3({ 15.0f, 15.5f, -15.0f }), Vector3({10, 10, -10}), Vector3(5000, 3000, 3000),
 			(uint32_t)g_ShadowBuffer.GetWidth(), (uint32_t)g_ShadowBuffer.GetHeight(), 16);
 
-		Matrix4 view = m_Camera.GetViewMatrix();
-		Matrix4 proj = m_Camera.GetProjMatrix();
-		Matrix4 viewProj = m_Camera.GetViewProjMatrix();
-
-		m_LightPassGlobalConstants.ViewMatrix = view;
-		m_LightPassGlobalConstants.ProjMatrix = proj;
-		m_LightPassGlobalConstants.ViewProjMatrix = viewProj;
+		m_LightPassGlobalConstants.ViewMatrix = m_Camera.GetViewMatrix();
+		m_LightPassGlobalConstants.ProjMatrix = m_Camera.GetProjMatrix();
+		m_LightPassGlobalConstants.ViewProjMatrix = m_Camera.GetViewProjMatrix();
 		m_LightPassGlobalConstants.SunShadowMatrix = m_SunShadowCamera.GetShadowMatrix();
 		m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition();
-		m_LightPassGlobalConstants.SunPos = m_SunShadowCamera.GetPosition();
+		m_LightPassGlobalConstants.SunPos = {15,15,-15};
 
 	}
 	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
@@ -337,7 +342,7 @@ void PbrRenderer::RenderScene()
 
 	{
 		
-		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetShadowMatrix();
+		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetViewProjMatrix();
 	}
 
 	gfxContext.SetRootSignature(s_RootSig);
