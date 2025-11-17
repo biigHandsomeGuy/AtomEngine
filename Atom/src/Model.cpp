@@ -2,7 +2,7 @@
 #include "Model.h"
 #include "GraphicsCore.h"
 #include "Renderer.h"
-#include "d3dUtil.h"
+#include "FileSystem.h"
 
 using namespace DirectX;
 void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
@@ -13,7 +13,7 @@ void Model::Load(const std::wstring& filepath, ID3D12Device* device, ID3D12Graph
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, Utility::WideStringToUTF8(filepath).c_str());
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, Utility::WStringToString(filepath).c_str());
 
     if (!warn.empty()) {
         OutputDebugStringA(warn.c_str());
@@ -30,7 +30,7 @@ void Model::Load(const std::wstring& filepath, ID3D12Device* device, ID3D12Graph
         meshes.push_back(ProcessMesh(attrib, shape, device, commandList));
     }  
 
-    LoadTextures(L"D:/code/AtomEngine/Assets/Textures/silver/");
+    LoadTextures(FileSystem::GetFullPath(L"Assets/Textures/silver/"));
 
 }
 
@@ -93,18 +93,15 @@ Mesh Model::ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t&
 {
     Mesh newMesh;
 
-    // 提取顶点数据
     for (const auto& index : shape.mesh.indices) {
         Vertex vertex;
 
-        // 位置
         vertex.Position = {
             attrib.vertices[3 * index.vertex_index + 0],
             attrib.vertices[3 * index.vertex_index + 1],
             attrib.vertices[3 * index.vertex_index + 2]
         };
 
-        // 法线
         if (!attrib.normals.empty()) {
             vertex.Normal = {
                 attrib.normals[3 * index.normal_index + 0],
@@ -113,11 +110,10 @@ Mesh Model::ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t&
             };
         }
 
-        // 纹理坐标
         if (!attrib.texcoords.empty()) {
             vertex.TexCoords = {
                 attrib.texcoords[2 * index.texcoord_index + 0],
-                attrib.texcoords[2 * index.texcoord_index + 1] // 反转 V 轴
+                attrib.texcoords[2 * index.texcoord_index + 1]
             };
         }
         
@@ -129,8 +125,7 @@ Mesh Model::ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t&
     const size_t vertexDataSize = newMesh.Vertices.size() * sizeof(Vertex);
     const size_t indexDataSize = newMesh.Indices.size() * sizeof(UINT);
 
-    // 创建 GPU 资源 - 顶点缓冲区
-    ThrowIfFailed(device->CreateCommittedResource(
+    ASSERT_SUCCEEDED(device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(vertexDataSize),
@@ -142,8 +137,7 @@ Mesh Model::ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t&
     newMesh.vbv.SizeInBytes = static_cast<UINT>(vertexDataSize);
     newMesh.vbv.StrideInBytes = sizeof(Vertex);
 
-    // 创建 GPU 资源 - 索引缓冲区
-    ThrowIfFailed(device->CreateCommittedResource(
+    ASSERT_SUCCEEDED(device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_UPLOAD },
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(indexDataSize),
@@ -155,14 +149,13 @@ Mesh Model::ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t&
     newMesh.ibv.SizeInBytes = static_cast<UINT>(indexDataSize);
     newMesh.ibv.Format = DXGI_FORMAT_R32_UINT;
 
-    // 复制顶点数据
     UINT8* data = nullptr;
-    ThrowIfFailed(newMesh.vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+    ASSERT_SUCCEEDED(newMesh.vertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
     memcpy(data, newMesh.Vertices.data(), vertexDataSize);
     newMesh.vertexBuffer->Unmap(0, nullptr);
 
-    // 复制索引数据
-    ThrowIfFailed(newMesh.indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+
+    ASSERT_SUCCEEDED(newMesh.indexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
     memcpy(data, newMesh.Indices.data(), indexDataSize);
     newMesh.indexBuffer->Unmap(0, nullptr);
 
@@ -176,16 +169,15 @@ void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>&
         Vertex& v1 = vertices[indices[i + 1]];
         Vertex& v2 = vertices[indices[i + 2]];
 
-        // 顶点坐标
+
         XMVECTOR pos0 = XMLoadFloat3(&v0.Position);
         XMVECTOR pos1 = XMLoadFloat3(&v1.Position);
         XMVECTOR pos2 = XMLoadFloat3(&v2.Position);
 
-        // 计算两个边
+
         XMVECTOR edge1 = XMVectorSubtract(pos1, pos0);
         XMVECTOR edge2 = XMVectorSubtract(pos2, pos0);
 
-        // UV 坐标
         XMFLOAT2 uv0 = v0.TexCoords;
         XMFLOAT2 uv1 = v1.TexCoords;
         XMFLOAT2 uv2 = v2.TexCoords;
@@ -195,11 +187,11 @@ void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>&
         float deltaU2 = uv2.x - uv0.x;
         float deltaV2 = uv2.y - uv0.y;
 
-        // 计算 TBN 矩阵的逆矩阵分母
+
         float determinant = (deltaU1 * deltaV2 - deltaU2 * deltaV1);
         float f = (determinant == 0.0f) ? 1.0f : (1.0f / determinant);
 
-        // 计算 Tangent 和 Bitangent
+
         XMVECTOR tangent = XMVectorScale(XMVectorSubtract(
             XMVectorScale(edge1, deltaV2),
             XMVectorScale(edge2, deltaV1)), f);
@@ -208,7 +200,7 @@ void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>&
             XMVectorScale(edge2, deltaU1),
             XMVectorScale(edge1, deltaU2)), f);
 
-        // 累加到顶点数据
+
         XMFLOAT3 t, b;
         XMStoreFloat3(&t, tangent);
         XMStoreFloat3(&b, bitangent);
@@ -222,13 +214,12 @@ void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>&
         v2.BiTangent = b;
     }
 
-    // 归一化 Tangent
+
     for (auto& vertex : vertices)
     {
         XMVECTOR t = XMLoadFloat3(&vertex.Tangent);
         XMVECTOR n = XMLoadFloat3(&vertex.Normal);
 
-        // 正交化 Tangent
         t = XMVector3Normalize(XMVectorSubtract(t, XMVectorScale(n, XMVector3Dot(n, t).m128_f32[0])));
 
         XMStoreFloat3(&vertex.Tangent, t);

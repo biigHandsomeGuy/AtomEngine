@@ -108,7 +108,7 @@ void SSAO::Initialize()
 
  
 
-    ThrowIfFailed(g_Device->CreateCommittedResource(
+    ASSERT_SUCCEEDED(g_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(s_SsaoCbuferSize),
@@ -221,7 +221,7 @@ void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
     const UINT num2DSubresources = texDesc.DepthOrArraySize * texDesc.MipLevels;
     const UINT64 uploadBufferSize = GetRequiredIntermediateSize(g_RandomVectorBuffer.GetResource(),  0, num2DSubresources);
 
-    ThrowIfFailed(g_Device->CreateCommittedResource(
+    ASSERT_SUCCEEDED(g_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),

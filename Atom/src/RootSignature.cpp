@@ -22,7 +22,7 @@ void RootSignature::InitStaticSampler(
     const D3D12_SAMPLER_DESC& NonStaticSamplerDesc,
     D3D12_SHADER_VISIBILITY Visibility)
 {
-    assert(m_NumInitializedStaticSamplers < m_NumSamplers);
+    ASSERT(m_NumInitializedStaticSamplers < m_NumSamplers);
     D3D12_STATIC_SAMPLER_DESC& StaticSamplerDesc = m_SamplerArray[m_NumInitializedStaticSamplers++];
 
     StaticSamplerDesc.Filter = NonStaticSamplerDesc.Filter;
@@ -74,7 +74,7 @@ void RootSignature::InitStaticSampler(
 
 void RootSignature::InitStaticSampler(const D3D12_STATIC_SAMPLER_DESC& StaticSamplerDesc)
 {
-    assert(m_NumInitializedStaticSamplers < m_NumSamplers);
+    ASSERT(m_NumInitializedStaticSamplers < m_NumSamplers);
     D3D12_STATIC_SAMPLER_DESC& samplerDesc = m_SamplerArray[m_NumInitializedStaticSamplers++];
 
     samplerDesc.Filter = StaticSamplerDesc.Filter;
@@ -99,7 +99,7 @@ void RootSignature::Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAG
     if (m_Finalized)
         return;
 
-    assert(m_NumInitializedStaticSamplers == m_NumSamplers);
+    ASSERT(m_NumInitializedStaticSamplers == m_NumSamplers);
 
     D3D12_ROOT_SIGNATURE_DESC RootDesc;
     RootDesc.NumParameters = m_NumParameters;
@@ -121,7 +121,7 @@ void RootSignature::Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAG
 
         if (RootParam.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
         {
-            assert(RootParam.DescriptorTable.pDescriptorRanges != nullptr);
+            ASSERT(RootParam.DescriptorTable.pDescriptorRanges != nullptr);
 
             HashCode = Utility::HashState(RootParam.DescriptorTable.pDescriptorRanges,
                 RootParam.DescriptorTable.NumDescriptorRanges, HashCode);
@@ -160,16 +160,16 @@ void RootSignature::Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAG
     {
         ComPtr<ID3DBlob> pOutBlob, pErrorBlob;
 
-        ThrowIfFailed(D3D12SerializeRootSignature(&RootDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+        ASSERT_SUCCEEDED(D3D12SerializeRootSignature(&RootDesc, D3D_ROOT_SIGNATURE_VERSION_1,
             pOutBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
 
-        ThrowIfFailed(g_Device->CreateRootSignature(1, pOutBlob->GetBufferPointer(), pOutBlob->GetBufferSize(),
+        ASSERT_SUCCEEDED(g_Device->CreateRootSignature(1, pOutBlob->GetBufferPointer(), pOutBlob->GetBufferSize(),
             IID_PPV_ARGS(&m_Signature)));
 
         m_Signature->SetName(name.c_str());
 
         s_RootSignatureHashMap[HashCode].Attach(m_Signature);
-        assert(*RSRef == m_Signature);
+        ASSERT(*RSRef == m_Signature);
     }
     else
     {

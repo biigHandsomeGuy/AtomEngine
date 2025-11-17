@@ -42,7 +42,7 @@ namespace Graphics
 
 void Display::Initialize(void)
 {
-	assert(s_SwapChain1 == nullptr);
+	ASSERT(s_SwapChain1 == nullptr);
     // Update the viewport transform to cover the client area.
     g_ViewPort.TopLeftX = 0;
     g_ViewPort.TopLeftY = 0;
@@ -54,7 +54,7 @@ void Display::Initialize(void)
     g_Rect = { 0, 0, (long)g_DisplayWidth, (long)g_DisplayHeight };
 
 	Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;
-	ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&dxgiFactory)));
+	ASSERT_SUCCEEDED(CreateDXGIFactory2(0, IID_PPV_ARGS(&dxgiFactory)));
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = g_DisplayWidth;
@@ -72,7 +72,7 @@ void Display::Initialize(void)
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
     fsSwapChainDesc.Windowed = TRUE;
 
-    ThrowIfFailed(dxgiFactory->CreateSwapChainForHwnd(
+    ASSERT_SUCCEEDED(dxgiFactory->CreateSwapChainForHwnd(
         g_CommandManager.GetCommandQueue(),
         GameCore::g_hWnd,
         &swapChainDesc,
@@ -84,7 +84,7 @@ void Display::Initialize(void)
     for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
     {
         ComPtr<ID3D12Resource> displayPlane;
-        ThrowIfFailed(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&displayPlane)));
+        ASSERT_SUCCEEDED(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&displayPlane)));
         g_DisplayPlane[i].CreateFromSwapChain(L"Primary SwapChain Buffer", displayPlane.Detach());
     }
 
@@ -128,7 +128,7 @@ void Display::Resize(uint32_t width, uint32_t height)
             g_DisplayPlane[i].Destroy();
         }
         // Resize the swap chain.
-        ThrowIfFailed(s_SwapChain1->ResizeBuffers(
+        ASSERT_SUCCEEDED(s_SwapChain1->ResizeBuffers(
             SWAP_CHAIN_BUFFER_COUNT,
             g_DisplayWidth, g_DisplayHeight,
             DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -139,7 +139,7 @@ void Display::Resize(uint32_t width, uint32_t height)
         for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
         {
             ComPtr<ID3D12Resource> displayPlane;
-            ThrowIfFailed(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&displayPlane)));
+            ASSERT_SUCCEEDED(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&displayPlane)));
             g_DisplayPlane[i].CreateFromSwapChain(L"Primary SwapChain Buffer", displayPlane.Detach());
 
         }

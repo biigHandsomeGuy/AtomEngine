@@ -8,6 +8,7 @@
 #include "SystemTime.h"
 #include "CommandListManager.h"
 #include "Display.h"
+#include "FileSystem.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxguid.lib")
@@ -53,6 +54,7 @@ namespace GameCore
 		Graphics::Initialize();
 		SystemTime::Initialize();
 		GameInput::Initialize();
+		FileSystem::Initialize();
 		game.Startup();
 	}
 

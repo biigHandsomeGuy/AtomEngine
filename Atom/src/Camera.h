@@ -53,7 +53,11 @@ namespace Math
 
         BaseCamera() : m_CameraToWorld(kIdentity), m_Basis(kIdentity) {}
 
-        void SetProjMatrix(const Matrix4& ProjMat) { m_ProjMatrix = ProjMat; }
+        void SetProjMatrix(const Matrix4& ProjMat) 
+        { 
+            m_ProjMatrix = ProjMat; 
+            m_ViewProjMatrix = m_ViewMatrix * m_ProjMatrix;
+        }
 
         OrthogonalTransform m_CameraToWorld;
 

@@ -3,7 +3,6 @@
 #include "GraphicsCore.h"
 #include "TextureManager.h"
 #include "stb_image/stb_image.h"
-#include "d3dUtil.h"
 using namespace Graphics;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
@@ -90,7 +89,7 @@ namespace TextureManager
 		// Create Texture
 		int width = 0, height = 0, channels = 0;
 		stbi_set_flip_vertically_on_load(false);
-		auto data = stbi_loadf(Utility::WideStringToUTF8(filePath).c_str(), &width, &height, &channels, 4);
+		auto data = stbi_loadf(Utility::WStringToString(filePath).c_str(), &width, &height, &channels, 4);
 		if (data == nullptr) {
 			abort();
 		}
@@ -131,7 +130,7 @@ namespace TextureManager
 
 		int width = 0, height = 0, channels = 0;
 
-		auto data = stbi_load(Utility::WideStringToUTF8(fileName).c_str(), &width, &height, &channels, STBI_rgb_alpha);
+		auto data = stbi_load(Utility::WStringToString(fileName).c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
 		tex->CreateFromMemory(data, width, height, fallback, forceSRGB);
 		// This was the first time it was requested, so indicate that the caller must read the file
@@ -187,7 +186,7 @@ void ManagedTexture::CreateFromMemory(unsigned char* data, uint64_t width, uint6
 		//if (forceSRGB)
 		//	textureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
 
-		ThrowIfFailed(g_Device->CreateCommittedResource(
+		ASSERT_SUCCEEDED(g_Device->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 			D3D12_HEAP_FLAG_NONE,
 			&textureDesc,
@@ -236,7 +235,7 @@ void ManagedTexture::CreateFromMemory(float* data, uint64_t width, uint64_t heig
 	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
 
-	ThrowIfFailed(g_Device->CreateCommittedResource(
+	ASSERT_SUCCEEDED(g_Device->CreateCommittedResource(
 		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 		D3D12_HEAP_FLAG_NONE,
 		&textureDesc,
@@ -322,7 +321,7 @@ const Texture* TextureRef::Get(void) const
 
 const Texture* TextureRef::operator->(void) const
 {
-	assert(m_Ref != nullptr);
+	ASSERT(m_Ref != nullptr);
 	return m_Ref;
 }
 

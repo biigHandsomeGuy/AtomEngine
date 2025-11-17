@@ -124,13 +124,13 @@ public:
 
 	RootParameter& operator[] (size_t EntryIndex)
 	{
-		assert(EntryIndex < m_NumParameters);
+		ASSERT(EntryIndex < m_NumParameters);
 		return m_ParamArray.get()[EntryIndex];
 	}
 
 	const RootParameter& operator[] (size_t EntryIndex) const
 	{
-		assert(EntryIndex < m_NumParameters);
+		ASSERT(EntryIndex < m_NumParameters);
 		return m_ParamArray.get()[EntryIndex];
 	}
 

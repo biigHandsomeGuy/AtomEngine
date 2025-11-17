@@ -100,12 +100,13 @@
     <ClInclude Include="src\DepthBuffer.h" />
     <ClInclude Include="src\DescriptorHeap.h" />
     <ClInclude Include="src\DynamicDescriptorHeap.h" />
+    <ClInclude Include="src\FileSystem.h" />
     <ClInclude Include="src\GameCore.h" />
     <ClInclude Include="src\Camera.h" />
     <ClInclude Include="src\CommandAllocatorPool.h" />
     <ClInclude Include="src\CommandListManager.h" />
     <ClInclude Include="src\ConstantBuffers.h" />
-    <ClInclude Include="src\d3dUtil.h" />
+    <ClInclude Include="src\Util.h" />
     <ClInclude Include="src\d3dx12.h" />
     <ClInclude Include="src\DDSTextureLoader.h" />
     <ClInclude Include="src\demo.h" />
@@ -149,12 +150,12 @@
     <ClInclude Include="src\SystemTime.h" />
     <ClInclude Include="src\Texture.h" />
     <ClInclude Include="src\TextureManager.h" />
-    <ClInclude Include="src\UploadBuffer.h" />
     <ClCompile Include="src\CameraController.cpp" />
     <ClCompile Include="src\Color.cpp" />
     <ClCompile Include="src\ColorBuffer.cpp" />
     <ClCompile Include="src\DepthBuffer.cpp" />
     <ClCompile Include="src\DynamicDescriptorHeap.cpp" />
+    <ClCompile Include="src\FileSystem.cpp" />
     <ClCompile Include="src\GameInput.cpp" />
     <ClCompile Include="src\GraphicsCommon.cpp" />
     <ClCompile Include="src\LinearAllocator.cpp" />
@@ -190,7 +191,7 @@
     <ClCompile Include="src\GameTimer.cpp" />
     <ClCompile Include="src\MathHelper.cpp" />
     <ClCompile Include="src\Ssao.cpp" />
-    <ClCompile Include="src\d3dUtil.cpp" />
+    <ClCompile Include="src\Util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\BloomPS.hlsl">

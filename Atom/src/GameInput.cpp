@@ -187,14 +187,14 @@ namespace
         KbmBuildKeyMapping();
 
         if (FAILED(DirectInput8Create(GetModuleHandle(nullptr), DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&s_DI, nullptr)))
-            ThrowIfFailed(false, "DirectInput8 initialization failed.");
+            ASSERT_SUCCEEDED(false, "DirectInput8 initialization failed.");
 
         if (FAILED(s_DI->CreateDevice(GUID_SysKeyboard, &s_Keyboard, nullptr)))
-            ThrowIfFailed(false, "Keyboard CreateDevice failed.");
+            ASSERT_SUCCEEDED(false, "Keyboard CreateDevice failed.");
         if (FAILED(s_Keyboard->SetDataFormat(&c_dfDIKeyboard)))
-            ThrowIfFailed(false, "Keyboard SetDataFormat failed.");
+            ASSERT_SUCCEEDED(false, "Keyboard SetDataFormat failed.");
         if (FAILED(s_Keyboard->SetCooperativeLevel(GameCore::g_hWnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE)))
-            ThrowIfFailed(false, "Keyboard SetCooperativeLevel failed.");
+            ASSERT_SUCCEEDED(false, "Keyboard SetCooperativeLevel failed.");
 
         DIPROPDWORD dipdw;
         dipdw.diph.dwSize = sizeof(DIPROPDWORD);
@@ -203,14 +203,14 @@ namespace
         dipdw.diph.dwHow = DIPH_DEVICE;
         dipdw.dwData = 10;
         if (FAILED(s_Keyboard->SetProperty(DIPROP_BUFFERSIZE, &dipdw.diph)))
-            ThrowIfFailed(false, "Keyboard set buffer size failed.");
+            ASSERT_SUCCEEDED(false, "Keyboard set buffer size failed.");
 
         if (FAILED(s_DI->CreateDevice(GUID_SysMouse, &s_Mouse, nullptr)))
-            ThrowIfFailed(false, "Mouse CreateDevice failed.");
+            ASSERT_SUCCEEDED(false, "Mouse CreateDevice failed.");
         if (FAILED(s_Mouse->SetDataFormat(&c_dfDIMouse2)))
-            ThrowIfFailed(false, "Mouse SetDataFormat failed.");
-        if (FAILED(s_Mouse->SetCooperativeLevel(GameCore::g_hWnd, DISCL_FOREGROUND | DISCL_EXCLUSIVE)))
-            ThrowIfFailed(false, "Mouse SetCooperativeLevel failed.");
+            ASSERT_SUCCEEDED(false, "Mouse SetDataFormat failed.");
+        if (FAILED(s_Mouse->SetCooperativeLevel(GameCore::g_hWnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE)))
+            ASSERT_SUCCEEDED(false, "Mouse SetCooperativeLevel failed.");
 
         KbmZeroInputs();
     }

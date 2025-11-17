@@ -14,7 +14,7 @@ LinearAllocatorPageManager::LinearAllocatorPageManager()
 {
     m_AllocationType = sm_AutoType;
     sm_AutoType = (LinearAllocatorType)(sm_AutoType + 1);
-    assert(sm_AutoType <= kNumAllocatorTypes);
+    ASSERT(sm_AutoType <= kNumAllocatorTypes);
 }
 
 LinearAllocatorPageManager LinearAllocator::sm_PageManager[2];
@@ -106,7 +106,7 @@ LinearAllocationPage* LinearAllocatorPageManager::CreateNewPage(size_t PageSize)
     }
 
     ID3D12Resource* pBuffer;
-    ThrowIfFailed(g_Device->CreateCommittedResource(&HeapProps, D3D12_HEAP_FLAG_NONE,
+    ASSERT_SUCCEEDED(g_Device->CreateCommittedResource(&HeapProps, D3D12_HEAP_FLAG_NONE,
         &ResourceDesc, DefaultUsage, nullptr, IID_PPV_ARGS(&pBuffer)));
 
     pBuffer->SetName(L"LinearAllocator Page");
@@ -146,8 +146,8 @@ DynAlloc LinearAllocator::Allocate(size_t SizeInBytes, size_t Alignment)
 {
     const size_t AlignmentMask = Alignment - 1;
 
-    // Assert that it's a power of two.
-    assert((AlignmentMask & Alignment) == 0);
+    // ASSERT that it's a power of two.
+    ASSERT((AlignmentMask & Alignment) == 0);
 
     // Align the allocation
     const size_t AlignedSize = Math::AlignUpWithMask(SizeInBytes, AlignmentMask);
@@ -159,7 +159,7 @@ DynAlloc LinearAllocator::Allocate(size_t SizeInBytes, size_t Alignment)
 
     if (m_CurOffset + AlignedSize > m_PageSize)
     {
-        assert(m_CurPage != nullptr);
+        ASSERT(m_CurPage != nullptr);
         m_RetiredPages.push_back(m_CurPage);
         m_CurPage = nullptr;
     }

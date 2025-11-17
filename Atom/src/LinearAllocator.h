@@ -119,7 +119,7 @@ public:
 
     LinearAllocator(LinearAllocatorType Type) : m_AllocationType(Type), m_PageSize(0), m_CurOffset(~(size_t)0), m_CurPage(nullptr)
     {
-        assert(Type > kInvalidAllocator && Type < kNumAllocatorTypes);
+        ASSERT(Type > kInvalidAllocator && Type < kNumAllocatorTypes);
         m_PageSize = (Type == kGpuExclusive ? kGpuAllocatorPageSize : kCpuAllocatorPageSize);
     }
 

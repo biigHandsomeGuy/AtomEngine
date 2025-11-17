@@ -59,6 +59,7 @@
       <ConformanceMode>false</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\tinyobjloader;$(SolutionDir)Dependencies\;$(SolutionDir)Dependencies\Imgui;$(SolutionDir)Dependencies\Imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -78,6 +79,7 @@
       <ConformanceMode>false</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\tinyobjloader;$(SolutionDir)Dependencies\;$(SolutionDir)Dependencies\Imgui;$(SolutionDir)Dependencies\Imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

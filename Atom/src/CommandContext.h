@@ -96,7 +96,7 @@ public:
     void Initialize(void);
 
     GraphicsContext& GetGraphicsContext() {
-        assert(m_Type != D3D12_COMMAND_LIST_TYPE_COMPUTE, "Cannot convert async compute context to graphics");
+        ASSERT(m_Type != D3D12_COMMAND_LIST_TYPE_COMPUTE, "Cannot convert async compute context to graphics");
         return reinterpret_cast<GraphicsContext&>(*this);
     }
 
@@ -446,7 +446,7 @@ inline void GraphicsContext::SetConstantBuffer(UINT RootIndex, D3D12_GPU_VIRTUAL
 
 inline void GraphicsContext::SetDynamicConstantBufferView(UINT RootIndex, size_t BufferSize, const void* BufferData)
 {
-    assert(BufferData != nullptr && Math::IsAligned(BufferData, 16));
+    ASSERT(BufferData != nullptr && Math::IsAligned(BufferData, 16));
     DynAlloc cb = m_CpuLinearAllocator.Allocate(BufferSize);
     //SIMDMemCopy(cb.DataPtr, BufferData, Math::AlignUp(BufferSize, 16) >> 4);
     memcpy(cb.DataPtr, BufferData, BufferSize);
@@ -455,7 +455,7 @@ inline void GraphicsContext::SetDynamicConstantBufferView(UINT RootIndex, size_t
 
 inline void ComputeContext::SetDynamicConstantBufferView(UINT RootIndex, size_t BufferSize, const void* BufferData)
 {
-    assert(BufferData != nullptr && Math::IsAligned(BufferData, 16));
+    ASSERT(BufferData != nullptr && Math::IsAligned(BufferData, 16));
     DynAlloc cb = m_CpuLinearAllocator.Allocate(BufferSize);
     //SIMDMemCopy(cb.DataPtr, BufferData, Math::AlignUp(BufferSize, 16) >> 4);
     memcpy(cb.DataPtr, BufferData, BufferSize);
@@ -464,7 +464,7 @@ inline void ComputeContext::SetDynamicConstantBufferView(UINT RootIndex, size_t 
 
 //inline void GraphicsContext::SetDynamicVB(UINT Slot, size_t NumVertices, size_t VertexStride, const void* VertexData)
 //{
-//    assert(VertexData != nullptr && Math::IsAligned(VertexData, 16));
+//    ASSERT(VertexData != nullptr && Math::IsAligned(VertexData, 16));
 //
 //    size_t BufferSize = Math::AlignUp(NumVertices * VertexStride, 16);
 //    DynAlloc vb = m_CpuLinearAllocator.Allocate(BufferSize);
@@ -481,7 +481,7 @@ inline void ComputeContext::SetDynamicConstantBufferView(UINT RootIndex, size_t 
 
 //inline void GraphicsContext::SetDynamicIB(size_t IndexCount, const uint16_t* IndexData)
 //{
-//    assert(IndexData != nullptr && Math::IsAligned(IndexData, 16));
+//    ASSERT(IndexData != nullptr && Math::IsAligned(IndexData, 16));
 //
 //    size_t BufferSize = Math::AlignUp(IndexCount * sizeof(uint16_t), 16);
 //    DynAlloc ib = m_CpuLinearAllocator.Allocate(BufferSize);
@@ -498,7 +498,7 @@ inline void ComputeContext::SetDynamicConstantBufferView(UINT RootIndex, size_t 
 //
 //inline void GraphicsContext::SetDynamicSRV(UINT RootIndex, size_t BufferSize, const void* BufferData)
 //{
-//    assert(BufferData != nullptr && Math::IsAligned(BufferData, 16));
+//    ASSERT(BufferData != nullptr && Math::IsAligned(BufferData, 16));
 //    DynAlloc cb = m_CpuLinearAllocator.Allocate(BufferSize);
 //    SIMDMemCopy(cb.DataPtr, BufferData, Math::AlignUp(BufferSize, 16) >> 4);
 //    m_CommandList->SetGraphicsRootShaderResourceView(RootIndex, cb.GpuAddress);
@@ -506,7 +506,7 @@ inline void ComputeContext::SetDynamicConstantBufferView(UINT RootIndex, size_t 
 //
 //inline void ComputeContext::SetDynamicSRV(UINT RootIndex, size_t BufferSize, const void* BufferData)
 //{
-//    assert(BufferData != nullptr && Math::IsAligned(BufferData, 16));
+//    ASSERT(BufferData != nullptr && Math::IsAligned(BufferData, 16));
 //    DynAlloc cb = m_CpuLinearAllocator.Allocate(BufferSize);
 //    SIMDMemCopy(cb.DataPtr, BufferData, Math::AlignUp(BufferSize, 16) >> 4);
 //    m_CommandList->SetComputeRootShaderResourceView(RootIndex, cb.GpuAddress);
@@ -514,25 +514,25 @@ inline void ComputeContext::SetDynamicConstantBufferView(UINT RootIndex, size_t 
 //
 //inline void GraphicsContext::SetBufferSRV(UINT RootIndex, const GpuBuffer& SRV, UINT64 Offset)
 //{
-//    assert((SRV.m_UsageState & (D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)) != 0);
+//    ASSERT((SRV.m_UsageState & (D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)) != 0);
 //    m_CommandList->SetGraphicsRootShaderResourceView(RootIndex, SRV.GetGpuVirtualAddress() + Offset);
 //}
 //
 //inline void ComputeContext::SetBufferSRV(UINT RootIndex, const GpuBuffer& SRV, UINT64 Offset)
 //{
-//    assert((SRV.m_UsageState & D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) != 0);
+//    ASSERT((SRV.m_UsageState & D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) != 0);
 //    m_CommandList->SetComputeRootShaderResourceView(RootIndex, SRV.GetGpuVirtualAddress() + Offset);
 //}
 //
 //inline void GraphicsContext::SetBufferUAV(UINT RootIndex, const GpuBuffer& UAV, UINT64 Offset)
 //{
-//    assert((UAV.m_UsageState & D3D12_RESOURCE_STATE_UNORDERED_ACCESS) != 0);
+//    ASSERT((UAV.m_UsageState & D3D12_RESOURCE_STATE_UNORDERED_ACCESS) != 0);
 //    m_CommandList->SetGraphicsRootUnorderedAccessView(RootIndex, UAV.GetGpuVirtualAddress() + Offset);
 //}
 //
 //inline void ComputeContext::SetBufferUAV(UINT RootIndex, const GpuBuffer& UAV, UINT64 Offset)
 //{
-//    assert((UAV.m_UsageState & D3D12_RESOURCE_STATE_UNORDERED_ACCESS) != 0);
+//    ASSERT((UAV.m_UsageState & D3D12_RESOURCE_STATE_UNORDERED_ACCESS) != 0);
 //    m_CommandList->SetComputeRootUnorderedAccessView(RootIndex, UAV.GetGpuVirtualAddress() + Offset);
 //}
 

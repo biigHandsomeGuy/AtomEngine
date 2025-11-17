@@ -18,7 +18,7 @@ public:
 
 	const RootSignature& GetRootSignature(void) const
 	{
-		assert(m_RootSignature != nullptr);
+		ASSERT(m_RootSignature != nullptr);
 		return *m_RootSignature;
 	}
 

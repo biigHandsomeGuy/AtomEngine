@@ -5,7 +5,7 @@
 #include "GraphicsCore.h"
 #include "DescriptorHeap.h"
 //#include "EngineProfiling.h"
-#include "UploadBuffer.h"
+
 //#include "ReadbackBuffer.h"
 
 #pragma warning(push)
@@ -41,16 +41,16 @@ CommandContext* ContextManager::AllocateContext(D3D12_COMMAND_LIST_TYPE Type)
         AvailableContexts.pop();
         ret->Reset();
     }
-    assert(ret != nullptr);
+    ASSERT(ret != nullptr);
 
-    assert(ret->m_Type == Type);
+    ASSERT(ret->m_Type == Type);
 
     return ret;
 }
 
 void ContextManager::FreeContext(CommandContext* UsedContext)
 {
-    assert(UsedContext != nullptr);
+    ASSERT(UsedContext != nullptr);
     std::lock_guard<std::mutex> LockGuard(sm_ContextAllocationMutex);
     sm_AvailableContexts[UsedContext->m_Type].push(UsedContext);
 }
@@ -85,7 +85,7 @@ uint64_t CommandContext::Flush(bool WaitForCompletion)
 {
     FlushResourceBarriers();
 
-    assert(m_CurrentAllocator != nullptr);
+    ASSERT(m_CurrentAllocator != nullptr);
 
     uint64_t FenceValue = g_CommandManager.GetQueue(m_Type).ExecuteCommandList(m_CommandList);
 
@@ -118,14 +118,14 @@ uint64_t CommandContext::Flush(bool WaitForCompletion)
 
 uint64_t CommandContext::Finish(bool WaitForCompletion)
 {
-    assert(m_Type == D3D12_COMMAND_LIST_TYPE_DIRECT || m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    ASSERT(m_Type == D3D12_COMMAND_LIST_TYPE_DIRECT || m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
     FlushResourceBarriers();
 
     //if (m_ID.length() > 0)
     //    EngineProfiling::EndBlock(this);
 
-    assert(m_CurrentAllocator != nullptr);
+    ASSERT(m_CurrentAllocator != nullptr);
 
     CommandQueue& Queue = g_CommandManager.GetQueue(m_Type);
 
@@ -180,7 +180,7 @@ void CommandContext::Reset(void)
 {
     // We only call Reset() on previously freed contexts.  The command list persists, but we must
     // request a new allocator.
-    assert(m_CommandList != nullptr && m_CurrentAllocator == nullptr);
+    ASSERT(m_CommandList != nullptr && m_CurrentAllocator == nullptr);
     m_CurrentAllocator = g_CommandManager.GetQueue(m_Type).RequestAllocator();
     m_CommandList->Reset(m_CurrentAllocator, nullptr);
 
@@ -314,7 +314,7 @@ void GraphicsContext::ClearDepthAndStencil(DepthBuffer& Target)
 
 void GraphicsContext::SetViewportAndScissor(const D3D12_VIEWPORT& vp, const D3D12_RECT& rect)
 {
-    assert(rect.left < rect.right && rect.top < rect.bottom);
+    ASSERT(rect.left < rect.right && rect.top < rect.bottom);
     m_CommandList->RSSetViewports(1, &vp);
     m_CommandList->RSSetScissorRects(1, &rect);
 }
@@ -338,7 +338,7 @@ void GraphicsContext::SetViewport(FLOAT x, FLOAT y, FLOAT w, FLOAT h, FLOAT minD
 
 void GraphicsContext::SetScissor(const D3D12_RECT& rect)
 {
-    assert(rect.left < rect.right && rect.top < rect.bottom);
+    ASSERT(rect.left < rect.right && rect.top < rect.bottom);
     m_CommandList->RSSetScissorRects(1, &rect);
 }
 
@@ -348,13 +348,13 @@ void CommandContext::TransitionResource(GpuResource& Resource, D3D12_RESOURCE_ST
 
     if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
     {
-        assert((OldState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == OldState);
-        assert((NewState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == NewState);
+        ASSERT((OldState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == OldState);
+        ASSERT((NewState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == NewState);
     }
 
     if (OldState != NewState)
     {
-        assert(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
+        ASSERT(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
         D3D12_RESOURCE_BARRIER& BarrierDesc = m_ResourceBarrierBuffer[m_NumBarriersToFlush++];
 
         BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -391,7 +391,7 @@ void CommandContext::BeginResourceTransition(GpuResource& Resource, D3D12_RESOUR
 
     if (OldState != NewState)
     {
-        assert(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
+        ASSERT(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
         D3D12_RESOURCE_BARRIER& BarrierDesc = m_ResourceBarrierBuffer[m_NumBarriersToFlush++];
 
         BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -411,7 +411,7 @@ void CommandContext::BeginResourceTransition(GpuResource& Resource, D3D12_RESOUR
 
 void CommandContext::InsertUAVBarrier(GpuResource& Resource, bool FlushImmediate)
 {
-    assert(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
+    ASSERT(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
     D3D12_RESOURCE_BARRIER& BarrierDesc = m_ResourceBarrierBuffer[m_NumBarriersToFlush++];
 
     BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
@@ -424,7 +424,7 @@ void CommandContext::InsertUAVBarrier(GpuResource& Resource, bool FlushImmediate
 
 void CommandContext::InsertAliasBarrier(GpuResource& Before, GpuResource& After, bool FlushImmediate)
 {
-    assert(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
+    ASSERT(m_NumBarriersToFlush < 16, "Exceeded arbitrary limit on buffered barriers");
     D3D12_RESOURCE_BARRIER& BarrierDesc = m_ResourceBarrierBuffer[m_NumBarriersToFlush++];
 
     BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_ALIASING;
@@ -438,7 +438,7 @@ void CommandContext::InsertAliasBarrier(GpuResource& Before, GpuResource& After,
 
 //void CommandContext::WriteBuffer(GpuResource& Dest, size_t DestOffset, const void* BufferData, size_t NumBytes)
 //{
-//    assert(BufferData != nullptr && Math::IsAligned(BufferData, 16));
+//    ASSERT(BufferData != nullptr && Math::IsAligned(BufferData, 16));
 //    DynAlloc TempSpace = m_CpuLinearAllocator.Allocate(NumBytes, 512);
 //    SIMDMemCopy(TempSpace.DataPtr, BufferData, Math::DivideByMultiple(NumBytes, 16));
 //    CopyBufferRegion(Dest, DestOffset, TempSpace.Buffer, TempSpace.Offset, NumBytes);
@@ -498,7 +498,7 @@ void CommandContext::InitializeTextureArraySlice(GpuResource& Dest, UINT SliceIn
     const D3D12_RESOURCE_DESC& DestDesc = Dest.GetResource()->GetDesc();
     const D3D12_RESOURCE_DESC& SrcDesc = Src.GetResource()->GetDesc();
 
-    assert(SliceIndex < DestDesc.DepthOrArraySize &&
+    ASSERT(SliceIndex < DestDesc.DepthOrArraySize &&
         SrcDesc.DepthOrArraySize == 1 &&
         DestDesc.Width == SrcDesc.Width &&
         DestDesc.Height == SrcDesc.Height &&

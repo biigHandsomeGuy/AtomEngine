@@ -11,5 +11,5 @@
 
 [submodule "Dependencies/imgui"]
 	path = Dependencies/imgui
-	url = https://github.com/biigHandsomeGuy/imgui
+	url = https://github.com/biigHandsomeGuy/imgui.git
 	branch = docking

@@ -55,61 +55,72 @@ void FlyingFPSCamera::Update(float deltaTime)
     deltaTime *= 100;
     float timeScale = 1.0f;
 
-    if (GameInput::IsFirstPressed(GameInput::kLThumbClick) || GameInput::IsFirstPressed(GameInput::kKey_lshift))
-        m_FineMovement = !m_FineMovement;
 
-    if (GameInput::IsFirstPressed(GameInput::kRThumbClick))
-        m_FineRotation = !m_FineRotation;
-
-    float speedScale = (m_FineMovement ? 0.1f : 1.0f) * timeScale;
-    float panScale = (m_FineRotation ? 0.5f : 1.0f) * timeScale;
-
-    float yaw = GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogRightStickX) * m_HorizontalLookSensitivity * panScale;
-    float pitch = GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogRightStickY) * m_VerticalLookSensitivity * panScale;
-    float forward = m_MoveSpeed * speedScale * (
-        GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogLeftStickY) +
-        (GameInput::IsPressed(GameInput::kKey_w) ? deltaTime : 0.0f) +
-        (GameInput::IsPressed(GameInput::kKey_s) ? -deltaTime : 0.0f)
-        );
-    float strafe = m_StrafeSpeed * speedScale * (
-        GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogLeftStickX) +
-        (GameInput::IsPressed(GameInput::kKey_d) ? deltaTime : 0.0f) +
-        (GameInput::IsPressed(GameInput::kKey_a) ? -deltaTime : 0.0f)
-        );
-    float ascent = m_StrafeSpeed * speedScale * (
-        GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogRightTrigger) -
-        GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogLeftTrigger) +
-        (GameInput::IsPressed(GameInput::kKey_e) ? deltaTime : 0.0f) +
-        (GameInput::IsPressed(GameInput::kKey_q) ? -deltaTime : 0.0f)
-        );
-
-    if (m_Momentum)
+    if (GameInput::IsPressed(GameInput::kMouse1))
     {
-        ApplyMomentum(m_LastYaw, yaw, deltaTime);
-        ApplyMomentum(m_LastPitch, pitch, deltaTime);
-        ApplyMomentum(m_LastForward, forward, deltaTime);
-        ApplyMomentum(m_LastStrafe, strafe, deltaTime);
-        ApplyMomentum(m_LastAscent, ascent, deltaTime);
+        ShowCursor(false);
+        if (GameInput::IsFirstPressed(GameInput::kLThumbClick) || GameInput::IsFirstPressed(GameInput::kKey_lshift))
+            m_FineMovement = !m_FineMovement;
+
+        if (GameInput::IsFirstPressed(GameInput::kRThumbClick))
+            m_FineRotation = !m_FineRotation;
+
+        float speedScale = (m_FineMovement ? 0.1f : 1.0f) * timeScale;
+        float panScale = (m_FineRotation ? 0.5f : 1.0f) * timeScale;
+
+        float yaw = GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogRightStickX) * m_HorizontalLookSensitivity * panScale;
+        float pitch = GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogRightStickY) * m_VerticalLookSensitivity * panScale;
+        float forward = m_MoveSpeed * speedScale * (
+            GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogLeftStickY) +
+            (GameInput::IsPressed(GameInput::kKey_w) ? deltaTime : 0.0f) +
+            (GameInput::IsPressed(GameInput::kKey_s) ? -deltaTime : 0.0f)
+            );
+        float strafe = m_StrafeSpeed * speedScale * (
+            GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogLeftStickX) +
+            (GameInput::IsPressed(GameInput::kKey_d) ? deltaTime : 0.0f) +
+            (GameInput::IsPressed(GameInput::kKey_a) ? -deltaTime : 0.0f)
+            );
+        float ascent = m_StrafeSpeed * speedScale * (
+            GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogRightTrigger) -
+            GameInput::GetTimeCorrectedAnalogInput(GameInput::kAnalogLeftTrigger) +
+            (GameInput::IsPressed(GameInput::kKey_e) ? deltaTime : 0.0f) +
+            (GameInput::IsPressed(GameInput::kKey_q) ? -deltaTime : 0.0f)
+            );
+
+        if (m_Momentum)
+        {
+            ApplyMomentum(m_LastYaw, yaw, deltaTime);
+            ApplyMomentum(m_LastPitch, pitch, deltaTime);
+            ApplyMomentum(m_LastForward, forward, deltaTime);
+            ApplyMomentum(m_LastStrafe, strafe, deltaTime);
+            ApplyMomentum(m_LastAscent, ascent, deltaTime);
+        }
+
+        // don't apply momentum to mouse inputs
+        yaw += GameInput::GetAnalogInput(GameInput::kAnalogMouseX) * m_MouseSensitivityX;
+        pitch += GameInput::GetAnalogInput(GameInput::kAnalogMouseY) * m_MouseSensitivityY;
+
+        m_CurrentPitch += pitch;
+        m_CurrentPitch = XMMin(XM_PIDIV2, m_CurrentPitch);
+        m_CurrentPitch = XMMax(-XM_PIDIV2, m_CurrentPitch);
+
+        m_CurrentHeading -= yaw;
+        if (m_CurrentHeading > XM_PI)
+            m_CurrentHeading -= XM_2PI;
+        else if (m_CurrentHeading <= -XM_PI)
+            m_CurrentHeading += XM_2PI;
+
+        Matrix3 orientation = Matrix3(m_WorldEast, m_WorldUp, -m_WorldNorth) * Matrix3::MakeYRotation(m_CurrentHeading) * Matrix3::MakeXRotation(m_CurrentPitch);
+        Vector3 position = orientation * Vector3(strafe, ascent, -forward) + m_TargetCamera.GetPosition();
+        m_TargetCamera.SetTransform(AffineTransform(orientation, position));
+
+        m_TargetCamera.Update();
     }
-
-    // don't apply momentum to mouse inputs
-    yaw += GameInput::GetAnalogInput(GameInput::kAnalogMouseX) * m_MouseSensitivityX;
-    pitch += GameInput::GetAnalogInput(GameInput::kAnalogMouseY) * m_MouseSensitivityY;
-
-    m_CurrentPitch += pitch;
-    m_CurrentPitch = XMMin(XM_PIDIV2, m_CurrentPitch);
-    m_CurrentPitch = XMMax(-XM_PIDIV2, m_CurrentPitch);
-
-    m_CurrentHeading -= yaw;
-    if (m_CurrentHeading > XM_PI)
-        m_CurrentHeading -= XM_2PI;
-    else if (m_CurrentHeading <= -XM_PI)
-        m_CurrentHeading += XM_2PI;
-
-    Matrix3 orientation = Matrix3(m_WorldEast, m_WorldUp, -m_WorldNorth) * Matrix3::MakeYRotation(m_CurrentHeading) * Matrix3::MakeXRotation(m_CurrentPitch);
-    Vector3 position = orientation * Vector3(strafe, ascent, -forward) + m_TargetCamera.GetPosition();
-    m_TargetCamera.SetTransform(AffineTransform(orientation, position));
-    m_TargetCamera.Update();
+    else
+    {
+        ShowCursor(true);
+    }
+    
 }
 
 void FlyingFPSCamera::SetHeadingPitchAndPosition(float heading, float pitch, const Vector3& position)

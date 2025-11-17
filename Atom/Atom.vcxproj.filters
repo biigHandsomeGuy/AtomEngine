@@ -27,7 +27,7 @@
     <ClInclude Include="src\ConstantBuffers.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="src\d3dUtil.h">
+    <ClInclude Include="src\Util.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="src\d3dx12.h">
@@ -70,9 +70,6 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="src\Texture.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="src\UploadBuffer.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="src\CommandAllocatorPool.h">
@@ -142,6 +139,7 @@
     <ClInclude Include="src\CameraController.h" />
     <ClInclude Include="src\ShadowCamera.h" />
     <ClInclude Include="src\SystemTime.h" />
+    <ClInclude Include="src\FileSystem.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Camera.cpp">
@@ -156,7 +154,7 @@
     <ClCompile Include="src\Ssao.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\d3dUtil.cpp">
+    <ClCompile Include="src\Util.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\pch.cpp">
@@ -215,6 +213,7 @@
     <ClCompile Include="src\CameraController.cpp" />
     <ClCompile Include="src\ShadowCamera.cpp" />
     <ClCompile Include="src\SystemTime.cpp" />
+    <ClCompile Include="src\FileSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\SsaoVS.hlsl">

@@ -42,14 +42,14 @@ ID3D12CommandAllocator* CommandAllocatorPool::RequestAllocator(uint64_t Complete
         {
             pAllocator = AllocatorPair.second;
             // 重用相关内存
-            ThrowIfFailed(pAllocator->Reset());
+            ASSERT_SUCCEEDED(pAllocator->Reset());
             m_ReadyAllocators.pop();
         }
     }
 
     if (pAllocator == nullptr)
     {
-        ThrowIfFailed(m_Device->CreateCommandAllocator(m_cCommandListType, IID_PPV_ARGS(&pAllocator)));
+        ASSERT_SUCCEEDED(m_Device->CreateCommandAllocator(m_cCommandListType, IID_PPV_ARGS(&pAllocator)));
         wchar_t AllocatorName[32];
         swprintf(AllocatorName, 32, L"CommandAllocator %zu", m_AllocatorPool.size());
         pAllocator->SetName(AllocatorName);

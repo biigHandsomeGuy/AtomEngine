@@ -27,7 +27,7 @@ ID3D12DescriptorHeap* DescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_
     Desc.NodeMask = 1;
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> pHeap;
-    ThrowIfFailed(Graphics::g_Device->CreateDescriptorHeap(&Desc, IID_PPV_ARGS(&pHeap)));
+    ASSERT_SUCCEEDED(Graphics::g_Device->CreateDescriptorHeap(&Desc, IID_PPV_ARGS(&pHeap)));
     sm_DescriptorHeapPool.emplace_back(pHeap);
     return pHeap.Get();
 }
@@ -61,7 +61,7 @@ void DescriptorHeap::Create(const std::wstring& Name, D3D12_DESCRIPTOR_HEAP_TYPE
     m_HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     m_HeapDesc.NodeMask = 1;
 
-    ThrowIfFailed(g_Device->CreateDescriptorHeap(&m_HeapDesc, IID_PPV_ARGS(m_Heap.ReleaseAndGetAddressOf())));
+    ASSERT_SUCCEEDED(g_Device->CreateDescriptorHeap(&m_HeapDesc, IID_PPV_ARGS(m_Heap.ReleaseAndGetAddressOf())));
 
 #ifdef RELEASE
     (void)Name;
@@ -79,7 +79,7 @@ void DescriptorHeap::Create(const std::wstring& Name, D3D12_DESCRIPTOR_HEAP_TYPE
 
 DescriptorHandle DescriptorHeap::Alloc(uint32_t Count)
 {
-    assert(HasAvailableSpace(Count), "Descriptor Heap out of space.  Increase heap size.");
+    ASSERT(HasAvailableSpace(Count), "Descriptor Heap out of space.  Increase heap size.");
     DescriptorHandle ret = m_NextFreeHandle;
     m_NextFreeHandle += Count * m_DescriptorSize;
     m_NumFreeDescriptors -= Count;

@@ -16,7 +16,7 @@
 #include "BufferManager.h"
 #include <dxcapi.h>
 #include <d3d12shader.h>
-
+#include "FileSystem.h"
 
 
 namespace CS
@@ -73,9 +73,10 @@ void PbrRenderer::Startup()
 
 	m_Camera.SetEyeAtUp(Vector3(0.0f, 0.0f, -20.0f), Vector3(kZero), Vector3(kYUnitVector));
 	m_Camera.SetZRange(0.1f, 10000.0f);
+	//m_Camera.SetAspectRatio((float)g_DisplayWidth / g_DisplayHeight);
 	m_CameraController.reset(new FlyingFPSCamera(m_Camera, Vector3(kYUnitVector)));
 
-	g_IBLTexture = TextureManager::LoadHdrFromFile(L"D:/code/AtomEngine/Assets/Textures/EnvirMap/sun.hdr");
+	g_IBLTexture = TextureManager::LoadHdrFromFile(FileSystem::GetFullPath(L"Assets/Textures/EnvirMap/sun.hdr"));
 
 	PrecomputeCubemaps(gfxContext);
 
@@ -137,9 +138,9 @@ void PbrRenderer::Startup()
 
 	Model skyBox, pbrModel, pbrModel2;
 
-	skyBox.Load(std::wstring(L"D:/code/AtomEngine/Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel.Load(std::wstring(L"D:/code/AtomEngine/Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel2.Load(std::wstring(L"D:/code/AtomEngine/Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
+	skyBox.Load(FileSystem::GetFullPath(L"Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
+	pbrModel.Load(FileSystem::GetFullPath(L"Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
+	pbrModel2.Load(FileSystem::GetFullPath(L"Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
 
 
 	//pbrModel.modelMatrix = OrthogonalTransform::MakeYRotation(45.0f);
@@ -165,7 +166,7 @@ void PbrRenderer::Startup()
 
 void PbrRenderer::OnResize()
 {
-
+	
 }
 
 void PbrRenderer::Update(float gt)
@@ -454,7 +455,7 @@ void PbrRenderer::RenderScene()
 	if (viewportPanelSize.x != g_RendererSize.x || viewportPanelSize.y != g_RendererSize.y)
 	{
 		g_RendererSize = { viewportPanelSize.x , viewportPanelSize.y };
-
+		m_Camera.SetAspectRatio(g_RendererSize.y / g_RendererSize.x);
 	}
 	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 

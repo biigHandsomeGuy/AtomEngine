@@ -6,7 +6,6 @@
 #include "ShadowCamera.h"
 #include "Ssao.h"
 
-#include "d3dUtil.h"
 #include "Scene.h"
 #include "SkyBox.h"
 #include <DirectXCollision.h>

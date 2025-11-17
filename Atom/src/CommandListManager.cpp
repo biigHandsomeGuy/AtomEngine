@@ -54,9 +54,9 @@ void CommandListManager::Shutdown()
 
 void CommandQueue::Create(ID3D12Device* pDevice)
 {
-    assert(pDevice != nullptr);
-    assert(IsReady() == false);
-    assert(m_AllocatorPool.Size() == 0);
+    ASSERT(pDevice != nullptr);
+    ASSERT(IsReady() == false);
+    ASSERT(m_AllocatorPool.Size() == 0);
 
     D3D12_COMMAND_QUEUE_DESC QueueDesc = {};
     QueueDesc.Type = m_Type;
@@ -64,23 +64,23 @@ void CommandQueue::Create(ID3D12Device* pDevice)
     pDevice->CreateCommandQueue(&QueueDesc, IID_PPV_ARGS(&m_CommandQueue));
     m_CommandQueue->SetName(L"CommandListManager::m_CommandQueue");
 
-    ThrowIfFailed(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence)));
+    ASSERT_SUCCEEDED(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence)));
     m_pFence->SetName(L"CommandListManager::m_pFence");
     m_pFence->Signal((uint64_t)m_Type << 56);
 
     m_FenceEventHandle = CreateEvent(nullptr, false, false, nullptr);
-    assert(m_FenceEventHandle != NULL);
+    ASSERT(m_FenceEventHandle != NULL);
 
     m_AllocatorPool.Create(pDevice);
 
-    assert(IsReady());
+    ASSERT(IsReady());
 }
 
 uint64_t CommandQueue::ExecuteCommandList(ID3D12CommandList* List)
 {
     std::lock_guard<std::mutex> LockGuard(m_FenceMutex);
 
-    ThrowIfFailed(((ID3D12GraphicsCommandList*)List)->Close());
+    ASSERT_SUCCEEDED(((ID3D12GraphicsCommandList*)List)->Close());
 
     // Kickoff the command list
     m_CommandQueue->ExecuteCommandLists(1, &List);
@@ -108,7 +108,7 @@ void CommandQueue::DiscardAllocator(uint64_t FenceValue, ID3D12CommandAllocator*
 
 void CommandListManager::Create(ID3D12Device* pDevice)
 {
-    assert(pDevice != nullptr);
+    ASSERT(pDevice != nullptr);
 
     m_Device = pDevice;
 
@@ -119,7 +119,7 @@ void CommandListManager::Create(ID3D12Device* pDevice)
 
 void CommandListManager::CreateNewCommandList(D3D12_COMMAND_LIST_TYPE Type, ID3D12GraphicsCommandList** List, ID3D12CommandAllocator** Allocator)
 {
-    assert(Type != D3D12_COMMAND_LIST_TYPE_BUNDLE, "Bundles are not yet supported");
+    ASSERT(Type != D3D12_COMMAND_LIST_TYPE_BUNDLE, "Bundles are not yet supported");
     switch (Type)
     {
     case D3D12_COMMAND_LIST_TYPE_DIRECT: *Allocator = m_GraphicsQueue.RequestAllocator(); break;
@@ -128,7 +128,7 @@ void CommandListManager::CreateNewCommandList(D3D12_COMMAND_LIST_TYPE Type, ID3D
     case D3D12_COMMAND_LIST_TYPE_COPY: *Allocator = m_CopyQueue.RequestAllocator(); break;
     }
 
-    ThrowIfFailed(m_Device->CreateCommandList(1, Type, *Allocator, nullptr, IID_PPV_ARGS(List)));
+    ASSERT_SUCCEEDED(m_Device->CreateCommandList(1, Type, *Allocator, nullptr, IID_PPV_ARGS(List)));
     (*List)->SetName(L"CommandList");
 }
 
@@ -164,7 +164,7 @@ void CommandQueue::StallForFence(uint64_t FenceValue)
 
 void CommandQueue::StallForProducer(CommandQueue& Producer)
 {
-    assert(Producer.m_NextFenceValue > 0);
+    ASSERT(Producer.m_NextFenceValue > 0);
     m_CommandQueue->Wait(Producer.m_pFence, Producer.m_NextFenceValue - 1);
 }
 

@@ -37,13 +37,13 @@ namespace Graphics
 #if defined(DEBUG) || defined(_DEBUG) 
 		// Enable the D3D12 debug layer.
 		{		
-			ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
+			ASSERT_SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
 			debugController->EnableDebugLayer();
 			debugController->SetEnableGPUBasedValidation(true);
 		}
 #endif
 		Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;
-		ThrowIfFailed(CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory)));
+		ASSERT_SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory)));
 		
 		// Try to create hardware device.
 		HRESULT hardwareResult = D3D12CreateDevice(
@@ -55,9 +55,9 @@ namespace Graphics
 		if (FAILED(hardwareResult))
 		{
 			Microsoft::WRL::ComPtr<IDXGIAdapter> pWarpAdapter;
-			ThrowIfFailed(dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pWarpAdapter)));
+			ASSERT_SUCCEEDED(dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pWarpAdapter)));
 
-			ThrowIfFailed(D3D12CreateDevice(
+			ASSERT_SUCCEEDED(D3D12CreateDevice(
 				pWarpAdapter.Get(),
 				D3D_FEATURE_LEVEL_11_0,
 				IID_PPV_ARGS(&pDevice)));

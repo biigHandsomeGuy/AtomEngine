@@ -83,7 +83,7 @@ DXGI_FORMAT PixelBuffer::GetUAVFormat(DXGI_FORMAT defaultFormat)
     case DXGI_FORMAT_X24_TYPELESS_G8_UINT:
     case DXGI_FORMAT_D16_UNORM:
 
-        assert(false, "Requested a UAV Format for a depth stencil Format.");
+        ASSERT(false, "Requested a UAV Format for a depth stencil Format.");
 #endif
 
     default:
@@ -313,7 +313,7 @@ D3D12_RESOURCE_DESC PixelBuffer::DescribeTex2D(uint32_t width, uint32_t height, 
 
 void PixelBuffer::AssociateWithResource(ID3D12Device* device, const std::wstring& name, ID3D12Resource* resource, D3D12_RESOURCE_STATES currentState)
 {
-	assert(resource != nullptr);
+	ASSERT(resource != nullptr);
 	D3D12_RESOURCE_DESC resourceDesc = resource->GetDesc();
 
 	m_pResource.Attach(resource);
@@ -335,7 +335,7 @@ void PixelBuffer::CreateTextureResource(ID3D12Device* device, const std::wstring
 	Destroy();
 
 	CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
-	ThrowIfFailed(device->CreateCommittedResource(
+	ASSERT_SUCCEEDED(device->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
