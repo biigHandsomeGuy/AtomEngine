@@ -1,0 +1,9 @@
+[submodule "Dependencies/Imgui"]
+	path = Dependencies/Imgui
+	url = https://github.com/biigHandsomeGuy/imgui.git
+[submodule "Dependencies/ImGuizmo"]
+	path = Dependencies/ImGuizmo
+	url = https://github.com/biigHandsomeGuy/ImGuizmo.git
+[submodule "Dependencies/tinyobjloader"]
+	path = Dependencies/tinyobjloader
+	url = https://github.com/biigHandsomeGuy/tinyobjloader.git
