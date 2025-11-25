@@ -14,6 +14,7 @@ namespace TextureManager
 
 	TextureRef LoadTexFromFile(const std::wstring& filePath, eDefaultTexture = kMagenta2D, bool sRGB = false);
 	TextureRef LoadHdrFromFile(const std::wstring& filePath);
+	TextureRef LoadTexFromMemory(unsigned char* data, uint64_t width, uint64_t height, eDefaultTexture = kMagenta2D, bool sRGB = false);
 }
 
 class ManagedTexture;

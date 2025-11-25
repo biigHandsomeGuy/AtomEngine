@@ -60,7 +60,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_GAMING_DESKTOP;ATOM_PLATFORM_WINDOWS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\tinyobjloader;$(SolutionDir)Dependencies;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\Imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\tinygltf;$(SolutionDir)Dependencies;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\Imgui</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -78,7 +78,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_GAMING_DESKTOP;ATOM_PLATFORM_WINDOWS;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\tinyobjloader;$(SolutionDir)Dependencies;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\Imgui</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(SolutionDir)Atom\src;$(SolutionDir)Dependencies\tinygltf;$(SolutionDir)Dependencies;$(SolutionDir)Dependencies\stb_image;$(SolutionDir)Dependencies\Imgui</AdditionalIncludeDirectories>
       <Optimization>MaxSpeed</Optimization>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -587,6 +587,11 @@
     <None Include="Shaders\PBRCommon.hlsli" />
     <None Include="src\Functions.inl" />
     <None Include="src\Math\Functions.inl" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Dependencies\tinygltf\tinygltf.vcxproj">
+      <Project>{a95bbe5d-4c2c-489e-8f02-28cebe5b7eb2}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

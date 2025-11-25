@@ -105,12 +105,6 @@
     <ProjectReference Include="..\..\Dependencies\Imgui\imgui.vcxproj">
       <Project>{e582a143-5d2d-443f-af35-a6673f41ba6d}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\Dependencies\stb_image\stb_image\stb_image.vcxproj">
-      <Project>{60ed286f-45cc-4f89-80a3-9406b0ee1487}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\..\Dependencies\tinyobjloader\tinyobjloader.vcxproj">
-      <Project>{a6eeed2e-c128-47e4-8741-2c398e659fb1}</Project>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

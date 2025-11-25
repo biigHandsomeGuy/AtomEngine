@@ -7,3 +7,6 @@
 [submodule "Dependencies/tinyobjloader"]
 	path = Dependencies/tinyobjloader
 	url = https://github.com/biigHandsomeGuy/tinyobjloader.git
+[submodule "Dependencies/tinygltf"]
+	path = Dependencies/tinygltf
+	url = https://github.com/syoyo/tinygltf.git

@@ -98,6 +98,13 @@ namespace TextureManager
 		return tex;
 	}
 
+	TextureRef LoadTexFromMemory(unsigned char* data, uint64_t width, uint64_t height, eDefaultTexture fallback, bool sRGB )
+	{
+		ManagedTexture* tex = new ManagedTexture(L"");
+		tex->CreateFromMemory(data, width, height, fallback, sRGB);
+		return tex;
+	}
+
 
 
 	ManagedTexture* FindOrLoadTexture(const std::wstring& fileName, eDefaultTexture fallback, bool forceSRGB)

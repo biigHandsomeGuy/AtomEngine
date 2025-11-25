@@ -17,7 +17,7 @@
 #include <dxcapi.h>
 #include <d3d12shader.h>
 #include "FileSystem.h"
-
+#include "Model.h"
 
 namespace CS
 {
@@ -137,18 +137,15 @@ void PbrRenderer::Startup()
 	m_BackBufferHandle[2] = Renderer::s_TextureHeap.Alloc();
 
 	Model skyBox, pbrModel, pbrModel2;
+	skyBox = LoadGltfModel(FileSystem::GetFullPath("Assets/Models/cube.glb"));
+	pbrModel = LoadGltfModel(FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf"));
 
-	skyBox.Load(FileSystem::GetFullPath(L"Assets/Models/cube.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel.Load(FileSystem::GetFullPath(L"Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
-	pbrModel2.Load(FileSystem::GetFullPath(L"Assets/Models/MaterialBall.obj"), g_Device, gfxContext.GetCommandList());
-
-
-	//pbrModel.modelMatrix = OrthogonalTransform::MakeYRotation(45.0f);
-	pbrModel.modelMatrix = pbrModel.modelMatrix * Matrix4::MakeScale(1.0f);
-	pbrModel2.modelMatrix = pbrModel.modelMatrix * OrthogonalTransform(Vector3{ 15,0,0 });
-
-	pbrModel.normalMatrix = InverseTranspose(pbrModel.modelMatrix.Get3x3());
-	pbrModel2.normalMatrix = InverseTranspose(pbrModel2.modelMatrix.Get3x3());
+	////pbrModel.modelMatrix = OrthogonalTransform::MakeYRotation(45.0f);
+	//pbrModel.modelMatrix = pbrModel.modelMatrix * Matrix4::MakeScale(1.0f);
+	//pbrModel2.modelMatrix = pbrModel.modelMatrix * OrthogonalTransform(Vector3{ 15,0,0 });
+	//
+	//pbrModel.normalMatrix = InverseTranspose(pbrModel.modelMatrix.Get3x3());
+	//pbrModel2.normalMatrix = InverseTranspose(pbrModel2.modelMatrix.Get3x3());
 
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
@@ -323,8 +320,8 @@ void PbrRenderer::RenderScene()
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		{
-			m_MeshConstants[i].ModelMatrix = m_Scene.Models[i].modelMatrix;
-			m_MeshConstants[i].NormalMatrix = m_Scene.Models[i].normalMatrix;
+			m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
+			m_MeshConstants[i].NormalMatrix = DefaultMeshConstants.NormalMatrix;
 		}
 		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
@@ -354,7 +351,7 @@ void PbrRenderer::RenderScene()
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		
-		m_MeshConstants[i].ModelMatrix = m_Scene.Models[i].modelMatrix;
+		m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
 
 		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
@@ -396,15 +393,15 @@ void PbrRenderer::RenderScene()
 			m_MaterialConstants[i].gMatIndex = i;
 		}
 		{
-			m_MeshConstants[i].ModelMatrix = m_Scene.Models[i].modelMatrix;
-			m_MeshConstants[i].NormalMatrix = m_Scene.Models[i].normalMatrix;
+			m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
+			m_MeshConstants[i].NormalMatrix = DefaultMeshConstants.ModelMatrix;
 			Matrix4 T(
 				{ 0.5f, 0.0f, 0.0f, 0.0f },
 				{ 0.0f, -0.5f, 0.0f, 0.0f },
 				{ 0.0f, 0.0f, 1.0f, 0.0f },
 				{ 0.5f, 0.5f, 0.0f, 1.0f });
 			Matrix4 viewProjTex = m_Camera.GetViewProjMatrix() * T;
-			m_MeshConstants[i].ViewProjTex = viewProjTex;
+			//m_MeshConstants[i].ViewProjTex = viewProjTex;
 
 		}
 		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
@@ -418,7 +415,7 @@ void PbrRenderer::RenderScene()
 
 	gfxContext.SetRootSignature(s_RootSig);
 	gfxContext.SetPipelineState(s_SkyboxPSO);
-	m_SkyBox.model.Draw(gfxContext.GetCommandList());
+	m_SkyBox.model.Draw(gfxContext.GetCommandList(), true);
 
 	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 

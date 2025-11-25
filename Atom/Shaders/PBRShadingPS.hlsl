@@ -3,9 +3,9 @@
 
 
 Texture2D gAlbedeTexture : register(t0);
-Texture2D gRoughnessTexture : register(t1);
+Texture2D gNormalTexture : register(t1);
 Texture2D gMetalnessTexture : register(t2);
-Texture2D  gNormalTexture: register(t3);
+Texture2D gRoughnessTexture : register(t3);
 
 
 TextureCube gEnvironmentTexture : register(t10);
@@ -55,7 +55,7 @@ struct VertexOut
 {
     float4 PosH : SV_POSITION;
     float4 ShadowPosH : POSITION0;
-    float4 SsaoPosH : POSITION1;
+    //float4 SsaoPosH : POSITION1;
     float3 WorldPosition : POSITION2;
     float2 TexC : TEXCOORD;
     float3x3 tangentBasis : TAASIC;
@@ -87,13 +87,14 @@ float4 main(VertexOut pin) : SV_Target
     if (UseTexture)
     {   
         // Sample input textures to get shading model params.
-        albedo = pow(gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
+        albedo = pow(gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb, 1);
         metalness = gMetalnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
-        roughness = gRoughnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
+        roughness = gRoughnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).g;
         // Get current fragment's normal and transform to world space.
         N = normalize(2.0 * gNormalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0);
 	
         N = normalize(mul(N, pin.tangentBasis));
+        N = normalize(pin.Normal);
     }
 	else
     {
@@ -103,8 +104,8 @@ float4 main(VertexOut pin) : SV_Target
         N = normalize(pin.Normal);
         //return float4(N, 1);
     }
-    //N = normalize(pin.Normal);
-    //return float4(N, 1);
+    N = normalize(pin.Normal);
+    //return float4(albedo, 1);
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.WorldPosition);
     
@@ -228,12 +229,12 @@ float4 main(VertexOut pin) : SV_Target
     }
 
     float ambientOcclution = 1;
-    if(UseSSAO)
-    {
-        pin.SsaoPosH /= pin.SsaoPosH.w;
-        ambientOcclution += gShadowMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
-        ambientOcclution = gSsaoMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
-    }
+    //if(UseSSAO)
+    //{
+    //    pin.SsaoPosH /= pin.SsaoPosH.w;
+    //    ambientOcclution += gShadowMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
+    //    ambientOcclution = gSsaoMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
+    //}
     
 	// Final fragment color.
     return float4(directLighting + ambientLighting * ambientOcclution, 1.0);

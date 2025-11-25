@@ -3,12 +3,7 @@
 #include "Math/Matrix4.h"
 #include "Math/Vector.h"
 
-__declspec(align(256)) struct MeshConstants
-{
-    Math::Matrix4 ModelMatrix{ Math::kIdentity };
-    Math::Matrix4 NormalMatrix{ Math::kIdentity };
-    Math::Matrix4 ViewProjTex{ Math::kIdentity };
-};
+
 __declspec(align(256)) struct MaterialConstants
 {
     uint32_t gMatIndex;
@@ -19,6 +14,7 @@ __declspec(align(256)) struct GlobalConstants
     Math::Matrix4 ViewMatrix{ Math::kIdentity };
     Math::Matrix4 ProjMatrix{ Math::kIdentity };
     Math::Matrix4 ViewProjMatrix{ Math::kIdentity };
+    //Math::Matrix4 ViewProjTex{ Math::kIdentity };
     Math::Matrix4 SunShadowMatrix{ Math::kIdentity };
     Math::Vector3 CameraPos = { 0.0f, 0.0f, 0.0f };
     Math::Vector3 SunPos = { 0.0f, 0.0f, 0.0f };

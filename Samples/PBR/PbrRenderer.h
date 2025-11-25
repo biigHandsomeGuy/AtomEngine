@@ -63,7 +63,7 @@ private:
     Math::Camera m_Camera;
     std::unique_ptr<CameraController> m_CameraController;
     ShadowCamera m_SunShadowCamera;
-
+    MeshConstants DefaultMeshConstants;
     float mLightRotationAngle = 0.0f;
 
     Vector3 mRotatedLightDirections{ kIdentity };
