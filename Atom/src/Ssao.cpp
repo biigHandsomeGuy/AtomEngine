@@ -206,7 +206,7 @@ void SSAO::Render(GraphicsContext& GfxContext, const Math::Camera& camera)
     GfxContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     GfxContext.DrawInstanced(6, 1, 0, 0);
 
-    GfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_COMMON);
+    GfxContext.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
     GfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 }

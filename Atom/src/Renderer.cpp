@@ -19,7 +19,7 @@
 #include "../CompiledShaders/SkyBoxPS.h"
 #include "../CompiledShaders/ShadowPS.h"
 #include "../CompiledShaders/DrawNormalsPS.h"
-#include "../CompiledShaders/PostProcessPS.h"
+#include "../CompiledShaders/PostProcessCS.h"
 #include "../CompiledShaders/BloomPS.h"
 
 
@@ -31,14 +31,18 @@ namespace Renderer
 {
 	DescriptorHeap s_TextureHeap;
 	DescriptorHandle m_CommonTextures;
+	// inout
+	DescriptorHandle g_PostProcessTexture;
 	DescriptorHandle g_SSAOSrvHeap;
 	DescriptorHandle g_SSAOUavHeap;
-	DescriptorHandle g_PostprocessHeap;
 	DescriptorHandle g_NullDescriptor;
 
 	RootSignature s_RootSig;
 	std::unordered_map<std::string, GraphicsPSO> s_PSOs;
 	GraphicsPSO s_SkyboxPSO;
+
+	RootSignature s_ComputeRootSig;
+	ComputePSO s_PostProcessPSO;
 
 
 	void Initialize(void)
@@ -56,7 +60,22 @@ namespace Renderer
 		s_RootSig[kCommonCBV].InitAsConstantBuffer(1);
 		s_RootSig[kPostprocessSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 20, 10);
 		s_RootSig[kShaderParams].InitAsConstantBuffer(2);
-		s_RootSig.Finalize(L"RootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		s_RootSig.Finalize(L"GraphicsRootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+		s_ComputeRootSig.Reset(3, 5);
+		s_ComputeRootSig.InitStaticSampler(0, SamplerLinearWrapDesc, D3D12_SHADER_VISIBILITY_ALL);
+		s_ComputeRootSig.InitStaticSampler(1, SamplerLinearClampDesc, D3D12_SHADER_VISIBILITY_ALL);
+		s_ComputeRootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc, D3D12_SHADER_VISIBILITY_ALL);
+		s_ComputeRootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc, D3D12_SHADER_VISIBILITY_ALL);
+		s_ComputeRootSig.InitStaticSampler(4, SamplerShadowDesc, D3D12_SHADER_VISIBILITY_ALL);
+		s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1);
+		s_ComputeRootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
+		s_ComputeRootSig[2].InitAsConstantBuffer(0);
+		s_ComputeRootSig.Finalize(L"ComputeRootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+		s_PostProcessPSO.SetRootSignature(s_ComputeRootSig);
+		s_PostProcessPSO.SetComputeShader(g_pPostProcessCS, sizeof(g_pPostProcessCS));
+		s_PostProcessPSO.Finalize();
 
 		DXGI_FORMAT ColorFormat = g_SceneColorBuffer.GetFormat();
 		DXGI_FORMAT DepthFormat = g_SceneDepthBuffer.GetFormat();
@@ -118,25 +137,12 @@ namespace Renderer
 		s_SkyboxPSO.SetPixelShader(g_pSkyBoxPS, sizeof(g_pSkyBoxPS));
 		s_SkyboxPSO.Finalize();
 
-
-		// PSO for post process.
-
-		GraphicsPSO postprocessPSO(L"Renderer::postprocess PSO");
-		postprocessPSO = defaultPSO;
-		postprocessPSO.SetRasterizerState(RasterizerTwoSided);
-		postprocessPSO.SetDepthStencilState(DepthStateReadOnly);
-		postprocessPSO.SetVertexShader(g_pPostProcessVS, sizeof(g_pPostProcessVS));
-		postprocessPSO.SetPixelShader(g_pPostProcessPS, sizeof(g_pPostProcessPS));
-		postprocessPSO.Finalize();
-		s_PSOs["postprocess"] = postprocessPSO;
-
-
 		TextureManager::Initialize(L"");
 
 		s_TextureHeap.Create(L"Scene Texture Descriptors", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128);
 
 		m_CommonTextures = s_TextureHeap.Alloc(10);
-		g_PostprocessHeap = s_TextureHeap.Alloc();
+		g_PostProcessTexture = s_TextureHeap.Alloc(2);
 
 		g_NullDescriptor = s_TextureHeap.Alloc();
 		D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};

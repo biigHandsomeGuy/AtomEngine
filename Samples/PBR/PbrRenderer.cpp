@@ -35,8 +35,9 @@ namespace CS
 
 namespace
 {
-	RootSignature s_IBL_RootSig;
 	std::unordered_map<std::string, ComputePSO> s_IBL_PSOCache;
+
+
 }
 
 using namespace Graphics;
@@ -177,8 +178,8 @@ void PbrRenderer::Update(float gt)
 void PbrRenderer::RenderScene()
 {
 	
-	GraphicsContext& gfxContext = GraphicsContext::Begin(L"Scene Render");
-
+	GraphicsContext& GraphicsContext = GraphicsContext::Begin(L"Scene Render");
+	ComputeContext& ComputeContext = ComputeContext::Begin(L"PrecomputeCubemaps");
 	// Start the Dear ImGui frame
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
@@ -284,22 +285,22 @@ void PbrRenderer::RenderScene()
 	UINT PrevBufferIndex = (g_CurrentBuffer + 3 - 1) % 3;
 
 
-	gfxContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, s_TextureHeap.GetHeapPointer());
-	gfxContext.SetViewportAndScissor(g_ViewPort, g_Rect);
+	GraphicsContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, s_TextureHeap.GetHeapPointer());
+	GraphicsContext.SetViewportAndScissor(g_ViewPort, g_Rect);
 
-	gfxContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET);
+	GraphicsContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	// ------------------------------------------ Z PrePass -------------------------------------------------
 
-	gfxContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	GraphicsContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-	gfxContext.ClearColor(g_SceneNormalBuffer);
-	gfxContext.ClearDepthAndStencil(g_SceneDepthBuffer);
+	GraphicsContext.ClearColor(g_SceneNormalBuffer);
+	GraphicsContext.ClearDepthAndStencil(g_SceneDepthBuffer);
 
-	gfxContext.SetRenderTarget(g_SceneNormalBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
-	gfxContext.SetRootSignature(s_RootSig);
-	gfxContext.SetPipelineState(s_PSOs["drawNormals"]);
+	GraphicsContext.SetRenderTarget(g_SceneNormalBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
+	GraphicsContext.SetRootSignature(s_RootSig);
+	GraphicsContext.SetPipelineState(s_PSOs["drawNormals"]);
 
 
 	{
@@ -314,7 +315,7 @@ void PbrRenderer::RenderScene()
 		m_LightPassGlobalConstants.SunPos = {15,15,-15};
 
 	}
-	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
+	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
@@ -323,69 +324,68 @@ void PbrRenderer::RenderScene()
 			m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
 			m_MeshConstants[i].NormalMatrix = DefaultMeshConstants.NormalMatrix;
 		}
-		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
-		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
+		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
 	}
-	gfxContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_COMMON);
 
 	// --------------------------------- Shadow Map ----------------------------------
 	
 
-	gfxContext.TransitionResource(g_ShadowBuffer,D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	GraphicsContext.TransitionResource(g_ShadowBuffer,D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-	gfxContext.ClearDepthAndStencil(g_ShadowBuffer);
+	GraphicsContext.ClearDepthAndStencil(g_ShadowBuffer);
 
-	gfxContext.SetDepthStencilTarget(g_ShadowBuffer.GetDSV());
+	GraphicsContext.SetDepthStencilTarget(g_ShadowBuffer.GetDSV());
 
 	{
 		
 		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetViewProjMatrix();
 	}
 
-	gfxContext.SetRootSignature(s_RootSig);
-	gfxContext.SetPipelineState(s_PSOs["shadow"]);
+	GraphicsContext.SetRootSignature(s_RootSig);
+	GraphicsContext.SetPipelineState(s_PSOs["shadow"]);
 
-	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_ShadowPassGlobalConstants);
+	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_ShadowPassGlobalConstants);
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		
 		m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
 
-		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
 
-		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
+		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
 
 	}
 
-	gfxContext.TransitionResource(g_ShadowBuffer, D3D12_RESOURCE_STATE_COMMON);
+	GraphicsContext.TransitionResource(g_ShadowBuffer, D3D12_RESOURCE_STATE_COMMON);
 
 	
 	
 	// ----------------------------------- Render SSAO --------------------------------
-	SSAO::Render(gfxContext, m_Camera);
+	SSAO::Render(GraphicsContext, m_Camera);
 
 	// ----------------------------------- Render Color ------------------------------
 
-	gfxContext.SetRootSignature(s_RootSig);
-	gfxContext.SetPipelineState(s_PSOs["opaque"]);
+	GraphicsContext.SetRootSignature(s_RootSig);
+	GraphicsContext.SetPipelineState(s_PSOs["opaque"]);
 
-	gfxContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
+	GraphicsContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
 	
-	gfxContext.GetCommandList()->RSSetViewports(1, &g_ViewPort);
-	gfxContext.GetCommandList()->RSSetScissorRects(1, &g_Rect);
+	GraphicsContext.GetCommandList()->RSSetViewports(1, &g_ViewPort);
+	GraphicsContext.GetCommandList()->RSSetScissorRects(1, &g_Rect);
 
 
-	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	gfxContext.ClearColor(g_SceneColorBuffer);
-	gfxContext.ClearDepthAndStencil(g_SceneDepthBuffer);
-	gfxContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
+	GraphicsContext.ClearColor(g_SceneColorBuffer);
+	GraphicsContext.ClearDepthAndStencil(g_SceneDepthBuffer);
+	GraphicsContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
 
-	gfxContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
+	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 
-	gfxContext.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &m_ShaderAttribs);
+	GraphicsContext.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &m_ShaderAttribs);
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
@@ -404,41 +404,38 @@ void PbrRenderer::RenderScene()
 			//m_MeshConstants[i].ViewProjTex = viewProjTex;
 
 		}
-		gfxContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
-		gfxContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_MaterialConstants[i]);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
+		GraphicsContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_MaterialConstants[i]);
 
-		m_Scene.Models[i].Draw(gfxContext.GetCommandList());
+		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
 	}   
 
 
-	gfxContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_EnvMapAttribs);
+	GraphicsContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_EnvMapAttribs);
 
-	gfxContext.SetRootSignature(s_RootSig);
-	gfxContext.SetPipelineState(s_SkyboxPSO);
-	m_SkyBox.model.Draw(gfxContext.GetCommandList(), true);
+	GraphicsContext.SetRootSignature(s_RootSig);
+	GraphicsContext.SetPipelineState(s_SkyboxPSO);
+	m_SkyBox.model.Draw(GraphicsContext.GetCommandList(), true);
 
-	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 
 	// ------------------------- postprocess -----------------------
-	gfxContext.SetRenderTarget(g_DisplayPlane[g_CurrentBuffer].GetRTV(), g_SceneDepthBuffer.GetDSV());
+	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Renderer::s_TextureHeap.GetHeapPointer());
+	ComputeContext.SetRootSignature(s_ComputeRootSig);
+	ComputeContext.SetPipelineState(s_PostProcessPSO);
+	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize, g_PostProcessBuffer.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	ComputeContext.SetDescriptorTable(0, g_PostProcessTexture);
+	ComputeContext.SetDescriptorTable(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize);
+	ComputeContext.SetDynamicConstantBufferView(2, sizeof(EnvMapRenderer::RenderAttribs), &m_ppAttribs);
+	int width = g_PostProcessBuffer.GetWidth() / 8;
+	int height = g_PostProcessBuffer.GetHeight() / 8;
+	ComputeContext.Dispatch(width, height);
+	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
-	
-	gfxContext.SetRootSignature(s_RootSig);
-	gfxContext.SetPipelineState(s_PSOs["postprocess"]);
 
-	gfxContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(EnvMapRenderer::RenderAttribs), &m_ppAttribs);
-
-	g_Device->CopyDescriptorsSimple(1, g_PostprocessHeap, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-
-	gfxContext.SetDescriptorTable(kPostprocessSRVs, g_PostprocessHeap);
-	gfxContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	gfxContext.DrawInstanced(4, 1, 0, 0);
-
-	gfxContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_COMMON);
-	gfxContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_PRESENT);
-	gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_COMMON);
 	ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
 	ImGui::End();
@@ -454,21 +451,23 @@ void PbrRenderer::RenderScene()
 		g_RendererSize = { viewportPanelSize.x , viewportPanelSize.y };
 		m_Camera.SetAspectRatio(g_RendererSize.y / g_RendererSize.x);
 	}
-	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_PostProcessBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	auto texID = (ImTextureID)m_BackBufferHandle[g_CurrentBuffer].GetGpuPtr();
 	ImGui::Image(texID, viewportPanelSize);
 	ImGui::End();
 	
-	ImGui::Begin("S");
 
 	ImGui::End();
+	GraphicsContext.SetRenderTarget(g_DisplayPlane[g_CurrentBuffer].GetRTV(), g_SceneDepthBuffer.GetDSV());
+	GraphicsContext.TransitionResource(
+		g_DisplayPlane[g_CurrentBuffer],
+		D3D12_RESOURCE_STATE_PRESENT);
 
-	ImGui::End();
 
 	ImGui::Render();
 
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), gfxContext.GetCommandList());
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), GraphicsContext.GetCommandList());
 
 	// Update and Render additional Platform Windows
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -477,7 +476,8 @@ void PbrRenderer::RenderScene()
 		ImGui::RenderPlatformWindowsDefault();
 	}
 
-	gfxContext.Finish(true);
+	GraphicsContext.Finish(true);
+	ComputeContext.Finish(true);
 }
 
 void PbrRenderer::UpdateUI()
@@ -488,96 +488,89 @@ void PbrRenderer::UpdateUI()
 
 void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 {
-	ComputeContext& GfxContext = ComputeContext::Begin(L"PrecomputeCubemaps");
+	ComputeContext& ComputeContext = ComputeContext::Begin(L"PrecomputeCubemaps");
 
-	s_IBL_RootSig.Reset(4, 5);
-	s_IBL_RootSig.InitStaticSampler(0, SamplerLinearWrapDesc);
-	s_IBL_RootSig.InitStaticSampler(1, SamplerLinearClampDesc);
-	s_IBL_RootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc);
-	s_IBL_RootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc);
-	s_IBL_RootSig.InitStaticSampler(4, SamplerShadowDesc);
-	s_IBL_RootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1);
-	s_IBL_RootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
-	s_IBL_RootSig[2].InitAsConstants(0, 1);
-	s_IBL_RootSig[3].InitAsConstants(1, 1);
-	s_IBL_RootSig.Finalize(L"s_IBL_RootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-	s_IBL_PSOCache["EquirectToCube"].SetRootSignature(s_IBL_RootSig);
+	__declspec(align(256)) struct ShaderParams
+	{
+		DWORD param0 = 0;
+		DWORD param1 = 0;
+	};
+	ShaderParams shaderParams;
+	s_IBL_PSOCache["EquirectToCube"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["EquirectToCube"].SetComputeShader(g_pEquirectToCubeCS, sizeof(g_pEquirectToCubeCS));
 	s_IBL_PSOCache["EquirectToCube"].Finalize();
 
-	s_IBL_PSOCache["GenerateMipMap"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["GenerateMipMap"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["GenerateMipMap"].SetComputeShader(g_pGenerateMipMapCS, sizeof(g_pGenerateMipMapCS));
 	s_IBL_PSOCache["GenerateMipMap"].Finalize();
 
-	s_IBL_PSOCache["PrefilterSpecularMap"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PrefilterSpecularMap"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["PrefilterSpecularMap"].SetComputeShader(g_pSpecularMapCS, sizeof(g_pSpecularMapCS));
 	s_IBL_PSOCache["PrefilterSpecularMap"].Finalize();
 
-	s_IBL_PSOCache["PrecomputeIrradianceMap"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PrecomputeIrradianceMap"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["PrecomputeIrradianceMap"].SetComputeShader(g_pIrradianceMapCS, sizeof(g_pIrradianceMapCS));
 	s_IBL_PSOCache["PrecomputeIrradianceMap"].Finalize();
 
-	s_IBL_PSOCache["PrecomputeBRDF"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PrecomputeBRDF"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["PrecomputeBRDF"].SetComputeShader(g_pSpecularBRDFCS, sizeof(g_pSpecularBRDFCS));
 	s_IBL_PSOCache["PrecomputeBRDF"].Finalize();
 
-	s_IBL_PSOCache["emu"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["emu"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["emu"].SetComputeShader(g_pEmu, sizeof(g_pEmu));
 	s_IBL_PSOCache["emu"].Finalize();
 
-	s_IBL_PSOCache["eavg"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["eavg"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["eavg"].SetComputeShader(g_pEavg, sizeof(g_pEavg));
 	s_IBL_PSOCache["eavg"].Finalize();
 
-	s_IBL_PSOCache["PreintegralDiffuseSSS"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PreintegralDiffuseSSS"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["PreintegralDiffuseSSS"].SetComputeShader(g_pPreIntegralDiffuseSSSCS, sizeof(g_pPreIntegralDiffuseSSSCS));
 	s_IBL_PSOCache["PreintegralDiffuseSSS"].Finalize();
 
-	s_IBL_PSOCache["PreintegralSpecularSSS"].SetRootSignature(s_IBL_RootSig);
+	s_IBL_PSOCache["PreintegralSpecularSSS"].SetRootSignature(s_ComputeRootSig);
 	s_IBL_PSOCache["PreintegralSpecularSSS"].SetComputeShader(g_pPreIntegralSpecularSSSCS, sizeof(g_pPreIntegralSpecularSSSCS));
 	s_IBL_PSOCache["PreintegralSpecularSSS"].Finalize();
 
 	{
 
-		GfxContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Renderer::s_TextureHeap.GetHeapPointer());
+		ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Renderer::s_TextureHeap.GetHeapPointer());
 
-		GfxContext.SetRootSignature(s_IBL_RootSig);
-		GfxContext.SetPipelineState(s_IBL_PSOCache["EquirectToCube"]);
+		ComputeContext.SetRootSignature(s_ComputeRootSig);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["EquirectToCube"]);
 
-		GfxContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		GfxContext.SetDynamicDescriptor(0, 0, g_IBLTexture.GetSRV());
-		GfxContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[0]);
-		GfxContext.SetConstants(2, 0);
-		GfxContext.SetConstants(3, 0);
-		GfxContext.Dispatch(16, 16, 6);
+		ComputeContext.SetDynamicDescriptor(0, 0, g_IBLTexture.GetSRV());
+		ComputeContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[0]);
+		ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
+		ComputeContext.Dispatch(16, 16, 6);
 
 
 		//// =======================  Generic MipMap
-		GfxContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
-		GfxContext.SetPipelineState(s_IBL_PSOCache["GenerateMipMap"]);
+		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["GenerateMipMap"]);
 	
 		for (UINT level = 1, size = 256; level < 10; ++level, size /= 2)
 		{
-			GfxContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[level]);
+			ComputeContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[level]);
 
 			const UINT numGroups = std::max(1u, size / 32);
-		
-			GfxContext.SetConstants(2, size);
-			GfxContext.SetConstants(3, level - 1);
-			GfxContext.Dispatch(numGroups, numGroups, 6);
+			shaderParams.param0 = size;
+			shaderParams.param1 = level - 1;
+			ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
+			ComputeContext.Dispatch(numGroups, numGroups, 6);
 
-			GfxContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		}
-		GfxContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_GENERIC_READ);
+		ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_GENERIC_READ);
 	}	
 		
 	// Compute pre-filtered specular environment map
 	{	
-		GfxContext.SetPipelineState(s_IBL_PSOCache["PrefilterSpecularMap"]);
-		GfxContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
-		GfxContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrefilterSpecularMap"]);
+		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
+		ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 
 		const UINT levels = g_RadianceMap.GetResource()->GetDesc().MipLevels;
@@ -586,13 +579,14 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		{
 			const UINT numGroups = std::max<UINT>(1, size / 32);
 			const float spmapRoughness = level * deltaRoughness;
-			GfxContext.SetDynamicDescriptor(1, 0, g_RadianceMap.GetUAVArray()[level]);
-			GfxContext.SetConstants(2, spmapRoughness);
-			GfxContext.Dispatch(numGroups, numGroups, 6);
+			ComputeContext.SetDynamicDescriptor(1, 0, g_RadianceMap.GetUAVArray()[level]);
+			shaderParams.param0 = spmapRoughness;
+			ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
+			ComputeContext.Dispatch(numGroups, numGroups, 6);
 
-			GfxContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		}
-		GfxContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	}	
 		
@@ -601,64 +595,64 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 	// create irradiance map compute pso
 	{	
 		
-		GfxContext.SetPipelineState(s_IBL_PSOCache["PrecomputeIrradianceMap"]);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrecomputeIrradianceMap"]);
 
 
-		GfxContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
-		GfxContext.SetDynamicDescriptor(1, 0, g_IrradianceMap.GetUAV());
-		GfxContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
+		ComputeContext.SetDynamicDescriptor(1, 0, g_IrradianceMap.GetUAV());
+		ComputeContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		GfxContext.Dispatch(2, 2, 6);
-		GfxContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		ComputeContext.Dispatch(2, 2, 6);
+		ComputeContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 		
 		
 	{	
 		
-		GfxContext.SetPipelineState(s_IBL_PSOCache["PrecomputeBRDF"]);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrecomputeBRDF"]);
 		
-		GfxContext.SetDynamicDescriptor(1, 0, g_LUT.GetUAV());
-		GfxContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.SetDynamicDescriptor(1, 0, g_LUT.GetUAV());
+		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		GfxContext.Dispatch(512/32, 512/32, 1);
-		GfxContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		ComputeContext.Dispatch(512/32, 512/32, 1);
+		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	}	
 		
 	{	
 
-		GfxContext.SetPipelineState(s_IBL_PSOCache["emu"]);
-		GfxContext.SetDynamicDescriptor(1, 0, g_Emu.GetUAV());
-		GfxContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
-		GfxContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["emu"]);
+		ComputeContext.SetDynamicDescriptor(1, 0, g_Emu.GetUAV());
+		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}	
 		
 	{
-		GfxContext.SetPipelineState(s_IBL_PSOCache["eavg"]);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["eavg"]);
 
-		GfxContext.SetDynamicDescriptor(1, 0, g_Eavg.GetUAV());
-		GfxContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
-		GfxContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		ComputeContext.SetDynamicDescriptor(1, 0, g_Eavg.GetUAV());
+		ComputeContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 
 	{
-		GfxContext.SetPipelineState(s_IBL_PSOCache["PreintegralDiffuseSSS"]);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["PreintegralDiffuseSSS"]);
 
-		GfxContext.SetDynamicDescriptor(1, 0, g_SSSDiffuseLut.GetUAV());
-		GfxContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
-		GfxContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		ComputeContext.SetDynamicDescriptor(1, 0, g_SSSDiffuseLut.GetUAV());
+		ComputeContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 
 	{
-		GfxContext.SetPipelineState(s_IBL_PSOCache["PreintegralSpecularSSS"]);
+		ComputeContext.SetPipelineState(s_IBL_PSOCache["PreintegralSpecularSSS"]);
 
-		GfxContext.SetDynamicDescriptor(1, 0, g_SSSSpecularLut.GetUAV());
-		GfxContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		GfxContext.Dispatch(512 / 32, 512 / 32, 1);
-		GfxContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		ComputeContext.SetDynamicDescriptor(1, 0, g_SSSSpecularLut.GetUAV());
+		ComputeContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
-	GfxContext.Finish();
+	ComputeContext.Finish();
 }

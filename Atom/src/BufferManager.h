@@ -7,6 +7,7 @@
 namespace Graphics
 {
     extern ColorBuffer g_SceneColorBuffer;
+    extern ColorBuffer g_PostProcessBuffer;
     extern DepthBuffer g_SceneDepthBuffer;
     extern ColorBuffer g_SceneNormalBuffer;
     extern DepthBuffer g_ShadowBuffer;

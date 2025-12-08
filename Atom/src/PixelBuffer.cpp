@@ -292,7 +292,7 @@ size_t PixelBuffer::BytesPerPixel(DXGI_FORMAT Format)
 D3D12_RESOURCE_DESC PixelBuffer::DescribeTex2D(uint32_t width, uint32_t height, uint32_t depthOrArraySize, uint32_t numMips, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags)
 {
 	m_Width = width;
-	m_Height == height;
+	m_Height = height;
 	m_ArraySize = depthOrArraySize;
 	m_Format = format;
 

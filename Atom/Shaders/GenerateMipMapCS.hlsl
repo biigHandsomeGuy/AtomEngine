@@ -3,12 +3,9 @@
 cbuffer CB0 : register(b0)
 {
     int size;
-};
-
-cbuffer CB : register(b1)
-{
     int mipmap;
 };
+
 
 TextureCube<float4> SrcTexture : register(t0);
 RWTexture2DArray<float4> DstTexture : register(u0);

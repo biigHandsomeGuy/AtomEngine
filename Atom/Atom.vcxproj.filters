@@ -294,6 +294,7 @@
     <FxCompile Include="Shaders\BloomPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\PostProcessCS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="src\Functions.inl" />
