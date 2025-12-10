@@ -87,7 +87,7 @@ float4 main(VertexOut pin) : SV_Target
     if (UseTexture)
     {   
         // Sample input textures to get shading model params.
-        albedo = pow(gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb, 1);
+        albedo = pow(gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
         metalness = gMetalnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
         roughness = gRoughnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).g;
         // Get current fragment's normal and transform to world space.

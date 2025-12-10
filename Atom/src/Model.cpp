@@ -520,3 +520,4 @@ void Model::Draw(ID3D12GraphicsCommandList* cmdList, bool isSkyBox)
         cmdList->DrawIndexedInstanced(Meshes[meshIndex].CPUIndices.size(), 1, 0, 0, 0);
     }
 }
+

@@ -14,7 +14,11 @@ __declspec(align(256)) struct MeshConstants
 	Math::Matrix4 ModelMatrix{ Math::kIdentity };
 	Math::Matrix4 NormalMatrix{ Math::kIdentity };
 };
-
+struct Component
+{
+	OrthogonalTransform Transform{ kIdentity };
+	Vector3 Scaling{ kIdentity };
+};
 
 struct Vertex
 {
@@ -148,42 +152,31 @@ struct Model
 
 	void CreateMaterialSRVs();
 	void Draw(ID3D12GraphicsCommandList* cmdList, bool isSkyBox = false);
+
+	void UpdateConstants()
+	{
+		//m_MeshConstants.ModelMatrix = Matrix4{ kIdentity };
+		Matrix4 scaleMat = Matrix4::MakeScale(m_MeshComponent.Scaling);
+
+		// 构建最终 M：Transform * S
+		// 假设 Transform = T * R
+		m_MeshConstants.ModelMatrix = m_MeshComponent.Transform;
+		m_MeshConstants.ModelMatrix = m_MeshConstants.ModelMatrix * scaleMat;
+
+		m_MeshConstants.NormalMatrix =
+			Math::InverseTranspose(m_MeshConstants.ModelMatrix.Get3x3());
+	}
+
+
+	MeshConstants m_MeshConstants;
+
+	Component m_MeshComponent;
 };
 void UploadMeshToGPU(Mesh& mesh);
-bool LoadGLTF_To_Model(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	const std::string& filename, Model& outModel, const std::string& basePath = "");
 
 Model LoadGltfModel(const std::string& path);
-
-Mesh ConvertMesh(
-	const tinygltf::Model& gltf,
-	const tinygltf::Mesh& gmesh);
 
 Material ConvertMaterial(
 	const tinygltf::Model& gltf,
 	const tinygltf::Material& gm,
 	const std::string& baseDir);
-
-//class Model
-//{
-//public:
-//	Model(const ModelCreationDesc& filepath, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
-//
-//	void Load();
-//	void Draw(ID3D12GraphicsCommandList* commandList);
-//	std::vector<Mesh> meshes;
-//	
-//	void LoadTextures(const std::wstring& basePath);
-//private:
-//	Mesh ProcessMesh(const tinyobj::attrib_t& attrib, const tinyobj::shape_t& shape, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
-//
-//private:
-//	MeshConstants m_MeshConstants;
-//
-//	std::wstring m_ModelName;
-//	std::wstring m_ModelPath;
-//	std::vector<TextureRef> m_TextureReferences;
-//
-//	DescriptorHandle m_SRVs;
-//	uint32_t m_SRVDescriptorSize;
-//};

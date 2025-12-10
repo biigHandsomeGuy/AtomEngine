@@ -249,12 +249,6 @@
     <FxCompile Include="Shaders\PreIntegralDiffuseSSSCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\PostProcessVS.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\PostProcessPS.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Shaders\PBRShadingVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>

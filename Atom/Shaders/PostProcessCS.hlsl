@@ -61,7 +61,7 @@ float4 Reinhard(float4 color)
 
 float4 Filmic(float4 col)
 {
-    col *= 0.6;
+    col *= 0.6 * exposure;
     float A = 0.15;
     float B = 0.50;
     float C = 0.10;
@@ -76,7 +76,7 @@ float4 Filmic(float4 col)
 
 float4 ACESFilm(float4 x)
 {
-    x *= 0.18;
+    x *= 0.18 * exposure;
     float a = 2.51f;
     float b = 0.03f;
     float c = 2.43f;

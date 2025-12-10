@@ -140,18 +140,10 @@ void PbrRenderer::Startup()
 	Model skyBox, pbrModel, pbrModel2;
 	skyBox = LoadGltfModel(FileSystem::GetFullPath("Assets/Models/cube.glb"));
 	pbrModel = LoadGltfModel(FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf"));
-
-	////pbrModel.modelMatrix = OrthogonalTransform::MakeYRotation(45.0f);
-	//pbrModel.modelMatrix = pbrModel.modelMatrix * Matrix4::MakeScale(1.0f);
-	//pbrModel2.modelMatrix = pbrModel.modelMatrix * OrthogonalTransform(Vector3{ 15,0,0 });
-	//
-	//pbrModel.normalMatrix = InverseTranspose(pbrModel.modelMatrix.Get3x3());
-	//pbrModel2.normalMatrix = InverseTranspose(pbrModel2.modelMatrix.Get3x3());
-
+	//pbrModel.
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
 	m_Scene.Models.push_back(std::move(pbrModel2));
-	m_MeshConstants.resize(m_Scene.Models.size());
 	m_MaterialConstants.resize(m_Scene.Models.size());
 
 	s_IBL_PSOCache.clear();
@@ -248,14 +240,14 @@ void PbrRenderer::RenderScene()
 	
 	static float f = 0.0f;
 
-	ImGui::Begin("debug");
+	ImGui::Begin("Inspector");
 	XMVECTOR pos = m_Camera.GetPosition();
 	XMFLOAT4 temp;
 	XMStoreFloat4(&temp, pos);
 
-	// ”√ImGui ‰≥ˆ
-	ImGui::Text("Vector: (%.3f, %.3f, %.3f, %.3f)", temp.x, temp.y, temp.z, temp.w);
-	ImGui::Text("Welcome to my renderer!");
+
+	ImGui::Text("Camera Position: (%.3f, %.3f, %.3f, %.3f)", temp.x, temp.y, temp.z, temp.w);
+
 	ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
 	ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
 	ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
@@ -268,6 +260,27 @@ void PbrRenderer::RenderScene()
 	ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);
 	ImGui::Checkbox("UseEmu", &m_ShaderAttribs.UseEmu);
 	ImGui::Checkbox("UseSSS", &m_ShaderAttribs.UseSSS);
+
+	static struct
+	{
+		Vector3 Translate{ kIdentity };
+		Vector3 Rotate{ kIdentity };
+		Vector3 Scale{ kIdentity };
+	} ModelMatrix;
+
+	ImGui::DragFloat4("Translate", (float*)&ModelMatrix.Translate, 1.0f);
+	ImGui::DragFloat4("Rotate", (float*)&ModelMatrix.Rotate, 1.0f);
+	ImGui::DragFloat4("Scale", (float*)&ModelMatrix.Scale, 1.0f);
+
+	m_Scene.Models[0].m_MeshComponent.Transform.SetTranslation(ModelMatrix.Translate);
+
+	Quaternion q(
+		XMConvertToRadians(ModelMatrix.Rotate.GetX()),
+		XMConvertToRadians(ModelMatrix.Rotate.GetY()),
+		XMConvertToRadians(ModelMatrix.Rotate.GetZ())
+	);
+	m_Scene.Models[0].m_MeshComponent.Transform.SetRotation(q);
+	m_Scene.Models[0].m_MeshComponent.Scaling = ModelMatrix.Scale;
 	if (m_ShaderAttribs.UseSSS)
 	{
 		ImGui::SliderFloat("CurveFactor", &m_ShaderAttribs.CurveFactor, 0, 10);
@@ -320,11 +333,8 @@ void PbrRenderer::RenderScene()
 
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
-		{
-			m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
-			m_MeshConstants[i].NormalMatrix = DefaultMeshConstants.NormalMatrix;
-		}
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
+		m_Scene.Models[i].UpdateConstants();
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].m_MeshConstants);
 
 		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
 	}
@@ -351,9 +361,9 @@ void PbrRenderer::RenderScene()
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		
-		m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
+		m_Scene.Models[i].UpdateConstants();
 
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].m_MeshConstants);
 
 		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
 
@@ -393,8 +403,7 @@ void PbrRenderer::RenderScene()
 			m_MaterialConstants[i].gMatIndex = i;
 		}
 		{
-			m_MeshConstants[i].ModelMatrix = DefaultMeshConstants.ModelMatrix;
-			m_MeshConstants[i].NormalMatrix = DefaultMeshConstants.ModelMatrix;
+			m_Scene.Models[i].UpdateConstants();
 			Matrix4 T(
 				{ 0.5f, 0.0f, 0.0f, 0.0f },
 				{ 0.0f, -0.5f, 0.0f, 0.0f },
@@ -404,7 +413,7 @@ void PbrRenderer::RenderScene()
 			//m_MeshConstants[i].ViewProjTex = viewProjTex;
 
 		}
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_MeshConstants[i]);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].m_MeshConstants);
 		GraphicsContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_MaterialConstants[i]);
 
 		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
