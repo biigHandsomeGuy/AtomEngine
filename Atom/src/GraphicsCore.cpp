@@ -13,7 +13,7 @@ namespace Graphics
     UINT DsvDescriptorSize = 0;
     UINT CbvSrvUavDescriptorSize = 0;
 
-	ID3D12Device* g_Device;
+	ID3D12Device5* g_Device;
     
 	// ID3D12GraphicsCommandList* g_CommandList;
 	// ID3D12CommandAllocator* g_CommandAllocator;
@@ -33,7 +33,7 @@ namespace Graphics
 	UINT g_CurrentFence = 0;
     void Initialize(bool RequireDXRSupport)
     {
-		Microsoft::WRL::ComPtr<ID3D12Device> pDevice;
+		Microsoft::WRL::ComPtr<ID3D12Device5> pDevice;
 #if defined(DEBUG) || defined(_DEBUG) 
 		// Enable the D3D12 debug layer.
 		{		

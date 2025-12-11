@@ -56,7 +56,7 @@ Renderer::Renderer(HINSTANCE hInstance)
     Application::Initialize();
 
 
-    ThrowIfFailed(m_CommandList->Reset(m_CommandAllocator.Get(), nullptr));
+    ASSERT_SUCCEEDED(m_CommandList->Reset(m_CommandAllocator.Get(), nullptr));
 
     m_Camera.SetPosition(0.0f, 5.0f, -10.0f);
     XMVECTOR lightPos = XMLoadFloat4(&XMFLOAT4{ 0.0f, 10.0f, 2.0f, 1.0f });
@@ -71,7 +71,7 @@ Renderer::Renderer(HINSTANCE hInstance)
     BuildPSOs();
 
     // Execute the initialization commands.
-    ThrowIfFailed(m_CommandList->Close());
+    ASSERT_SUCCEEDED(m_CommandList->Close());
     ID3D12CommandList* cmdsLists[] = { m_CommandList.Get() };
     m_CommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
@@ -160,7 +160,7 @@ void Renderer::CreateRtvAndDsvDescriptorHeaps()
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     rtvHeapDesc.NodeMask = 0;
-    ThrowIfFailed(m_Device->CreateDescriptorHeap(
+    ASSERT_SUCCEEDED(m_Device->CreateDescriptorHeap(
         &rtvHeapDesc, IID_PPV_ARGS(m_RtvHeap.GetAddressOf())));
 
     // Add 1 DSV for shadow map.
@@ -169,7 +169,7 @@ void Renderer::CreateRtvAndDsvDescriptorHeaps()
     dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
     dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     dsvHeapDesc.NodeMask = 0;
-    ThrowIfFailed(m_Device->CreateDescriptorHeap(
+    ASSERT_SUCCEEDED(m_Device->CreateDescriptorHeap(
         &dsvHeapDesc, IID_PPV_ARGS(m_DsvHeap.GetAddressOf())));
 }
 
@@ -190,9 +190,9 @@ void Renderer::Update(const GameTimer& gt)
 
 void Renderer::Draw(const GameTimer& gt)
 {
-    ThrowIfFailed(m_CommandAllocator->Reset());
+    ASSERT_SUCCEEDED(m_CommandAllocator->Reset());
 
-    ThrowIfFailed(m_CommandList->Reset(m_CommandAllocator.Get(), m_PSOs["opaque"].Get()));
+    ASSERT_SUCCEEDED(m_CommandList->Reset(m_CommandAllocator.Get(), m_PSOs["opaque"].Get()));
 
 
     ID3D12DescriptorHeap* descriptorHeaps[] = { m_SrvDescriptorHeap.Get() };
@@ -264,7 +264,7 @@ void Renderer::Draw(const GameTimer& gt)
     {
         const UINT64 bufferSize = sizeof(ShaderParams);
 
-        ThrowIfFailed(m_Device->CreateCommittedResource(
+        ASSERT_SUCCEEDED(m_Device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
             D3D12_HEAP_FLAG_NONE,
             &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
@@ -324,14 +324,14 @@ void Renderer::Draw(const GameTimer& gt)
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 
     // Done recording commands.
-    ThrowIfFailed(m_CommandList->Close());
+    ASSERT_SUCCEEDED(m_CommandList->Close());
 
     // Add the command list to the queue for execution.
     ID3D12CommandList* cmdsLists[] = { m_CommandList.Get() };
     m_CommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
     // Swap the back and front buffers
-    ThrowIfFailed(m_SwapChain->Present(0, 0));
+    ASSERT_SUCCEEDED(m_SwapChain->Present(0, 0));
     mCurrBackBuffer = (mCurrBackBuffer + 1) % SwapChainBufferCount;
 
     FlushCommandQueue();
@@ -413,7 +413,7 @@ void Renderer::UpdateUI()
 
 void Renderer::InitConstantBuffer()
 {
-    ThrowIfFailed(m_Device->CreateCommittedResource(
+    ASSERT_SUCCEEDED(m_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(GlobalConstantsBufferSize),
@@ -422,7 +422,7 @@ void Renderer::InitConstantBuffer()
         IID_PPV_ARGS(m_LightPassGlobalConstantsBuffer.GetAddressOf())
     ));
 
-    ThrowIfFailed(m_Device->CreateCommittedResource(
+    ASSERT_SUCCEEDED(m_Device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(GlobalConstantsBufferSize),
@@ -433,7 +433,7 @@ void Renderer::InitConstantBuffer()
 
     for (int i = 0; i < m_Scene.Models.size(); i++)
     {
-        ThrowIfFailed(m_Device->CreateCommittedResource(
+        ASSERT_SUCCEEDED(m_Device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
             D3D12_HEAP_FLAG_NONE,
             &CD3DX12_RESOURCE_DESC::Buffer(MeshConstantsBufferSize),
@@ -478,9 +478,9 @@ void Renderer::BuildRootSignature()
     {
         ::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
     }
-    ThrowIfFailed(hr);
+    ASSERT_SUCCEEDED(hr);
 
-    ThrowIfFailed(m_Device->CreateRootSignature(
+    ASSERT_SUCCEEDED(m_Device->CreateRootSignature(
         0,
         serializedRootSig->GetBufferPointer(),
         serializedRootSig->GetBufferSize(),
@@ -497,7 +497,7 @@ void Renderer::BuildDescriptorHeaps()
     srvHeapDesc.NumDescriptors = 64;
     srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    ThrowIfFailed(m_Device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_SrvDescriptorHeap)));
+    ASSERT_SUCCEEDED(m_Device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_SrvDescriptorHeap)));
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(m_SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
@@ -559,7 +559,7 @@ void Renderer::BuildPSOs()
     opaquePsoDesc.DepthStencilState.DepthEnable = true;
     opaquePsoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     opaquePsoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    ThrowIfFailed(m_Device->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&m_PSOs["opaque"])));
+    ASSERT_SUCCEEDED(m_Device->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&m_PSOs["opaque"])));
 
     //
     // PSO for shadow map pass.
@@ -581,7 +581,7 @@ void Renderer::BuildPSOs()
     // Shadow map pass does not have a render target.
     smapPsoDesc.RTVFormats[0] = DXGI_FORMAT_UNKNOWN;
     smapPsoDesc.NumRenderTargets = 0;
-    ThrowIfFailed(m_Device->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&m_PSOs["shadow_opaque"])));
+    ASSERT_SUCCEEDED(m_Device->CreateGraphicsPipelineState(&smapPsoDesc, IID_PPV_ARGS(&m_PSOs["shadow_opaque"])));
     // 
     // //
     // // PSO for debug layer.
@@ -597,7 +597,7 @@ void Renderer::BuildPSOs()
     {
         g_pTextureDebugPS, sizeof(g_pTextureDebugPS)
     };
-    ThrowIfFailed(m_Device->CreateGraphicsPipelineState(&debugPsoDesc, IID_PPV_ARGS(&m_PSOs["debug"])));
+    ASSERT_SUCCEEDED(m_Device->CreateGraphicsPipelineState(&debugPsoDesc, IID_PPV_ARGS(&m_PSOs["debug"])));
 
 
 }
@@ -652,7 +652,7 @@ void Renderer::DrawSceneToShadowMap()
         XMMATRIX S = lightView * lightProj * T;
         XMStoreFloat4x4(&mShadowTransform, S);
         BYTE* data = nullptr;
-        ThrowIfFailed(m_ShadowPassGlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+        ASSERT_SUCCEEDED(m_ShadowPassGlobalConstantsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&data)));
 
         memcpy(data, &m_ShadowPassGlobalConstants, GlobalConstantsBufferSize);
         m_ShadowPassGlobalConstantsBuffer->Unmap(0, nullptr);

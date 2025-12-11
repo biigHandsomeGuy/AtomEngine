@@ -7,7 +7,7 @@
 class CommandContext;
 namespace Graphics
 {
-    extern ID3D12Device* g_Device;
+    extern ID3D12Device5* g_Device;
 }
 
 // This class is a linear allocation system for dynamically generated descriptor tables.  It internally caches

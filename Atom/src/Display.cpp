@@ -56,18 +56,23 @@ void Display::Initialize(void)
 	Microsoft::WRL::ComPtr<IDXGIFactory4> dxgiFactory;
 	ASSERT_SUCCEEDED(CreateDXGIFactory2(0, IID_PPV_ARGS(&dxgiFactory)));
 
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.Width = g_DisplayWidth;
-    swapChainDesc.Height = g_DisplayHeight;
-    swapChainDesc.Format = SwapChainFormat;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = SWAP_CHAIN_BUFFER_COUNT;
-    swapChainDesc.SampleDesc.Count = 1;
-    swapChainDesc.SampleDesc.Quality = 0;
-    swapChainDesc.Scaling = DXGI_SCALING_NONE;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-    swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = DXGI_SWAP_CHAIN_DESC1
+    {
+        .Width = g_DisplayWidth,
+        .Height = g_DisplayHeight,
+        .Format = SwapChainFormat,
+        .SampleDesc =
+        {
+            .Count = 1,
+            .Quality = 0
+        },
+        .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        .BufferCount = SWAP_CHAIN_BUFFER_COUNT,
+        .Scaling = DXGI_SCALING_NONE,
+        .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        .AlphaMode = DXGI_ALPHA_MODE_IGNORE,
+        .Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+    };
 
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
     fsSwapChainDesc.Windowed = TRUE;
@@ -109,43 +114,47 @@ void Display::Resize(uint32_t width, uint32_t height)
     height = std::max(height, 8u);
 
 
-        g_CommandManager.IdleGPU();
-        g_DisplayWidth = width;
-        g_DisplayHeight = height;
+    g_CommandManager.IdleGPU();
+    g_DisplayWidth = width;
+    g_DisplayHeight = height;
 
-        g_ViewPort.TopLeftX = 0;
-        g_ViewPort.TopLeftY = 0;
-        g_ViewPort.Width = static_cast<float>(g_DisplayWidth);
-        g_ViewPort.Height = static_cast<float>(g_DisplayHeight);
-        g_ViewPort.MinDepth = 0.0f;
-        g_ViewPort.MaxDepth = 1.0f;
+    g_ViewPort = D3D12_VIEWPORT
+    {
+        .TopLeftX = 0,
+        .TopLeftY = 0,
+        .Width = static_cast<float>(g_DisplayWidth),
+        .Height = static_cast<float>(g_DisplayHeight),
+        .MinDepth = 0.0f,
+        .MaxDepth = 1.0f
+    };
 
-        g_Rect = { 0, 0, (long)g_DisplayWidth, (long)g_DisplayHeight };
+
+    g_Rect = { 0, 0, (long)g_DisplayWidth, (long)g_DisplayHeight };
 
 
-        for (uint32_t i = 0; i < SWAP_CHAIN_BUFFER_COUNT; ++i)
-        {
-            g_DisplayPlane[i].Destroy();
-        }
-        // Resize the swap chain.
-        ASSERT_SUCCEEDED(s_SwapChain1->ResizeBuffers(
-            SWAP_CHAIN_BUFFER_COUNT,
-            g_DisplayWidth, g_DisplayHeight,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
+    for (uint32_t i = 0; i < SWAP_CHAIN_BUFFER_COUNT; ++i)
+    {
+        g_DisplayPlane[i].Destroy();
+    }
+    // Resize the swap chain.
+    ASSERT_SUCCEEDED(s_SwapChain1->ResizeBuffers(
+        SWAP_CHAIN_BUFFER_COUNT,
+        g_DisplayWidth, g_DisplayHeight,
+        DXGI_FORMAT_R16G16B16A16_FLOAT,
+        DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
-        g_CurrentBuffer = 0;
+    g_CurrentBuffer = 0;
 
-        for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
-        {
-            ComPtr<ID3D12Resource> displayPlane;
-            ASSERT_SUCCEEDED(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&displayPlane)));
-            g_DisplayPlane[i].CreateFromSwapChain(L"Primary SwapChain Buffer", displayPlane.Detach());
+    for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
+    {
+        ComPtr<ID3D12Resource> displayPlane;
+        ASSERT_SUCCEEDED(s_SwapChain1->GetBuffer(i, IID_PPV_ARGS(&displayPlane)));
+        g_DisplayPlane[i].CreateFromSwapChain(L"Primary SwapChain Buffer", displayPlane.Detach());
 
-        }
+    }
 
-        ResizeDisplayDependentBuffers(g_DisplayWidth, g_DisplayHeight);
-        g_CommandManager.IdleGPU();
+    ResizeDisplayDependentBuffers(g_DisplayWidth, g_DisplayHeight);
+    g_CommandManager.IdleGPU();
     
     
 }
