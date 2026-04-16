@@ -1,523 +1,478 @@
-// GltfLoader.cpp
-#include "pch.h"
+﻿#include "pch.h"
 #include "Model.h"
+
+#include <cassert>
+#include <iostream>
+#include <memory>
+#include <filesystem>
+#include <vector>
+
 #include "GraphicsCore.h"
+#include "CommandContext.h"
 #include "Renderer.h"
-#include "FileSystem.h"
-#include "TextureManager.h"
-#include "tiny_gltf.h"
+#include "ConstantBuffers.h"
 
-// stb_image for decoding PNG/JPEG from base64 or compressed image buffers
-#include "stb_image.h"
+using namespace DirectX;
 
-
-// -------------------- Helpers --------------------
-
-static bool EndsWith(const std::string& s, const std::string& suffix)
+static void AccumulateSurfaceBasis(
+    const Vector3& p0,
+    const Vector3& p1,
+    const Vector3& p2,
+    const XMFLOAT2& uv0,
+    const XMFLOAT2& uv1,
+    const XMFLOAT2& uv2,
+    Vector3& outNormal,
+    Vector3& outTangent,
+    Vector3& outBitangent)
 {
-    if (s.size() < suffix.size()) return false;
-    return s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
+    const Vector3 e1 = p1 - p0;
+    const Vector3 e2 = p2 - p0;
+    const Vector3 faceNormal = Cross(e1, e2);
+    outNormal += faceNormal;
 
-// Read buffer pointer + stride for accessor
-static const unsigned char* GetBufferPtr(const tinygltf::Model& gltf, const tinygltf::Accessor& acc, int& outByteStride)
-{
-    if (acc.bufferView < 0 || acc.bufferView >= (int)gltf.bufferViews.size()) {
-        outByteStride = 0;
-        return nullptr;
-    }
-    const tinygltf::BufferView& bv = gltf.bufferViews[acc.bufferView];
-    const tinygltf::Buffer& buf = gltf.buffers[bv.buffer];
-    const unsigned char* base = buf.data.data() + bv.byteOffset + acc.byteOffset;
+    const float du1 = uv1.x - uv0.x;
+    const float dv1 = uv1.y - uv0.y;
+    const float du2 = uv2.x - uv0.x;
+    const float dv2 = uv2.y - uv0.y;
+    const float det = du1 * dv2 - dv1 * du2;
 
-    if (bv.byteStride != 0)
-        outByteStride = static_cast<int>(bv.byteStride);
-    else {
-        // compute element size by type and component (assume floats for positions/normals/uvs common case)
-        int componentSize = 0;
-        switch (acc.componentType) {
-        case TINYGLTF_COMPONENT_TYPE_BYTE:
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: componentSize = 1; break;
-        case TINYGLTF_COMPONENT_TYPE_SHORT:
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: componentSize = 2; break;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: componentSize = 4; break;
-        case TINYGLTF_COMPONENT_TYPE_FLOAT: componentSize = 4; break;
-        default: componentSize = 1; break;
-        }
-
-        int numComponents = 1;
-        if (acc.type == TINYGLTF_TYPE_SCALAR) numComponents = 1;
-        else if (acc.type == TINYGLTF_TYPE_VEC2) numComponents = 2;
-        else if (acc.type == TINYGLTF_TYPE_VEC3) numComponents = 3;
-        else if (acc.type == TINYGLTF_TYPE_VEC4) numComponents = 4;
-        else if (acc.type == TINYGLTF_TYPE_MAT2) numComponents = 4;
-        else if (acc.type == TINYGLTF_TYPE_MAT3) numComponents = 9;
-        else if (acc.type == TINYGLTF_TYPE_MAT4) numComponents = 16;
-
-        outByteStride = componentSize * numComponents;
-    }
-
-    return base;
-}
-
-// Read float vector from raw pointer (assume contiguous floats)
-static void ReadFloatElement(const unsigned char* ptr, int compCount, Vector4& out)
-{
-    out = Vector4(0.0f);
-    if (!ptr) return;
-    const float* f = reinterpret_cast<const float*>(ptr);
-    if (compCount >= 1) out.SetX(f[0]);
-    if (compCount >= 2) out.SetY(f[1]);
-    if (compCount >= 3) out.SetZ(f[2]);
-    if (compCount >= 4) out.SetW(f[3]);
-}
-
-static uint32_t ReadIndexValue(const unsigned char* src, int componentType)
-{
-    switch (componentType) {
-    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-        return static_cast<uint32_t>(*reinterpret_cast<const uint16_t*>(src));
-    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-        return static_cast<uint32_t>(*reinterpret_cast<const uint32_t*>(src));
-    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-        return static_cast<uint32_t>(*reinterpret_cast<const uint8_t*>(src));
-    default:
-        return 0;
-    }
-}
-
-// Base64 decode (simple)
-static inline unsigned char DecodeBase64Char(unsigned char c)
-{
-    if (c >= 'A' && c <= 'Z') return c - 'A';
-    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
-    if (c >= '0' && c <= '9') return c - '0' + 52;
-    if (c == '+') return 62;
-    if (c == '/') return 63;
-    return 255;
-}
-
-static std::vector<unsigned char> Base64Decode(const std::string& input)
-{
-    std::vector<unsigned char> output;
-    output.reserve(input.size() * 3 / 4);
-
-    unsigned int buffer = 0;
-    int bitsLeft = 0;
-
-    for (unsigned char c : input)
+    if (std::abs(det) > 1e-8f)
     {
-        if (c == '=') break;
-        unsigned char decoded = DecodeBase64Char(c);
-        if (decoded == 255) continue;
+        const float invDet = 1.0f / det;
+        outTangent += (e1 * dv2 - e2 * dv1) * invDet;
+        outBitangent += (e2 * du1 - e1 * du2) * invDet;
+    }
+}
 
-        buffer = (buffer << 6) | decoded;
-        bitsLeft += 6;
+static void RebuildVertexNormalsAndTangents(MeshAsset& mesh, bool rebuildNormals, bool rebuildTangents)
+{
+    if (mesh.Vertices.empty() || mesh.Indices.size() < 3)
+        return;
 
-        if (bitsLeft >= 8)
+    std::vector<Vector3> normalAccum(mesh.Vertices.size(), Vector3(kZero));
+    std::vector<Vector3> tangentAccum(mesh.Vertices.size(), Vector3(kZero));
+    std::vector<Vector3> bitangentAccum(mesh.Vertices.size(), Vector3(kZero));
+
+    for (size_t i = 0; i + 2 < mesh.Indices.size(); i += 3)
+    {
+        const uint32_t i0 = mesh.Indices[i + 0];
+        const uint32_t i1 = mesh.Indices[i + 1];
+        const uint32_t i2 = mesh.Indices[i + 2];
+
+        if (i0 >= mesh.Vertices.size() || i1 >= mesh.Vertices.size() || i2 >= mesh.Vertices.size())
+            continue;
+
+        const Vertex& v0 = mesh.Vertices[i0];
+        const Vertex& v1 = mesh.Vertices[i1];
+        const Vertex& v2 = mesh.Vertices[i2];
+
+        Vector3 faceNormal(kZero);
+        Vector3 faceTangent(kZero);
+        Vector3 faceBitangent(kZero);
+        AccumulateSurfaceBasis(
+            v0.Position, v1.Position, v2.Position,
+            v0.UV, v1.UV, v2.UV,
+            faceNormal, faceTangent, faceBitangent);
+
+        normalAccum[i0] += faceNormal;
+        normalAccum[i1] += faceNormal;
+        normalAccum[i2] += faceNormal;
+
+        tangentAccum[i0] += faceTangent;
+        tangentAccum[i1] += faceTangent;
+        tangentAccum[i2] += faceTangent;
+
+        bitangentAccum[i0] += faceBitangent;
+        bitangentAccum[i1] += faceBitangent;
+        bitangentAccum[i2] += faceBitangent;
+    }
+
+    for (size_t i = 0; i < mesh.Vertices.size(); ++i)
+    {
+        Vertex& v = mesh.Vertices[i];
+
+        Vector3 normal = rebuildNormals ? normalAccum[i] : v.Normal;
+        if (LengthSquare(normal) < 1e-8f)
+            normal = Vector3(kZUnitVector);
+        normal = Normalize(normal);
+
+        Vector3 tangent = rebuildTangents ? tangentAccum[i] : v.Tangent;
+        tangent = tangent - normal * Dot(normal, tangent);
+        if (LengthSquare(tangent) < 1e-8f)
         {
-            bitsLeft -= 8;
-            output.push_back(static_cast<unsigned char>((buffer >> bitsLeft) & 0xFF));
+            const Vector3 fallbackAxis = std::abs(normal.GetX()) < 0.999f ? Vector3(kXUnitVector) : Vector3(kYUnitVector);
+            tangent = Normalize(Cross(fallbackAxis, normal));
         }
-    }
+        else
+        {
+            tangent = Normalize(tangent);
+        }
 
-    return output;
+        Vector3 bitangent = rebuildTangents ? bitangentAccum[i] : v.Bitangent;
+        bitangent = bitangent - normal * Dot(normal, bitangent) - tangent * Dot(tangent, bitangent);
+        if (LengthSquare(bitangent) < 1e-8f)
+            bitangent = Normalize(Cross(normal, tangent));
+        else
+            bitangent = Normalize(bitangent);
+
+        if (Dot(Cross(normal, tangent), bitangent) < 0.0f)
+            bitangent = -bitangent;
+
+        v.Normal = normal;
+        v.Tangent = tangent;
+        v.Bitangent = bitangent;
+    }
 }
 
-// -------------------- Texture loading --------------------
-// Forward declare functions from your TextureManager
-// Expected: TextureRef LoadTexFromFile(const std::wstring& path);
-//           TextureRef LoadTexFromMemory(const unsigned char* pixels, int w, int h);
-
-// Load tinygltf::Image into TextureRef (handles external URI, data:base64, bufferView/raw)
-TextureRef LoadGltfImageToTextureRef(const tinygltf::Image& image, const std::string& baseDir)
+static Vector3 ReadVec3(const tinygltf::Model& model, const tinygltf::Accessor& accessor, uint32_t index)
 {
-    // Case 1: external file (uri not empty and not data:)
-    if (!image.uri.empty() && image.uri.rfind("data:", 0) != 0)
-    {
-        std::string fullPath = baseDir.empty() ? image.uri : (baseDir + "/" + image.uri);
-        std::wstring wpath(fullPath.begin(), fullPath.end());
-        return TextureManager::LoadTexFromFile(wpath);
-    }
+    const auto& view = model.bufferViews[accessor.bufferView];
+    const auto& buffer = model.buffers[view.buffer];
 
-    // Case 2: data: URI (base64 compressed image)
-    if (!image.uri.empty() && image.uri.rfind("data:", 0) == 0)
-    {
-        // find base64 part
-        size_t pos = image.uri.find("base64,");
-        if (pos == std::string::npos) {
-            return TextureRef(nullptr);
-        }
-        std::string base64Data = image.uri.substr(pos + 7);
-        std::vector<unsigned char> decoded = Base64Decode(base64Data);
+    const uint8_t* data = buffer.data.data() + view.byteOffset + accessor.byteOffset;
+    const float* ptr = reinterpret_cast<const float*>(data + index * accessor.ByteStride(view));
 
-        // decode compressed image (PNG/JPEG) to RGBA using stb_image
-        int w = 0, h = 0, comp = 0;
-        unsigned char* rgba = stbi_load_from_memory(decoded.data(), static_cast<int>(decoded.size()), &w, &h, &comp, 4);
-        if (!rgba) {
-            // failed to decode
-            return TextureRef(nullptr);
-        }
-
-        TextureRef ref = TextureManager::LoadTexFromMemory(rgba, w, h);
-
-        stbi_image_free(rgba);
-        return ref;
-    }
-
-    // Case 3: image.image may contain decoded pixels OR compressed bytes depending on tinygltf settings
-    if (!image.image.empty()) {
-        // tinygltf often decodes PNG/JPG into image.image only if Load... did decode them
-        // but to be robust: attempt to detect if image.image is already raw RGBA or compressed (PNG/JPG).
-        // Heuristic: if image.component is set and equals channels (1/3/4) -> raw pixels
-        if (image.component > 0) {
-            // component = number of channels (e.g. 4 for RGBA) => treat as raw pixels
-            // tinygltf stores raw pixel bytes in image.image when it decoded them.
-            return TextureManager::LoadTexFromMemory(const_cast<unsigned char*>(image.image.data()), image.width, image.height);
-        }
-        else {
-            // component == 0 -> image.image probably contains compressed file bytes (PNG/JPG)
-            int w = 0, h = 0, comp = 0;
-            unsigned char* rgba = stbi_load_from_memory(image.image.data(), static_cast<int>(image.image.size()), &w, &h, &comp, 4);
-            if (!rgba) return TextureRef(nullptr);
-            TextureRef ref = TextureManager::LoadTexFromMemory(rgba, w, h);
-            stbi_image_free(rgba);
-            return ref;
-        }
-    }
-
-    return TextureRef(nullptr);
+    return Vector3(ptr[0], ptr[1], ptr[2]);
 }
 
-// -------------------- Material conversion --------------------
-
-Material ConvertMaterial(const tinygltf::Model& gltf, const tinygltf::Material& gm, const std::string& baseDir)
+static XMFLOAT2 ReadVec2(const tinygltf::Model& model, const tinygltf::Accessor& accessor, uint32_t index)
 {
-    Material mat;
+    const auto& view = model.bufferViews[accessor.bufferView];
+    const auto& buffer = model.buffers[view.buffer];
 
-    // Base color factor
-    if (gm.pbrMetallicRoughness.baseColorFactor.size() == 4) {
-        mat.BaseColorFactor = Vector4(
-            (float)gm.pbrMetallicRoughness.baseColorFactor[0],
-            (float)gm.pbrMetallicRoughness.baseColorFactor[1],
-            (float)gm.pbrMetallicRoughness.baseColorFactor[2],
-            (float)gm.pbrMetallicRoughness.baseColorFactor[3]);
+    const uint8_t* data = buffer.data.data() + view.byteOffset + accessor.byteOffset;
+    const float* ptr = reinterpret_cast<const float*>(data + index * accessor.ByteStride(view));
+
+    return XMFLOAT2(ptr[0], ptr[1]);
+}
+
+static XMFLOAT4 ReadVec4(const tinygltf::Model& model, const tinygltf::Accessor& accessor, uint32_t index)
+{
+    const auto& view = model.bufferViews[accessor.bufferView];
+    const auto& buffer = model.buffers[view.buffer];
+
+    const uint8_t* data = buffer.data.data() + view.byteOffset + accessor.byteOffset;
+    const float* ptr = reinterpret_cast<const float*>(data + index * accessor.ByteStride(view));
+
+    return XMFLOAT4(ptr[0], ptr[1], ptr[2], ptr[3]);
+}
+
+static void LoadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& primitive, MeshAsset& mesh)
+{
+    const auto& posAcc = model.accessors[primitive.attributes.at("POSITION")];
+    const tinygltf::Accessor* normAcc = nullptr;
+    if (primitive.attributes.contains("NORMAL"))
+        normAcc = &model.accessors[primitive.attributes.at("NORMAL")];
+
+    const tinygltf::Accessor* uvAcc = nullptr;
+    if (primitive.attributes.contains("TEXCOORD_0"))
+        uvAcc = &model.accessors[primitive.attributes.at("TEXCOORD_0")];
+
+    const tinygltf::Accessor* tangentAcc = nullptr;
+    if (primitive.attributes.contains("TANGENT"))
+        tangentAcc = &model.accessors[primitive.attributes.at("TANGENT")];
+
+    uint32_t vertexCount = static_cast<uint32_t>(posAcc.count);
+
+    for (uint32_t i = 0; i < vertexCount; i++)
+    {
+        Vertex v{};
+        v.Position = ReadVec3(model, posAcc, i);
+        v.Normal = normAcc ? ReadVec3(model, *normAcc, i) : Vector3(kZero);
+        v.UV = uvAcc ? ReadVec2(model, *uvAcc, i) : XMFLOAT2(0, 0);
+
+        if (tangentAcc)
+        {
+            const XMFLOAT4 tangent = ReadVec4(model, *tangentAcc, i);
+            v.Tangent = Vector3(tangent.x, tangent.y, tangent.z);
+            v.Bitangent = Cross(v.Normal, v.Tangent) * tangent.w;
+        }
+        else
+        {
+            v.Tangent = Vector3(kZero);
+            v.Bitangent = Vector3(kZero);
+        }
+
+        mesh.Vertices.push_back(v);
     }
 
-    mat.MetallicFactor = (float)gm.pbrMetallicRoughness.metallicFactor;
-    mat.RoughnessFactor = (float)gm.pbrMetallicRoughness.roughnessFactor;
+    const auto& idxAcc = model.accessors[primitive.indices];
+    const auto& view = model.bufferViews[idxAcc.bufferView];
+    const auto& buffer = model.buffers[view.buffer];
+    const uint8_t* data = buffer.data.data() + view.byteOffset + idxAcc.byteOffset;
 
-    if (gm.emissiveFactor.size() == 3) {
-        mat.EmissiveFactor = Vector3((float)gm.emissiveFactor[0], (float)gm.emissiveFactor[1], (float)gm.emissiveFactor[2]);
+    for (size_t i = 0; i < idxAcc.count; i++)
+    {
+        uint32_t index = 0;
+
+        switch (idxAcc.componentType)
+        {
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+            index = reinterpret_cast<const uint16_t*>(data)[i];
+            break;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+            index = reinterpret_cast<const uint32_t*>(data)[i];
+            break;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+            index = reinterpret_cast<const uint8_t*>(data)[i];
+            break;
+        default:
+            break;
+        }
+
+        mesh.Indices.push_back(index);
     }
 
-    mat.DoubleSided = gm.doubleSided;
-    mat.Name = gm.name;
+    SubMesh sub{};
+    sub.IndexOffset = 0;
+    sub.IndexCount = static_cast<uint32_t>(mesh.Indices.size());
+    sub.MaterialIndex = primitive.material >= 0 ? primitive.material : 0;
+    mesh.SubMeshes.push_back(sub);
 
-    // helper to safely get texture -> image
-    auto GetImageFromTextureIndex = [&](int texIdx) -> const tinygltf::Image* {
-        if (texIdx < 0 || texIdx >= (int)gltf.textures.size()) return nullptr;
-        const tinygltf::Texture& t = gltf.textures[texIdx];
-        if (t.source < 0 || t.source >= (int)gltf.images.size()) return nullptr;
-        return &gltf.images[t.source];
+    RebuildVertexNormalsAndTangents(mesh, normAcc == nullptr, tangentAcc == nullptr);
+}
+
+static void CreateBuffer(ID3D12Resource** resource, const void* data, uint64_t size)
+{
+    CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
+    CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+
+    ASSERT_SUCCEEDED(Graphics::g_Device->CreateCommittedResource(
+        &defaultHeap,
+        D3D12_HEAP_FLAG_NONE,
+        &desc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        IID_PPV_ARGS(resource)));
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> upload;
+    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
+
+    ASSERT_SUCCEEDED(Graphics::g_Device->CreateCommittedResource(
+        &uploadHeap,
+        D3D12_HEAP_FLAG_NONE,
+        &desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(upload.GetAddressOf())));
+
+    void* mapped = nullptr;
+    upload->Map(0, nullptr, &mapped);
+    memcpy(mapped, data, size);
+    upload->Unmap(0, nullptr);
+
+    CommandContext& ctx = CommandContext::Begin();
+    ctx.GetCommandList()->CopyBufferRegion(*resource, 0, upload.Get(), 0, size);
+
+    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        *resource,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_GENERIC_READ);
+
+    ctx.GetCommandList()->ResourceBarrier(1, &barrier);
+    ctx.Finish(true);
+}
+
+static MeshGPU UploadMesh(const MeshAsset& asset)
+{
+    MeshGPU gpu{};
+
+    uint64_t vbSize = asset.Vertices.size() * sizeof(Vertex);
+    uint64_t ibSize = asset.Indices.size() * sizeof(uint32_t);
+
+    CreateBuffer(gpu.VertexBuffer.GetAddressOf(), asset.Vertices.data(), vbSize);
+    CreateBuffer(gpu.IndexBuffer.GetAddressOf(), asset.Indices.data(), ibSize);
+
+    gpu.VBV = { gpu.VertexBuffer->GetGPUVirtualAddress(), static_cast<UINT>(vbSize), sizeof(Vertex) };
+    gpu.IBV = { gpu.IndexBuffer->GetGPUVirtualAddress(), static_cast<UINT>(ibSize), DXGI_FORMAT_R32_UINT };
+    gpu.VertexCount = static_cast<uint32_t>(asset.Vertices.size());
+    gpu.IndexCount = static_cast<uint32_t>(asset.Indices.size());
+
+    return gpu;
+}
+
+static uint32_t ToSceneHeapIndex(TextureID textureId, TextureManager& textureManager)
+{
+    if (textureId == INVALID_TEXTURE)
+        return Graphics::g_BindlessHeap.GetOffsetOfHandle(Renderer::g_NullDescriptor);
+
+    return textureManager.GetBindlessIndex(textureId);
+}
+
+static TextureID LoadTinyGltfImage(const tinygltf::Image& img, TextureManager& textureManager, bool srgb)
+{
+    if (img.image.empty() || img.width <= 0 || img.height <= 0)
+        return INVALID_TEXTURE;
+
+    if (img.as_is)
+        return textureManager.LoadTextureFromMemory(img.image.data(), img.image.size(), srgb);
+
+    if (img.bits != 8 || img.pixel_type != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
+        return INVALID_TEXTURE;
+
+    const size_t pixelCount = static_cast<size_t>(img.width) * static_cast<size_t>(img.height);
+    std::vector<uint8_t> rgba(pixelCount * 4);
+
+    switch (img.component)
+    {
+    case 1:
+        for (size_t i = 0; i < pixelCount; ++i)
+        {
+            const uint8_t v = img.image[i];
+            rgba[i * 4 + 0] = v;
+            rgba[i * 4 + 1] = v;
+            rgba[i * 4 + 2] = v;
+            rgba[i * 4 + 3] = 255;
+        }
+        break;
+    case 2:
+        for (size_t i = 0; i < pixelCount; ++i)
+        {
+            rgba[i * 4 + 0] = img.image[i * 2 + 0];
+            rgba[i * 4 + 1] = img.image[i * 2 + 0];
+            rgba[i * 4 + 2] = img.image[i * 2 + 0];
+            rgba[i * 4 + 3] = img.image[i * 2 + 1];
+        }
+        break;
+    case 3:
+        for (size_t i = 0; i < pixelCount; ++i)
+        {
+            rgba[i * 4 + 0] = img.image[i * 3 + 0];
+            rgba[i * 4 + 1] = img.image[i * 3 + 1];
+            rgba[i * 4 + 2] = img.image[i * 3 + 2];
+            rgba[i * 4 + 3] = 255;
+        }
+        break;
+    case 4:
+        memcpy(rgba.data(), img.image.data(), rgba.size());
+        break;
+    default:
+        return INVALID_TEXTURE;
+    }
+
+    return textureManager.CreateTexture2D(
+        static_cast<uint32_t>(img.width),
+        static_cast<uint32_t>(img.height),
+        srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM,
+        rgba.data());
+}
+
+static void LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelGPU& gpu, TextureManager& textureManager)
+{
+    tinygltf::TinyGLTF loader;
+    tinygltf::Model model;
+
+    std::string err;
+    std::string warn;
+
+    bool ret = path.ends_with(".glb")
+        ? loader.LoadBinaryFromFile(&model, &err, &warn, path)
+        : loader.LoadASCIIFromFile(&model, &err, &warn, path);
+
+    assert(ret);
+
+    std::string baseDir = path.substr(0, path.find_last_of("\\/") + 1);
+
+    asset.Materials.resize(model.materials.size());
+    if (asset.Materials.empty())
+        asset.Materials.emplace_back();
+
+    for (size_t i = 0; i < model.materials.size(); i++)
+    {
+        const auto& mat = model.materials[i];
+        auto& out = asset.Materials[i];
+
+        auto loadTex = [&](int texIndex, bool srgb)
+        {
+            if (texIndex < 0)
+                return INVALID_TEXTURE;
+
+            const auto& tex = model.textures[texIndex];
+            const auto& img = model.images[tex.source];
+
+            if (!img.image.empty())
+                return LoadTinyGltfImage(img, textureManager, srgb);
+
+            if (!img.uri.empty())
+            {
+                std::filesystem::path fullPath = std::filesystem::path(baseDir) / std::filesystem::path(img.uri);
+                return textureManager.LoadTexture(fullPath.generic_wstring(), srgb);
+            }
+
+            return INVALID_TEXTURE;
         };
 
-    // Albedo
-    if (gm.pbrMetallicRoughness.baseColorTexture.index >= 0) {
-        if (const tinygltf::Image* img = GetImageFromTextureIndex(gm.pbrMetallicRoughness.baseColorTexture.index))
-            mat.Albedo = LoadGltfImageToTextureRef(*img, baseDir);
+        out.BaseColor = loadTex(mat.pbrMetallicRoughness.baseColorTexture.index, true);
+        out.Normal = loadTex(mat.normalTexture.index, false);
+        out.RoughnessMetallic = loadTex(mat.pbrMetallicRoughness.metallicRoughnessTexture.index, false);
+        out.Emissive = loadTex(mat.emissiveTexture.index, true);
     }
 
-    // MetallicRoughness (single texture: B=metallic, G=roughness)
-    if (gm.pbrMetallicRoughness.metallicRoughnessTexture.index >= 0) {
-        if (const tinygltf::Image* img = GetImageFromTextureIndex(gm.pbrMetallicRoughness.metallicRoughnessTexture.index)) {
-            TextureRef mr = LoadGltfImageToTextureRef(*img, baseDir);
-            mat.Metallic = mr;
-            mat.Roughness = mr;
-        }
-    }
-
-    // Normal
-    if (gm.normalTexture.index >= 0) {
-        if (const tinygltf::Image* img = GetImageFromTextureIndex(gm.normalTexture.index))
-            mat.Normal = LoadGltfImageToTextureRef(*img, baseDir);
-    }
-
-    // Occlusion
-    if (gm.occlusionTexture.index >= 0) {
-        if (const tinygltf::Image* img = GetImageFromTextureIndex(gm.occlusionTexture.index))
-            mat.Occlusion = LoadGltfImageToTextureRef(*img, baseDir);
-    }
-
-    // Emissive
-    if (gm.emissiveTexture.index >= 0) {
-        if (const tinygltf::Image* img = GetImageFromTextureIndex(gm.emissiveTexture.index))
-            mat.Emissive = LoadGltfImageToTextureRef(*img, baseDir);
-    }
-
-    return mat;
-}
-
-// -------------------- Mesh conversion --------------------
-
-Mesh ConvertMesh(const tinygltf::Model& gltf, const tinygltf::Mesh& gmesh, const std::string& baseDir)
-{
-    Mesh mesh;
-    mesh.Name = gmesh.name;
-
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-
-    // iterate primitives: each primitive -> one Submesh
-    for (const tinygltf::Primitive& prim : gmesh.primitives) {
-        // record base offsets
-        uint32_t baseVertex = static_cast<uint32_t>(vertices.size());
-        uint32_t baseIndex = static_cast<uint32_t>(indices.size());
-
-        // ---- determine vertex count by reading POSITION accessor.count
-        int posAccessorIndex = -1;
-        auto posIt = prim.attributes.find("POSITION");
-        if (posIt != prim.attributes.end()) posAccessorIndex = posIt->second;
-        if (posAccessorIndex < 0) continue;
-        const tinygltf::Accessor& posAcc = gltf.accessors[posAccessorIndex];
-        size_t primVertexCount = posAcc.count;
-
-        // resize vertex array to hold this primitive
-        vertices.resize(baseVertex + primVertexCount);
-
-        // read POSITION
-        {
-            int stride = 0;
-            const unsigned char* ptr = GetBufferPtr(gltf, posAcc, stride);
-            for (size_t i = 0; i < posAcc.count; ++i) {
-                const unsigned char* elem = ptr + i * stride;
-                Vector4 p4; ReadFloatElement(elem, 3, p4);
-                vertices[baseVertex + i].Position = Vector3(p4.GetX(), p4.GetY(), p4.GetZ());
-            }
-        }
-
-        // Optional attributes: NORMAL, TEXCOORD_0, TANGENT
-        auto readOptional = [&](const char* semantic, auto assignFunc) {
-            auto it = prim.attributes.find(semantic);
-            if (it == prim.attributes.end()) return;
-            const tinygltf::Accessor& acc = gltf.accessors[it->second];
-            int stride = 0;
-            const unsigned char* ptr = GetBufferPtr(gltf, acc, stride);
-            int compCount = (acc.type == TINYGLTF_TYPE_VEC2) ? 2 : (acc.type == TINYGLTF_TYPE_VEC3 ? 3 : 4);
-            for (size_t i = 0; i < acc.count; ++i) {
-                const unsigned char* elem = ptr + i * stride;
-                Vector4 tmp; ReadFloatElement(elem, compCount, tmp);
-                assignFunc(baseVertex + i, tmp);
-            }
-            };
-
-        readOptional("NORMAL", [&](size_t idx, const Vector4& v) { vertices[idx].Normal = Vector3(v.GetX(), v.GetY(), v.GetZ()); });
-        readOptional("TEXCOORD_0", [&](size_t idx, const Vector4& v) { vertices[idx].UV = XMFLOAT2(v.GetX(), v.GetY()); });
-        readOptional("TANGENT", [&](size_t idx, const Vector4& v) { vertices[idx].Tangent = Vector3(v.GetX(), v.GetY(), v.GetZ()); /* w (handedness) ignored here */ });
-        readOptional("BITANGENT", [&](size_t idx, const Vector4& v) { vertices[idx].BiTangent = Vector3(v.GetX(), v.GetY(), v.GetZ()); /* w (handedness) ignored here */ });
-
-        // ---- indices
-        if (prim.indices >= 0) {
-            const tinygltf::Accessor& idxAcc = gltf.accessors[prim.indices];
-            int idxStride = 0;
-            const unsigned char* idxBase = GetBufferPtr(gltf, idxAcc, idxStride);
-            for (size_t k = 0; k < idxAcc.count; ++k) {
-                const unsigned char* src = idxBase + k * idxStride;
-                uint32_t raw = ReadIndexValue(src, idxAcc.componentType);
-                indices.push_back(raw + baseVertex); // offset by baseVertex
-            }
-        }
-        else {
-            // no indices -> generate sequential indices (triangle list assumption)
-            for (uint32_t v = 0; v < primVertexCount; ++v) {
-                indices.push_back(baseVertex + v);
-            }
-        }
-
-        // ---- build submesh
-        Submesh sub;
-        sub.StartIndex = baseIndex;
-        sub.IndexCount = static_cast<uint32_t>(indices.size()) - baseIndex;
-        sub.BaseVertex = baseVertex;
-        sub.Bounds = DirectX::BoundingBox(); // optional: compute properly later
-
-        if (prim.material >= 0 && prim.material < (int)gltf.materials.size()) {
-            sub.Material = ConvertMaterial(gltf, gltf.materials[prim.material], baseDir);
-        }
-        else {
-            sub.Material = Material(); // default
-        }
-
-        mesh.Submeshes.push_back(std::move(sub));
-    }
-
-    // attach CPU-side arrays
-    mesh.CPUVertices = std::move(vertices);
-    mesh.CPUIndices = std::move(indices);
-
-    return mesh;
-}
-
-// -------------------- GPU upload (UPLOAD heap, Map/Unmap) --------------------
-
-void UploadMeshToGPU(Mesh& mesh)
-{
-    ID3D12Device* device = Graphics::g_Device;
-
-    mesh.VertexCount = static_cast<uint32_t>(mesh.CPUVertices.size());
-    mesh.IndexCount = static_cast<uint32_t>(mesh.CPUIndices.size());
-
-    const size_t vbSize = mesh.VertexCount * sizeof(Vertex);
-    const size_t ibSize = mesh.IndexCount * sizeof(uint32_t);
-
-    if (vbSize > 0) {
-        ASSERT_SUCCEEDED(device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(vbSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&mesh.VertexBuffer)));
-
-        // map & copy
-        {
-            UINT8* mapped = nullptr;
-            ASSERT_SUCCEEDED(mesh.VertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mapped)));
-            memcpy(mapped, mesh.CPUVertices.data(), vbSize);
-            mesh.VertexBuffer->Unmap(0, nullptr);
-        }
-
-        mesh.VBV.BufferLocation = mesh.VertexBuffer->GetGPUVirtualAddress();
-        mesh.VBV.SizeInBytes = static_cast<UINT>(vbSize);
-        mesh.VBV.StrideInBytes = sizeof(Vertex);
-    }
-
-    if (ibSize > 0) {
-        ASSERT_SUCCEEDED(device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-            D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(ibSize),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&mesh.IndexBuffer)));
-
-        {
-            UINT8* mapped = nullptr;
-            ASSERT_SUCCEEDED(mesh.IndexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mapped)));
-            memcpy(mapped, mesh.CPUIndices.data(), ibSize);
-            mesh.IndexBuffer->Unmap(0, nullptr);
-        }
-
-        mesh.IBV.BufferLocation = mesh.IndexBuffer->GetGPUVirtualAddress();
-        mesh.IBV.SizeInBytes = static_cast<UINT>(ibSize);
-        mesh.IBV.Format = DXGI_FORMAT_R32_UINT;
-    }
-}
-
-// -------------------- Material SRV creation --------------------
-
-void Model::CreateMaterialSRVs()
-{
-    using namespace Graphics;
-    using namespace Renderer;
-
-    MaterialSRVs.resize(Materials.size());
-
-    for (size_t i = 0; i < Materials.size(); ++i)
+    for (const auto& mesh : model.meshes)
     {
-        Material& mat = Materials[i];
+        MeshAsset meshAsset{};
+        meshAsset.Name = mesh.name;
 
-        std::vector<TextureRef*> texRefs;
-        if (mat.Albedo.IsValid())    texRefs.push_back(&mat.Albedo);
-        if (mat.Normal.IsValid())    texRefs.push_back(&mat.Normal);
-        if (mat.Metallic.IsValid())  texRefs.push_back(&mat.Metallic);
-        if (mat.Roughness.IsValid()) texRefs.push_back(&mat.Roughness);
-        if (mat.Occlusion.IsValid()) texRefs.push_back(&mat.Occlusion);
-        if (mat.Emissive.IsValid())  texRefs.push_back(&mat.Emissive);
+        for (const auto& primitive : mesh.primitives)
+            LoadPrimitive(model, primitive, meshAsset);
 
-        uint32_t texCount = static_cast<uint32_t>(texRefs.size());
-        if (texCount == 0) {
-            MaterialSRVs[i] = DescriptorHandle(); // empty
-            continue;
-        }
+        asset.Meshes.push_back(std::move(meshAsset));
+    }
 
-        MaterialSRVs[i] = Renderer::s_TextureHeap.Alloc(texCount);
-        DescriptorHandle dst = MaterialSRVs[i];
+    for (auto& m : asset.Meshes)
+        gpu.Meshes.push_back(UploadMesh(m));
 
-        std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> src;
-        src.reserve(texCount);
-        for (TextureRef* t : texRefs) src.push_back(t->GetSRV());
+    gpu.Materials.resize(asset.Materials.size());
 
-        Graphics::g_Device->CopyDescriptors(
-            1,
-            &dst,
-            &texCount,
-            texCount,
-            src.data(),
-            nullptr,
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
-        );
+    for (size_t i = 0; i < asset.Materials.size(); i++)
+    {
+        const auto& m = asset.Materials[i];
+        auto& g = gpu.Materials[i];
+        g.BaseColorIndex = ToSceneHeapIndex(m.BaseColor, textureManager);
+        g.NormalIndex = ToSceneHeapIndex(m.Normal, textureManager);
+        g.RoughnessMetallicIndex = ToSceneHeapIndex(m.RoughnessMetallic, textureManager);
+        g.EmissiveIndex = ToSceneHeapIndex(m.Emissive, textureManager);
     }
 }
 
-// -------------------- Top-level loader --------------------
-
-Model LoadGltfModel(const std::string& path)
+void Model::Draw(GraphicsContext& context, bool bindMaterialData)
 {
-    tinygltf::Model gltf;
-    tinygltf::TinyGLTF loader;
-    std::string err, warn;
+    for (size_t i = 0; i < GPU.Meshes.size(); i++)
+    {
+        const auto& mesh = GPU.Meshes[i];
+        const auto& sub = Asset->Meshes[i].SubMeshes[0];
+        const MaterialGPU& mat = GPU.Materials[sub.MaterialIndex];
 
-    std::string baseDir;
-    size_t sep = path.find_last_of("/\\");
-    if (sep != std::string::npos) baseDir = path.substr(0, sep);
+        if (bindMaterialData)
+        {
+            MaterialConstants materialConstants{};
+            materialConstants.BaseColorIndex = mat.BaseColorIndex;
+            materialConstants.NormalIndex = mat.NormalIndex;
+            materialConstants.RoughnessMetallicIndex = mat.RoughnessMetallicIndex;
+            materialConstants.EmissiveIndex = mat.EmissiveIndex;
+            context.SetDynamicConstantBufferView(Renderer::kMaterialConstants, sizeof(MaterialConstants), &materialConstants);
+        }
 
-    bool isGlb = EndsWith(path, ".glb") || EndsWith(path, ".GLB");
-    bool ok = false;
-    if (isGlb)
-        ok = loader.LoadBinaryFromFile(&gltf, &err, &warn, path);
-    else
-        ok = loader.LoadASCIIFromFile(&gltf, &err, &warn, path);
+        context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context.GetCommandList()->IASetVertexBuffers(0, 1, &mesh.VBV);
+        context.GetCommandList()->IASetIndexBuffer(&mesh.IBV);
+        context.GetCommandList()->DrawIndexedInstanced(mesh.IndexCount, 1, 0, 0, 0);
+    }
+}
 
-    if (!warn.empty()) OutputDebugStringA(warn.c_str());
-    if (!err.empty())  OutputDebugStringA(err.c_str());
-    if (!ok) throw std::runtime_error("Failed to load glTF: " + path);
+LoadedModelData LoadGltfAsset(const std::string& path)
+{
+    LoadedModelData data;
+    data.Asset = std::make_shared<ModelAsset>();
+    LoadModelFromGLTF(path, *data.Asset, data.GPU, Graphics::g_TextureManager);
+    return data;
+}
 
+Model CreateModel(LoadedModelData&& data)
+{
     Model model;
-    model.Name = path;
-
-    // Convert materials first (so textures are created and ready)
-    model.Materials.clear();
-    model.Materials.reserve(gltf.materials.size());
-    for (const auto& gm : gltf.materials) {
-        model.Materials.push_back(ConvertMaterial(gltf, gm, baseDir));
-    }
-
-    // Meshes
-    model.Meshes.clear();
-    for (const auto& gmesh : gltf.meshes) {
-        Mesh m = ConvertMesh(gltf, gmesh, baseDir);
-        UploadMeshToGPU(m);
-        model.Meshes.push_back(std::move(m));
-    }
-
-    // Optional: create descriptor blocks for all materials
-    model.CreateMaterialSRVs();
-
+    model.Asset = std::move(data.Asset);
+    model.GPU = std::move(data.GPU);
+    model.UpdateConstants();
     return model;
 }
-void Model::Draw(ID3D12GraphicsCommandList* cmdList, bool isSkyBox)
-{
-    for (uint32_t meshIndex = 0; meshIndex < Meshes.size(); meshIndex++)
-    {
-        if(!isSkyBox)
-        cmdList->SetGraphicsRootDescriptorTable(Renderer::kMaterialSRVs, MaterialSRVs[meshIndex]);
-
-
-        cmdList->IASetVertexBuffers(0, 1, &Meshes[meshIndex].VBV);
-        cmdList->IASetIndexBuffer(&Meshes[meshIndex].IBV);
-        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        cmdList->DrawIndexedInstanced(Meshes[meshIndex].CPUIndices.size(), 1, 0, 0, 0);
-    }
-}
-

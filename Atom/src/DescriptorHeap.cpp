@@ -77,13 +77,17 @@ void DescriptorHeap::Create(const std::wstring& Name, D3D12_DESCRIPTOR_HEAP_TYPE
     m_NextFreeHandle = m_FirstHandle;
 }
 
-DescriptorHandle DescriptorHeap::Alloc(uint32_t Count)
+DescriptorHeap::BindlessHandle DescriptorHeap::AllocBindless(uint32_t Count)
 {
     ASSERT(HasAvailableSpace(Count), "Descriptor Heap out of space.  Increase heap size.");
     DescriptorHandle ret = m_NextFreeHandle;
     m_NextFreeHandle += Count * m_DescriptorSize;
     m_NumFreeDescriptors -= Count;
-    return ret;
+
+    BindlessHandle bindlessHandle;
+    bindlessHandle.Handle = ret;
+    bindlessHandle.Index = static_cast<uint32_t>((ret.GetCpuPtr() - m_FirstHandle.GetCpuPtr()) / m_DescriptorSize);
+    return bindlessHandle;
 }
 
 bool DescriptorHeap::ValidateHandle(const DescriptorHandle& DHandle) const

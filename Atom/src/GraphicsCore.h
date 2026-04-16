@@ -4,6 +4,7 @@
 
 class CommandListManager;
 class ContextManager;
+class TextureManager;
 namespace Graphics
 {
 
@@ -20,6 +21,8 @@ namespace Graphics
     // extern ID3D12CommandAllocator* g_CommandAllocator;
     extern CommandListManager g_CommandManager;
     extern ContextManager g_ContextManager;
+    extern TextureManager g_TextureManager;
+    extern DescriptorHeap g_BindlessHeap;
 
     extern DescriptorAllocator g_DescriptorAllocator[];
     inline D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE Type, UINT Count = 1)

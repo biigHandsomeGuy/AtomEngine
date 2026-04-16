@@ -19,6 +19,21 @@
 using namespace Math;
 using namespace GameCore;
 
+namespace
+{
+    void SetCursorHidden(bool hidden)
+    {
+        if (hidden)
+        {
+            while (ShowCursor(FALSE) >= 0) {}
+        }
+        else
+        {
+            while (ShowCursor(TRUE) < 0) {}
+        }
+    }
+}
+
 FlyingFPSCamera::FlyingFPSCamera(Camera& camera, Vector3 worldUp) : CameraController(camera)
 {
     m_WorldUp = Normalize(worldUp);
@@ -40,6 +55,7 @@ FlyingFPSCamera::FlyingFPSCamera(Camera& camera, Vector3 worldUp) : CameraContro
     m_FineMovement = false;
     m_FineRotation = false;
     m_Momentum = true;
+    m_CursorHidden = false;
 
     m_LastYaw = 0.0f;
     m_LastPitch = 0.0f;
@@ -56,9 +72,13 @@ void FlyingFPSCamera::Update(float deltaTime)
     float timeScale = 1.0f;
 
 
-    if (GameInput::IsPressed(GameInput::kMouse1))
+    if (GameCore::g_ViewportHovered && GameInput::IsPressed(GameInput::kMouse1))
     {
-        ShowCursor(false);
+        if (!m_CursorHidden)
+        {
+            SetCursorHidden(true);
+            m_CursorHidden = true;
+        }
         if (GameInput::IsFirstPressed(GameInput::kLThumbClick) || GameInput::IsFirstPressed(GameInput::kKey_lshift))
             m_FineMovement = !m_FineMovement;
 
@@ -118,7 +138,11 @@ void FlyingFPSCamera::Update(float deltaTime)
     }
     else
     {
-        ShowCursor(true);
+        if (m_CursorHidden)
+        {
+            SetCursorHidden(false);
+            m_CursorHidden = false;
+        }
     }
     
 }

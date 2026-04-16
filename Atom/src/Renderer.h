@@ -17,6 +17,7 @@ namespace Renderer
     extern DescriptorHandle g_NullDescriptor;
     extern RootSignature s_RootSig;
     extern RootSignature s_ComputeRootSig;
+    extern RootSignature g_BindlessRootSig;
 
     extern std::unordered_map<std::string, GraphicsPSO> s_PSOs;
     extern GraphicsPSO s_SkyboxPSO;

@@ -4,7 +4,6 @@
 
 #ifdef _GAMING_DESKTOP
 
-// I can't find the GameInput.h header in the GDK for Desktop yet
 #include <Xinput.h>
 #pragma comment(lib, "xinput9_1_0.lib")
 
@@ -16,10 +15,8 @@
 
 #else
 
-// This is what we should use on *all* platforms, but see previous comment
 #include <GameInput.h>
 
-// This should be handled by GameInput.h, but we'll borrow values from XINPUT.
 #define XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE  (7849.0f / 32768.0f)
 #define XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE (8689.0f / 32768.0f)
 
@@ -39,13 +36,18 @@ namespace
 
 #ifdef USE_KEYBOARD_MOUSE
 
-    IDirectInput8A* s_DI;
-    IDirectInputDevice8A* s_Keyboard;
-    IDirectInputDevice8A* s_Mouse;
+    IDirectInput8A* s_DI = nullptr;
+    IDirectInputDevice8A* s_Keyboard = nullptr;
+    IDirectInputDevice8A* s_Mouse = nullptr;
 
-    DIMOUSESTATE2 s_MouseState;
-    unsigned char s_Keybuffer[256];
-    unsigned char s_DXKeyMapping[GameInput::kNumKeys]; // map DigitalInput enum to DX key codes 
+    DIMOUSESTATE2 s_MouseState{};
+    unsigned char s_Keybuffer[256]{};
+    unsigned char s_DXKeyMapping[GameInput::kNumKeys]{};
+
+    bool s_MouseLookActive = false;
+    bool s_MouseCursorHidden = false;
+    POINT s_MouseLookRestorePos{};
+    POINT s_MouseLookCenterScreen{};
 
 #endif
 
@@ -68,6 +70,21 @@ namespace
     }
 
 #ifdef USE_KEYBOARD_MOUSE
+
+    static void ShowSystemCursor(bool show)
+    {
+        if (show && s_MouseCursorHidden)
+        {
+            while (ShowCursor(TRUE) < 0) {}
+            s_MouseCursorHidden = false;
+        }
+        else if (!show && !s_MouseCursorHidden)
+        {
+            while (ShowCursor(FALSE) >= 0) {}
+            s_MouseCursorHidden = true;
+        }
+    }
+
     void KbmBuildKeyMapping()
     {
         s_DXKeyMapping[GameInput::kKey_escape] = 1;
@@ -217,6 +234,8 @@ namespace
 
     void KbmShutdown()
     {
+        GameInput::EndMouseLook();
+
         if (s_Keyboard)
         {
             s_Keyboard->Unacquire();
@@ -241,28 +260,40 @@ namespace
         HWND foreground = GetForegroundWindow();
         bool visible = IsWindowVisible(foreground) != 0;
 
-        if (foreground != GameCore::g_hWnd // wouldn't be able to acquire
-            || !visible)
+        if (foreground != GameCore::g_hWnd || !visible)
         {
+            GameInput::EndMouseLook();
             KbmZeroInputs();
+            return;
         }
-        else
+
+        s_Mouse->Acquire();
+        if (FAILED(s_Mouse->GetDeviceState(sizeof(DIMOUSESTATE2), &s_MouseState)))
         {
-            s_Mouse->Acquire();
-            s_Mouse->GetDeviceState(sizeof(DIMOUSESTATE2), &s_MouseState);
-            s_Keyboard->Acquire();
-            s_Keyboard->GetDeviceState(sizeof(s_Keybuffer), s_Keybuffer);
+            ZeroMemory(&s_MouseState, sizeof(DIMOUSESTATE2));
+        }
+
+        s_Keyboard->Acquire();
+        if (FAILED(s_Keyboard->GetDeviceState(sizeof(s_Keybuffer), s_Keybuffer)))
+        {
+            ZeroMemory(s_Keybuffer, sizeof(s_Keybuffer));
+        }
+
+        if (s_MouseLookActive)
+        {
+            SetCursorPos(s_MouseLookCenterScreen.x, s_MouseLookCenterScreen.y);
         }
     }
 
 #endif
-
 }
 
 void GameInput::Initialize()
 {
     ZeroMemory(s_Buttons, sizeof(s_Buttons));
     ZeroMemory(s_Analogs, sizeof(s_Analogs));
+    ZeroMemory(s_AnalogsTC, sizeof(s_AnalogsTC));
+    ZeroMemory(s_HoldDuration, sizeof(s_HoldDuration));
 
 #ifdef USE_KEYBOARD_MOUSE
     KbmInitialize();
@@ -361,11 +392,12 @@ void GameInput::Update(float frameDelta)
 
     for (uint32_t i = 0; i < 8; ++i)
     {
-        if (s_MouseState.rgbButtons[i] > 0) s_Buttons[0][kMouse0 + i] = true;
+        if (s_MouseState.rgbButtons[i] > 0)
+            s_Buttons[0][kMouse0 + i] = true;
     }
 
-    s_Analogs[kAnalogMouseX] = (float)s_MouseState.lX * .0018f;
-    s_Analogs[kAnalogMouseY] = (float)s_MouseState.lY * -.0018f;
+    s_Analogs[kAnalogMouseX] = (float)s_MouseState.lX * 0.0018f;
+    s_Analogs[kAnalogMouseY] = (float)s_MouseState.lY * -0.0018f;
 
     if (s_MouseState.lZ > 0)
         s_Analogs[kAnalogMouseScroll] = 1.0f;
@@ -373,7 +405,6 @@ void GameInput::Update(float frameDelta)
         s_Analogs[kAnalogMouseScroll] = -1.0f;
 #endif
 
-    // Update time duration for buttons pressed
     for (uint32_t i = 0; i < kNumDigitalInputs; ++i)
     {
         if (s_Buttons[0][i])
@@ -383,18 +414,26 @@ void GameInput::Update(float frameDelta)
             else
                 s_HoldDuration[i] += frameDelta;
         }
+        else
+        {
+            s_HoldDuration[i] = 0.0f;
+        }
     }
 
     for (uint32_t i = 0; i < kNumAnalogInputs; ++i)
     {
         s_AnalogsTC[i] = s_Analogs[i] * frameDelta;
     }
-
 }
 
 bool GameInput::IsAnyPressed(void)
 {
-    return s_Buttons[0] != 0;
+    for (uint32_t i = 0; i < kNumDigitalInputs; ++i)
+    {
+        if (s_Buttons[0][i])
+            return true;
+    }
+    return false;
 }
 
 bool GameInput::IsPressed(DigitalInput di)
@@ -430,4 +469,46 @@ float GameInput::GetAnalogInput(AnalogInput ai)
 float GameInput::GetTimeCorrectedAnalogInput(AnalogInput ai)
 {
     return s_AnalogsTC[ai];
+}
+
+void GameInput::BeginMouseLook(int centerX, int centerY)
+{
+#ifdef USE_KEYBOARD_MOUSE
+    if (s_MouseLookActive)
+        return;
+
+    GetCursorPos(&s_MouseLookRestorePos);
+
+    s_MouseLookCenterScreen.x = centerX;
+    s_MouseLookCenterScreen.y = centerY;
+
+    SetCapture(GameCore::g_hWnd);
+    ShowSystemCursor(false);
+    SetCursorPos(centerX, centerY);
+
+    s_MouseLookActive = true;
+#endif
+}
+
+void GameInput::EndMouseLook()
+{
+#ifdef USE_KEYBOARD_MOUSE
+    if (!s_MouseLookActive)
+        return;
+
+    ReleaseCapture();
+    SetCursorPos(s_MouseLookRestorePos.x, s_MouseLookRestorePos.y);
+    ShowSystemCursor(true);
+
+    s_MouseLookActive = false;
+#endif
+}
+
+bool GameInput::IsMouseLookActive()
+{
+#ifdef USE_KEYBOARD_MOUSE
+    return s_MouseLookActive;
+#else
+    return false;
+#endif
 }

@@ -50,8 +50,27 @@ VertexOut main(VertexIn vin)
     float4 posW = mul(gWorldMatrix, float4(vin.PosL, 1.0f));
     vout.PosW = posW.xyz;
 
-    float3x3 TBN = float3x3(vin.Tangent, vin.BiTangent, vin.NormalL);       
-    vout.tangentBasis = mul((float3x3) gWorldMatrix, transpose(TBN));
+    float3 normalW = normalize(mul((float3x3) gNormalMatrix, vin.NormalL));
+    float3 tangentW = mul((float3x3) gNormalMatrix, vin.Tangent);
+    tangentW = normalize(tangentW - normalW * dot(normalW, tangentW));
+
+    float3 bitangentW = mul((float3x3) gNormalMatrix, vin.BiTangent);
+    bitangentW = bitangentW - normalW * dot(normalW, bitangentW) - tangentW * dot(tangentW, bitangentW);
+    if (dot(bitangentW, bitangentW) < 1e-6f)
+    {
+        bitangentW = normalize(cross(normalW, tangentW));
+    }
+    else
+    {
+        bitangentW = normalize(bitangentW);
+    }
+
+    if (dot(cross(normalW, tangentW), bitangentW) < 0.0f)
+    {
+        bitangentW = -bitangentW;
+    }
+
+    vout.tangentBasis = float3x3(tangentW, bitangentW, normalW);
     
     // Transform to homogeneous clip space.
     //vout.PosH = mul(gViewProj, posW);
@@ -62,8 +81,8 @@ VertexOut main(VertexIn vin)
 	// Output vertex attributes for interpolation across triangle.
     vout.TexC = float2(vin.TexC.x, 1 - vin.TexC.y);
 
-    vout.Normal = vin.NormalL;
-    vout.Tangent = vin.Tangent;
+    vout.Normal = normalW;
+    vout.Tangent = tangentW;
     // Generate projective tex-coords to project shadow map onto scene.
     vout.ShadowPosH = mul(gSunShadowMatrix, posW);
 	

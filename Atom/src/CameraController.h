@@ -74,6 +74,7 @@ private:
     bool m_FineMovement;
     bool m_FineRotation;
     bool m_Momentum;
+    bool m_CursorHidden = false;
 
     float m_LastYaw;
     float m_LastPitch;

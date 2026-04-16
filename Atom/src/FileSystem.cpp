@@ -26,6 +26,10 @@ void FileSystem::Initialize()
         ASSERT("Assets Directory that was located is not a directory!");
     }
 
-    s_rootDirectoryPath = currentDirectory.string() + "/";
+    currentDirectory.make_preferred();
+    s_rootDirectoryPath = currentDirectory.string();
+
+    if (!s_rootDirectoryPath.empty() && s_rootDirectoryPath.back() != '\\')
+        s_rootDirectoryPath += '\\';
 
 }

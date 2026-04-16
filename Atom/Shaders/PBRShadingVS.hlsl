@@ -29,6 +29,7 @@ struct VertexIn
 	float2 Texcoord    : TEXCOORD;
 	float3 Tangent : TANGENT;
 	float3 BiTangent : BITANGENT;
+    uint ClusterID : CLUSTERID;
 };
 
 struct VertexOut
@@ -41,17 +42,39 @@ struct VertexOut
     float3x3 tangentBasis : TAASIC;
     float3 Normal : NORMAL;
     float3 Tangent : TANGENT;
+    uint ClusterID : CLUSTERID;
 };
 
 VertexOut main(VertexIn vin)
 {
 	VertexOut vout = (VertexOut)0.0f;
 
+    vout.ClusterID = vin.ClusterID;
+    
     float4 posW = mul(gWorldMatrix, float4(vin.Position, 1.0f));
     vout.WorldPosition = posW.xyz;
 
-    float3x3 TBN = float3x3(vin.Tangent, vin.BiTangent, vin.Normal);
-    vout.tangentBasis = TBN;
+    float3 normalW = normalize(mul((float3x3) gNormalMatrix, vin.Normal));
+    float3 tangentW = mul((float3x3) gNormalMatrix, vin.Tangent);
+    tangentW = normalize(tangentW - normalW * dot(normalW, tangentW));
+
+    float3 bitangentW = mul((float3x3) gNormalMatrix, vin.BiTangent);
+    bitangentW = bitangentW - normalW * dot(normalW, bitangentW) - tangentW * dot(tangentW, bitangentW);
+    if (dot(bitangentW, bitangentW) < 1e-6f)
+    {
+        bitangentW = normalize(cross(normalW, tangentW));
+    }
+    else
+    {
+        bitangentW = normalize(bitangentW);
+    }
+
+    if (dot(cross(normalW, tangentW), bitangentW) < 0.0f)
+    {
+        bitangentW = -bitangentW;
+    }
+
+    vout.tangentBasis = float3x3(tangentW, bitangentW, normalW);
     
     // Transform to homogeneous clip space.
     vout.PosH = mul(gViewProj, posW);
@@ -63,8 +86,8 @@ VertexOut main(VertexIn vin)
     vout.TexC = float2(vin.Texcoord.x,  vin.Texcoord.y);
 
     //vout.Normal = mul(gNormalMatrix, float4(vin.NormalL, 1));
-    vout.Normal = mul((float3x3) gNormalMatrix, vin.Normal);
-    vout.Tangent = vin.Tangent;
+    vout.Normal = normalW;
+    vout.Tangent = tangentW;
     // Generate projective tex-coords to project shadow map onto scene.
     vout.ShadowPosH = mul(gSunShadowMatrix, posW);
 	

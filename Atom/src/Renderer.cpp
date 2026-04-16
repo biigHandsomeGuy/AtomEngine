@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "Renderer.h"
 #include "TextureManager.h"
 #include "GraphicsCore.h"
@@ -8,208 +8,207 @@
 #include "GraphicsCommon.h"
 #include "Display.h"
 #include "PipelineState.h"
+#include "Model.h"
 
 #include "../CompiledShaders/PBRShadingVS.h"
 #include "../CompiledShaders/SkyBoxVS.h"
 #include "../CompiledShaders/ShadowVS.h"
 #include "../CompiledShaders/DrawNormalsVS.h"
-#include "../CompiledShaders/PostProcessVS.h"
-#include "../CompiledShaders/BloomVS.h"
+#include "../CompiledShaders/PostProcessCS.h"
 #include "../CompiledShaders/PBRShadingPS.h"
 #include "../CompiledShaders/SkyBoxPS.h"
 #include "../CompiledShaders/ShadowPS.h"
 #include "../CompiledShaders/DrawNormalsPS.h"
-#include "../CompiledShaders/PostProcessCS.h"
-#include "../CompiledShaders/BloomPS.h"
 
-
-using namespace TextureManager;
 using namespace Graphics;
-using namespace Microsoft::WRL;
 
 namespace Renderer
 {
-	DescriptorHeap s_TextureHeap;
-	DescriptorHandle m_CommonTextures;
-	// inout
-	DescriptorHandle g_PostProcessTexture;
-	DescriptorHandle g_SSAOSrvHeap;
-	DescriptorHandle g_SSAOUavHeap;
-	DescriptorHandle g_NullDescriptor;
+    DescriptorHeap s_TextureHeap;
+    DescriptorHandle m_CommonTextures;
+    DescriptorHandle g_PostProcessTexture;
+    DescriptorHandle g_SSAOSrvHeap;
+    DescriptorHandle g_SSAOUavHeap;
+    DescriptorHandle g_NullDescriptor;
 
-	RootSignature s_RootSig;
-	std::unordered_map<std::string, GraphicsPSO> s_PSOs;
-	GraphicsPSO s_SkyboxPSO;
+    RootSignature s_RootSig;
+    RootSignature s_ComputeRootSig;
+    RootSignature g_BindlessRootSig;
 
-	RootSignature s_ComputeRootSig;
-	ComputePSO s_PostProcessPSO;
+    std::unordered_map<std::string, GraphicsPSO> s_PSOs;
+    GraphicsPSO s_SkyboxPSO(L"Skybox PSO");
+    ComputePSO s_PostProcessPSO(L"Post Process PSO");
 
+    static void CreateGraphicsRootSignature()
+    {
+        s_RootSig.Reset(kNumRootBindings, 5);
+        s_RootSig[kMeshConstants].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_VERTEX);
+        s_RootSig[kMaterialConstants].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_PIXEL);
+        s_RootSig[kMaterialSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 4, D3D12_SHADER_VISIBILITY_PIXEL);
+        s_RootSig[kCommonSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 10, D3D12_SHADER_VISIBILITY_PIXEL);
+        s_RootSig[kCommonCBV].InitAsConstantBuffer(1);
+        s_RootSig[kPostprocessSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 20, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+        s_RootSig[kShaderParams].InitAsConstantBuffer(2, D3D12_SHADER_VISIBILITY_PIXEL);
 
-	void Initialize(void)
-	{
-		s_RootSig.Reset(kNumRootBindings, 5);
-		s_RootSig.InitStaticSampler(0, SamplerLinearWrapDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig.InitStaticSampler(1, SamplerLinearClampDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig.InitStaticSampler(4, SamplerShadowDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig[kMeshConstants].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_VERTEX);
-		s_RootSig[kMaterialConstants].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig[kMaterialSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 10, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig[kCommonSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 10, D3D12_SHADER_VISIBILITY_PIXEL);
-		s_RootSig[kCommonCBV].InitAsConstantBuffer(1);
-		s_RootSig[kPostprocessSRVs].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 20, 10);
-		s_RootSig[kShaderParams].InitAsConstantBuffer(2);
-		s_RootSig.Finalize(L"GraphicsRootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        s_RootSig.InitStaticSampler(0, SamplerLinearWrapDesc);
+        s_RootSig.InitStaticSampler(1, SamplerLinearClampDesc);
+        s_RootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc);
+        s_RootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc);
+        s_RootSig.InitStaticSampler(4, SamplerShadowDesc);
+        s_RootSig.Finalize(
+            L"Renderer Graphics RootSig",
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+    }
 
-		s_ComputeRootSig.Reset(3, 5);
-		s_ComputeRootSig.InitStaticSampler(0, SamplerLinearWrapDesc, D3D12_SHADER_VISIBILITY_ALL);
-		s_ComputeRootSig.InitStaticSampler(1, SamplerLinearClampDesc, D3D12_SHADER_VISIBILITY_ALL);
-		s_ComputeRootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc, D3D12_SHADER_VISIBILITY_ALL);
-		s_ComputeRootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc, D3D12_SHADER_VISIBILITY_ALL);
-		s_ComputeRootSig.InitStaticSampler(4, SamplerShadowDesc, D3D12_SHADER_VISIBILITY_ALL);
-		s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1);
-		s_ComputeRootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
-		s_ComputeRootSig[2].InitAsConstantBuffer(0);
-		s_ComputeRootSig.Finalize(L"ComputeRootSig", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+    static void CreateComputeRootSignature()
+    {
+        s_ComputeRootSig.Reset(3, 4);
+        s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1);
+        s_ComputeRootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
+        s_ComputeRootSig[2].InitAsConstantBuffer(0);
 
-		s_PostProcessPSO.SetRootSignature(s_ComputeRootSig);
-		s_PostProcessPSO.SetComputeShader(g_pPostProcessCS, sizeof(g_pPostProcessCS));
-		s_PostProcessPSO.Finalize();
+        s_ComputeRootSig.InitStaticSampler(0, SamplerLinearWrapDesc);
+        s_ComputeRootSig.InitStaticSampler(1, SamplerLinearClampDesc);
+        s_ComputeRootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc);
+        s_ComputeRootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc);
+        s_ComputeRootSig.Finalize(L"Renderer Compute RootSig");
+    }
 
-		DXGI_FORMAT ColorFormat = g_SceneColorBuffer.GetFormat();
-		DXGI_FORMAT DepthFormat = g_SceneDepthBuffer.GetFormat();
-		DXGI_FORMAT NormalFormat = g_SceneNormalBuffer.GetFormat();
+    static void CreateBindlessRootSignature()
+    {
+        g_BindlessRootSig.Reset(1, 5);
+        g_BindlessRootSig[0].InitAsConstants(0, 64);
+        g_BindlessRootSig.InitStaticSampler(0, SamplerLinearWrapDesc);
+        g_BindlessRootSig.InitStaticSampler(1, SamplerLinearClampDesc);
+        g_BindlessRootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc);
+        g_BindlessRootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc);
+        g_BindlessRootSig.InitStaticSampler(4, SamplerShadowDesc);
+        g_BindlessRootSig.Finalize(
+            L"BindlessRootSig",
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED |
+            D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED);
+    }
 
-		D3D12_INPUT_ELEMENT_DESC DefaultInputLayout[] =
-		{
-			{ "POSITION",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "NORMAL",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 16,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD",  0, DXGI_FORMAT_R32G32_FLOAT,    0, 32,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TANGENT",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 40,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 56,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
+    static void CreatePSOs()
+    {
+        static const D3D12_INPUT_ELEMENT_DESC kInputLayout[] =
+        {
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, static_cast<UINT>(offsetof(Vertex, Position)), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, static_cast<UINT>(offsetof(Vertex, Normal)), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, static_cast<UINT>(offsetof(Vertex, UV)), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, static_cast<UINT>(offsetof(Vertex, Tangent)), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, static_cast<UINT>(offsetof(Vertex, Bitangent)), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "CLUSTERID", 0, DXGI_FORMAT_R32_UINT, 0, static_cast<UINT>(offsetof(Vertex, ClusterID)), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };
 
+        GraphicsPSO opaque(L"Opaque PSO");
+        opaque.SetRootSignature(s_RootSig);
+        opaque.SetRasterizerState(RasterizerDefault);
+        opaque.SetBlendState(CD3DX12_BLEND_DESC(D3D12_DEFAULT));
+        opaque.SetDepthStencilState(DepthStateReadWrite);
+        opaque.SetInputLayout(_countof(kInputLayout), kInputLayout);
+        opaque.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        opaque.SetRenderTargetFormat(g_SceneColorBuffer.GetFormat(), g_SceneDepthBuffer.GetFormat());
+        opaque.SetVertexShader(g_pPBRShadingVS, sizeof(g_pPBRShadingVS));
+        opaque.SetPixelShader(g_pPBRShadingPS, sizeof(g_pPBRShadingPS));
+        opaque.Finalize();
+        s_PSOs["opaque"] = std::move(opaque);
 
-		// Default PSO
+        GraphicsPSO drawNormals(L"DrawNormals PSO");
+        drawNormals.SetRootSignature(s_RootSig);
+        drawNormals.SetRasterizerState(RasterizerDefault);
+        drawNormals.SetBlendState(CD3DX12_BLEND_DESC(D3D12_DEFAULT));
+        drawNormals.SetDepthStencilState(DepthStateReadWrite);
+        drawNormals.SetInputLayout(_countof(kInputLayout), kInputLayout);
+        drawNormals.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        drawNormals.SetRenderTargetFormat(g_SceneNormalBuffer.GetFormat(), g_SceneDepthBuffer.GetFormat());
+        drawNormals.SetVertexShader(g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS));
+        drawNormals.SetPixelShader(g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS));
+        drawNormals.Finalize();
+        s_PSOs["drawNormals"] = std::move(drawNormals);
 
-		GraphicsPSO defaultPSO(L"Renderer::opaque PSO");
-		defaultPSO.SetRootSignature(s_RootSig);
-		defaultPSO.SetRasterizerState(RasterizerDefault);
-		defaultPSO.SetBlendState(BlendNoColorWrite);
-		defaultPSO.SetDepthStencilState(DepthStateReadWrite);
-		defaultPSO.SetInputLayout(_countof(DefaultInputLayout), DefaultInputLayout);
-		defaultPSO.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-		defaultPSO.SetRenderTargetFormats(1, &ColorFormat, DepthFormat);
-		defaultPSO.SetVertexShader(g_pPBRShadingVS, sizeof(g_pPBRShadingVS));
-		defaultPSO.SetPixelShader(g_pPBRShadingPS, sizeof(g_pPBRShadingPS));
-		defaultPSO.Finalize();
-		s_PSOs["opaque"] = defaultPSO;
+        GraphicsPSO shadow(L"Shadow PSO");
+        shadow.SetRootSignature(s_RootSig);
+        shadow.SetRasterizerState(RasterizerShadow);
+        shadow.SetBlendState(CD3DX12_BLEND_DESC(D3D12_DEFAULT));
+        shadow.SetDepthStencilState(DepthStateReadWrite);
+        shadow.SetInputLayout(_countof(kInputLayout), kInputLayout);
+        shadow.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        shadow.SetRenderTargetFormats(0, nullptr, g_ShadowBuffer.GetFormat());
+        shadow.SetVertexShader(g_pShadowVS, sizeof(g_pShadowVS));
+        shadow.SetPixelShader(g_pShadowPS, sizeof(g_pShadowPS));
+        shadow.Finalize();
+        s_PSOs["shadow"] = std::move(shadow);
 
-		// shadow map PSO
+        s_SkyboxPSO.SetRootSignature(s_RootSig);
+        s_SkyboxPSO.SetRasterizerState(RasterizerTwoSided);
+        s_SkyboxPSO.SetBlendState(CD3DX12_BLEND_DESC(D3D12_DEFAULT));
+        s_SkyboxPSO.SetDepthStencilState(DepthStateReadOnly);
+        s_SkyboxPSO.SetInputLayout(_countof(kInputLayout), kInputLayout);
+        s_SkyboxPSO.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        s_SkyboxPSO.SetRenderTargetFormat(g_SceneColorBuffer.GetFormat(), g_SceneDepthBuffer.GetFormat());
+        s_SkyboxPSO.SetVertexShader(g_pSkyBoxVS, sizeof(g_pSkyBoxVS));
+        s_SkyboxPSO.SetPixelShader(g_pSkyBoxPS, sizeof(g_pSkyBoxPS));
+        s_SkyboxPSO.Finalize();
 
-		GraphicsPSO shadowPSO(L"Renderer::shadow PSO");
-		shadowPSO = defaultPSO;
-		shadowPSO.SetRasterizerState(RasterizerShadow);
-		shadowPSO.SetRenderTargetFormats(0, nullptr, g_ShadowBuffer.GetFormat());
-		shadowPSO.SetVertexShader(g_pShadowVS, sizeof(g_pShadowVS));
-		shadowPSO.SetPixelShader(g_pShadowPS, sizeof(g_pShadowPS));
-		shadowPSO.Finalize();
-		s_PSOs["shadow"] = shadowPSO;
+        s_PostProcessPSO.SetRootSignature(s_ComputeRootSig);
+        s_PostProcessPSO.SetComputeShader(g_pPostProcessCS, sizeof(g_pPostProcessCS));
+        s_PostProcessPSO.Finalize();
+    }
 
-		// draw normal PSO
+    void Initialize(void)
+    {
+        m_CommonTextures = Graphics::g_BindlessHeap.Alloc(10);
+        g_PostProcessTexture = Graphics::g_BindlessHeap.Alloc(2);
+        g_SSAOSrvHeap = Graphics::g_BindlessHeap.Alloc(4);
+        g_SSAOUavHeap = Graphics::g_BindlessHeap.Alloc(1);
+        g_NullDescriptor = Graphics::g_BindlessHeap.Alloc(1);
 
-		GraphicsPSO drawNormalPSO(L"Renderer::drawNormal PSO");
-		drawNormalPSO = defaultPSO;
-		drawNormalPSO.SetRenderTargetFormats(1, &NormalFormat, DepthFormat);
-		drawNormalPSO.SetVertexShader(g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS));
-		drawNormalPSO.SetPixelShader(g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS));
-		drawNormalPSO.Finalize();
-		s_PSOs["drawNormals"] = drawNormalPSO;
+        D3D12_SHADER_RESOURCE_VIEW_DESC nullSrv{};
+        nullSrv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        nullSrv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        nullSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        nullSrv.Texture2D.MipLevels = 1;
+        g_Device->CreateShaderResourceView(nullptr, &nullSrv, g_NullDescriptor);
 
+        CreateGraphicsRootSignature();
+        CreateComputeRootSignature();
+        CreateBindlessRootSignature();
+        CreatePSOs();
+        UpdateGlobalDescriptors();
+    }
 
-		// PSO for sky.
-		
-		s_SkyboxPSO = defaultPSO;
-		s_SkyboxPSO.SetRasterizerState(RasterizerTwoSided);
-		s_SkyboxPSO.SetDepthStencilState(DepthStateReadOnly);
-		s_SkyboxPSO.SetVertexShader(g_pSkyBoxVS, sizeof(g_pSkyBoxVS));
-		s_SkyboxPSO.SetPixelShader(g_pSkyBoxPS, sizeof(g_pSkyBoxPS));
-		s_SkyboxPSO.Finalize();
+    void Shutdown(void)
+    {
+        s_PSOs.clear();
+    }
 
-		TextureManager::Initialize(L"");
-
-		s_TextureHeap.Create(L"Scene Texture Descriptors", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128);
-
-		m_CommonTextures = s_TextureHeap.Alloc(10);
-		g_PostProcessTexture = s_TextureHeap.Alloc(2);
-
-		g_NullDescriptor = s_TextureHeap.Alloc();
-		D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
-		desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-		desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		desc.Texture2D.MipLevels = -1;
-		desc.Texture2D.MostDetailedMip = 0;
-		desc.Texture2D.ResourceMinLODClamp = 0;
-		g_Device->CreateShaderResourceView(nullptr, &desc, g_NullDescriptor);
-
-		uint32_t DestCount = 10;
-		uint32_t SourceCounts[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-
-		D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[] =
-		{
-			g_EnvirMap.GetSRV(),
-			g_RadianceMap.GetSRV(),
-			g_IrradianceMap.GetSRV(),
-			g_SSAOFullScreen.GetSRV(),
-			g_ShadowBuffer.GetDepthSRV(),
-			g_LUT.GetSRV(),
-			g_SSSDiffuseLut.GetSRV(),
-			g_SSSSpecularLut.GetSRV(),
-			g_Emu.GetSRV(),
-			g_Eavg.GetSRV(),
-		};
-
-		g_Device->CopyDescriptors(1, &m_CommonTextures, &DestCount, DestCount, SourceTextures, SourceCounts, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		
-		{
-			g_SSAOSrvHeap = Renderer::s_TextureHeap.Alloc(4);
-			g_SSAOUavHeap = Renderer::s_TextureHeap.Alloc();
-
-			uint32_t DestCount = 4;
-			uint32_t SourceCounts[] = { 1, 1, 1, 1};
-
-			D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[] =
-			{
-				g_SceneNormalBuffer.GetSRV(),
-				g_SceneDepthBuffer.GetDepthSRV(),
-				g_RandomVectorBuffer.GetSRV(),
-				g_SSAOFullScreen.GetSRV(),
-			};
-
-			g_Device->CopyDescriptors(1, &g_SSAOSrvHeap, &DestCount, DestCount, SourceTextures,
-				SourceCounts, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			g_Device->CopyDescriptorsSimple(1, g_SSAOUavHeap, g_SSAOFullScreen.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		}
-
-	}
-	void UpdateGlobalDescriptors(void)
-	{
-		uint32_t DestCount = 2;
-		uint32_t SourceCounts[] = { 1, 1 };
-
-
-		D3D12_CPU_DESCRIPTOR_HANDLE SourceTextures[] =
-		{
-			g_SSAOFullScreen.GetSRV(),
-			g_ShadowBuffer.GetDepthSRV(),
-		};
-
-		DescriptorHandle dest = m_CommonTextures + 3 * s_TextureHeap.GetDescriptorSize();
-
-		g_Device->CopyDescriptors(1, &dest, &DestCount, DestCount, SourceTextures, SourceCounts, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	}
+    void UpdateGlobalDescriptors(void)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE src[10] =
+        {
+            g_EnvirMap.GetSRV(),
+            g_RadianceMap.GetSRV(),
+            g_IrradianceMap.GetSRV(),
+            g_SSAOFullScreen.GetSRV(),
+            g_ShadowBuffer.GetDepthSRV(),
+            g_LUT.GetSRV(),
+            g_SSSDiffuseLut.GetSRV(),
+            g_SSSSpecularLut.GetSRV(),
+            g_Emu.GetSRV(),
+            g_Eavg.GetSRV(),
+        };
+        UINT srcSizes[10] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+        UINT destSize = 10;
+        D3D12_CPU_DESCRIPTOR_HANDLE destRange = m_CommonTextures;
+        g_Device->CopyDescriptors(
+            1,
+            &destRange,
+            &destSize,
+            10,
+            src,
+            srcSizes,
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    }
 }

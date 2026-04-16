@@ -1,6 +1,7 @@
 #pragma once
 
 
+
 // This is an unbounded resource descriptor allocator.  It is intended to provide space for CPU-visible
 // resource descriptors as resources are created.  For those that need to be made shader-visible, they
 // will need to be copied to a DescriptorHeap or a DynamicDescriptorHeap.
@@ -87,6 +88,12 @@ private:
 class DescriptorHeap
 {
 public:
+    // Shader-visible handle plus stable heap index for bindless access.
+    struct BindlessHandle
+    {
+        DescriptorHandle Handle;
+        uint32_t Index;
+    };
 
     DescriptorHeap(void) {}
     ~DescriptorHeap(void) { Destroy(); }
@@ -95,9 +102,13 @@ public:
     void Destroy(void) { m_Heap = nullptr; }
 
     bool HasAvailableSpace(uint32_t Count) const { return Count <= m_NumFreeDescriptors; }
-    DescriptorHandle Alloc(uint32_t Count = 1);
+    DescriptorHandle Alloc(uint32_t Count = 1) { return AllocBindless(Count).Handle; }
+    BindlessHandle AllocBindless(uint32_t Count = 1);
 
     DescriptorHandle operator[] (uint32_t arrayIdx) const { return m_FirstHandle + arrayIdx * m_DescriptorSize; }
+    DescriptorHandle GetHandle(uint32_t index) const { return (*this)[index]; }
+    D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(uint32_t index) const { return GetHandle(index); }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(uint32_t index) const { return GetHandle(index); }
 
     uint32_t GetOffsetOfHandle(const DescriptorHandle& DHandle) {
         return (uint32_t)(DHandle.GetCpuPtr() - m_FirstHandle.GetCpuPtr()) / m_DescriptorSize;

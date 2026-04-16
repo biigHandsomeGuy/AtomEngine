@@ -47,6 +47,8 @@ LRESULT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 namespace GameCore
 {
 	bool isResize = false;
+    bool g_ViewportHovered = false;
+    bool g_ViewportCapturingMouse = false;
 
 	HWND g_hWnd = nullptr;
 	void InitializeApplication(IGameApp& game)

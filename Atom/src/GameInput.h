@@ -176,5 +176,8 @@ namespace GameInput
     float GetAnalogInput(AnalogInput ai);
     float GetTimeCorrectedAnalogInput(AnalogInput ai);
 
-
+    // ===== 新增：由 Renderer 驱动 mouse look =====
+    void BeginMouseLook(int centerX, int centerY);
+    void EndMouseLook();
+    bool IsMouseLookActive();
 }

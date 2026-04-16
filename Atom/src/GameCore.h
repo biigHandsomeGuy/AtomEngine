@@ -20,6 +20,9 @@ namespace GameCore
 {
 	extern HWND g_hWnd;
 	extern bool isResize;
+	extern bool g_IsExiting;
+	extern bool g_ViewportHovered;
+	extern bool g_ViewportCapturingMouse;
 	// frame work
 	class IGameApp
 	{

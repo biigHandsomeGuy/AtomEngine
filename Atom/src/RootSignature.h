@@ -95,7 +95,7 @@ class RootSignature
 
 public:
 	RootSignature(UINT NumRootParams = 0, UINT NumStaticSamplers = 0)
-		:m_Finalized(FALSE), m_NumParameters(NumRootParams), m_NumSamplers(NumStaticSamplers)
+		:m_Finalized(FALSE), m_NumParameters(NumRootParams), m_NumSamplers(NumStaticSamplers), m_Flags(D3D12_ROOT_SIGNATURE_FLAG_NONE)
 	{
 		Reset(NumRootParams, NumStaticSamplers);
 	}
@@ -120,6 +120,7 @@ public:
 			m_SamplerArray = nullptr;
 		m_NumSamplers = NumStaticSamplers;
 		m_NumInitializedStaticSamplers = 0;
+        m_Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 	}
 
 	RootParameter& operator[] (size_t EntryIndex)
@@ -143,11 +144,21 @@ public:
 	void Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAGS Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 	ID3D12RootSignature* GetSignature() const { return m_Signature; }
+    bool UsesDirectlyIndexedResourceHeap() const
+    {
+        return (m_Flags & D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED) != 0;
+    }
+
+    bool UsesDirectlyIndexedSamplerHeap() const
+    {
+        return (m_Flags & D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED) != 0;
+    }
 protected:
 	BOOL m_Finalized;
 	UINT m_NumParameters;
 	UINT m_NumSamplers;
 	UINT m_NumInitializedStaticSamplers;
+    D3D12_ROOT_SIGNATURE_FLAGS m_Flags;
 	uint32_t m_DescriptorTableBitMap;		// One bit is set for root parameters that are non-sampler descriptor tables
 	uint32_t m_SamplerTableBitMap;			// One bit is set for root parameters that are sampler descriptor tables
 	uint32_t m_DescriptorTableSize[16];		// Non-sampler descriptor tables need to know their descriptor count

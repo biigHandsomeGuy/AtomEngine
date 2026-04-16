@@ -2,50 +2,57 @@
 
 #include "GpuResource.h"
 
-//struct Texture
-//{
-//    std::string Name;
-//    std::string Filename;
-//
-//    Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
-//
-//    Microsoft::WRL::ComPtr<ID3D12Resource> UploadHeap;
-//};
+using TextureID = uint32_t;
+
+static constexpr TextureID INVALID_TEXTURE = 0xffffffff;
+
+// Responsible for GPU Resource, SRV descriptor, bindless resource index
 class Texture : public GpuResource
 {
 public:
 	Texture()
 	{
-		m_hCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+		m_SRVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+		m_UAVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+		m_RTVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+		m_DSVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
 	}
-	Texture(D3D12_CPU_DESCRIPTOR_HANDLE Handle) 
-		: m_hCpuDescriptorHandle(Handle) {}
 
+	void Destroy() override
+	{
+		GpuResource::Destroy();
+		m_SRVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+		m_UAVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+		m_RTVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+		m_DSVCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
+	}
 
-    // Create a 1-level textures
-    void Create2D(size_t RowPitchBytes, size_t Width, size_t Height, DXGI_FORMAT Format, const void* InitData);
-    void CreateCube(size_t RowPitchBytes, size_t Width, size_t Height, DXGI_FORMAT Format, const void* InitialData);
+	//const D3D12_CPU_DESCRIPTOR_HANDLE& GetSRV() const { return m_hCpuDescriptorHandle; }
 
-    void CreateTGAFromMemory(const void* memBuffer, size_t fileSize, bool sRGB);
-    bool CreateDDSFromMemory(const void* memBuffer, size_t fileSize, bool sRGB);
-    void CreatePIXImageFromMemory(const void* memBuffer, size_t fileSize);
-
-    void Destroy() override
-    {
-        GpuResource::Destroy();
-        m_hCpuDescriptorHandle.ptr = D3D12_GPU_VIRTUAL_ADDRESS_UNKNOWN;
-    }
-
-    const D3D12_CPU_DESCRIPTOR_HANDLE& GetSRV() const { return m_hCpuDescriptorHandle; }
-
-    uint32_t GetWidth() const { return m_Width; }
-    uint32_t GetHeight() const { return m_Height; }
-    uint32_t GetDepth() const { return m_Depth; }
-
+	uint32_t GetWidth() const { return m_Width; }
+	uint32_t GetHeight() const { return m_Height; }
+	uint32_t GetDepth() const { return m_Depth; }
+public:
+	const D3D12_CPU_DESCRIPTOR_HANDLE& GetSRV() const { return m_SRVCpuDescriptorHandle; }
+	const D3D12_CPU_DESCRIPTOR_HANDLE& GetUAV() const { return m_UAVCpuDescriptorHandle; }
+	uint32_t GetBindlessSRVIndex() const { return m_SRVIndex; }
+	uint32_t GetBindlessUAVIndex() const { return m_UAVIndex; }
+	TextureID GetID() const { return m_ID; }
 protected:
-	uint32_t m_Width;
-	uint32_t m_Height;
-	uint32_t m_Depth;
+	friend class TextureManager;
+	
+	TextureID m_ID = INVALID_TEXTURE;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE m_hCpuDescriptorHandle;
+	uint32_t m_Width = 0;
+	uint32_t m_Height = 0;
+	uint32_t m_Depth = 1;
+	// Bindless Resource
+	uint32_t m_SRVIndex = INVALID_TEXTURE;
+	uint32_t m_UAVIndex = INVALID_TEXTURE;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE m_SRVCpuDescriptorHandle;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_UAVCpuDescriptorHandle;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_RTVCpuDescriptorHandle;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_DSVCpuDescriptorHandle;
 };
+

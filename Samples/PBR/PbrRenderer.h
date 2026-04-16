@@ -35,7 +35,7 @@ __declspec(align(256)) struct ShaderParams
     float SpecularFactor = {};
 };
 
-TextureRef g_IBLTexture;
+inline TextureID g_IBLTexture = INVALID_TEXTURE;
 
 class PbrRenderer : public GameCore::IGameApp
 {
@@ -73,8 +73,6 @@ private:
 
     GlobalConstants m_ShadowPassGlobalConstants = {};
     GlobalConstants m_LightPassGlobalConstants = {};
-
-    std::vector<MaterialConstants> m_MaterialConstants;
 
     Scene m_Scene;
     SkyBox m_SkyBox;

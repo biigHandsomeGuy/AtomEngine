@@ -28,7 +28,7 @@ void main(uint2 ThreadID : SV_DispatchThreadID)
 	// Get integration parameters.
 	float NoV = (ThreadID.x) / outputWidth;
 	float roughness = (ThreadID.y) / outputHeight;
-    //roughness = max(0.025, roughness);
+	//roughness = max(0.025, roughness);
 	float res = 0;
 	
 	float3 V;
@@ -49,13 +49,13 @@ void main(uint2 ThreadID : SV_DispatchThreadID)
 		float VoH = saturate(dot(V, H));
 		
 		
-        float AlphaRoughness = roughness * roughness;
+		float AlphaRoughness = roughness * roughness;
 		
 		float cosA = VoH;
 		float F = 1 + (1.0f - 1) * pow(1 - cosA, 5.0f);
 	   
-        res += 4 * F * V_SmithGGXCorrelated(NoL, NoV, roughness) * VoH * NoL / NoH;
-    }
+		res += 4 * F * V_SmithGGXCorrelated(NoL, NoV, roughness) * VoH * NoL / NoH;
+	}
 	
 	Emu[ThreadID] = (res * g_InvNumSamples);
 }

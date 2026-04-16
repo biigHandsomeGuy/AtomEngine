@@ -6,7 +6,10 @@
 
 __declspec(align(256)) struct MaterialConstants
 {
-    uint32_t gMatIndex;
+    uint32_t BaseColorIndex;
+    uint32_t NormalIndex;
+    uint32_t RoughnessMetallicIndex;
+    uint32_t EmissiveIndex;
 };
 
 __declspec(align(256)) struct GlobalConstants

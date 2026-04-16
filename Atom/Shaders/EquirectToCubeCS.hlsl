@@ -14,28 +14,28 @@ float3 getSamplingVector(uint3 ThreadID)
     float2 st = ThreadID.xy / float2(outputWidth, outputHeight);
     float2 uv = 2.0 * float2(st.x, 1.0 - st.y) - float2(1.0, 1.0);
 
-	// Select vector based on cubemap face index.
+    // Select vector based on cubemap face index.
     float3 ret = float3(0,0,0);
     switch (ThreadID.z)
     {
-        case 0:
-            ret = float3(1.0, uv.y, -uv.x);
-            break;
-        case 1:
-            ret = float3(-1.0, uv.y, uv.x);
-            break;
-        case 2:
-            ret = float3(uv.x, 1.0, -uv.y);
-            break;
-        case 3:
-            ret = float3(uv.x, -1.0, uv.y);
-            break;
-        case 4:
-            ret = float3(uv.x, uv.y, 1.0);
-            break;
-        case 5:
-            ret = float3(-uv.x, uv.y, -1.0);
-            break;
+    case 0:
+        ret = float3(1.0, uv.y, -uv.x);
+        break;
+    case 1:
+        ret = float3(-1.0, uv.y, uv.x);
+        break;
+    case 2:
+        ret = float3(uv.x, 1.0, -uv.y);
+        break;
+    case 3:
+        ret = float3(uv.x, -1.0, uv.y);
+        break;
+    case 4:
+        ret = float3(uv.x, uv.y, 1.0);
+        break;
+    case 5:
+        ret = float3(-uv.x, uv.y, -1.0);
+        break;
     }
     return normalize(ret);
 }
@@ -45,12 +45,12 @@ void main(uint3 ThreadID : SV_DispatchThreadID)
 {
     float3 v = getSamplingVector(ThreadID);
 	
-	// Convert Cartesian direction vector to spherical coordinates.
+    // Convert Cartesian direction vector to spherical coordinates.
     float phi = atan2(v.z, v.x);
     float theta = acos(v.y);
 
-	// Sample equirectangular texture.
+    // Sample equirectangular texture.
     float4 color = gSphereMap.SampleLevel(gsamLinearWrap, float2(phi / TwoPI, theta / PI), 0);
-	// Write out color to output cubemap.
+    // Write out color to output cubemap.
     outputTexture[ThreadID] = color;
 }

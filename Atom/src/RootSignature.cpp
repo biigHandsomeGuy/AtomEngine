@@ -100,14 +100,16 @@ void RootSignature::Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAG
         return;
 
     ASSERT(m_NumInitializedStaticSamplers == m_NumSamplers);
+    m_Flags = Flags;
 
-    D3D12_ROOT_SIGNATURE_DESC RootDesc;
+    D3D12_ROOT_SIGNATURE_DESC RootDesc = {};
     RootDesc.NumParameters = m_NumParameters;
     RootDesc.pParameters = (const D3D12_ROOT_PARAMETER*)m_ParamArray.get();
     RootDesc.NumStaticSamplers = m_NumSamplers;
     RootDesc.pStaticSamplers = (const D3D12_STATIC_SAMPLER_DESC*)m_SamplerArray.get();
     RootDesc.Flags = Flags;
 
+    // ---------------- HASH ----------------
     m_DescriptorTableBitMap = 0;
     m_SamplerTableBitMap = 0;
 
@@ -123,58 +125,72 @@ void RootSignature::Finalize(const std::wstring& name, D3D12_ROOT_SIGNATURE_FLAG
         {
             ASSERT(RootParam.DescriptorTable.pDescriptorRanges != nullptr);
 
-            HashCode = Utility::HashState(RootParam.DescriptorTable.pDescriptorRanges,
-                RootParam.DescriptorTable.NumDescriptorRanges, HashCode);
+            HashCode = Utility::HashState(
+                RootParam.DescriptorTable.pDescriptorRanges,
+                RootParam.DescriptorTable.NumDescriptorRanges,
+                HashCode);
 
-            // We keep track of sampler descriptor tables separately from CBV_SRV_UAV descriptor tables
             if (RootParam.DescriptorTable.pDescriptorRanges->RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
                 m_SamplerTableBitMap |= (1 << Param);
             else
                 m_DescriptorTableBitMap |= (1 << Param);
 
-            for (UINT TableRange = 0; TableRange < RootParam.DescriptorTable.NumDescriptorRanges; ++TableRange)
-                m_DescriptorTableSize[Param] += RootParam.DescriptorTable.pDescriptorRanges[TableRange].NumDescriptors;
+            for (UINT i = 0; i < RootParam.DescriptorTable.NumDescriptorRanges; ++i)
+                m_DescriptorTableSize[Param] +=
+                RootParam.DescriptorTable.pDescriptorRanges[i].NumDescriptors;
         }
         else
+        {
             HashCode = Utility::HashState(&RootParam, 1, HashCode);
+        }
     }
 
+    // ---------------- CACHE ----------------
     ID3D12RootSignature** RSRef = nullptr;
     bool firstCompile = false;
-    {
-        static mutex s_HashMapMutex;
-        lock_guard<mutex> CS(s_HashMapMutex);
-        auto iter = s_RootSignatureHashMap.find(HashCode);
 
-        // Reserve space so the next inquiry will find that someone got here first.
+    {
+        static std::mutex s_HashMapMutex;
+        std::lock_guard<std::mutex> lock(s_HashMapMutex);
+
+        auto iter = s_RootSignatureHashMap.find(HashCode);
         if (iter == s_RootSignatureHashMap.end())
         {
             RSRef = s_RootSignatureHashMap[HashCode].GetAddressOf();
             firstCompile = true;
         }
         else
+        {
             RSRef = iter->second.GetAddressOf();
+        }
     }
 
     if (firstCompile)
     {
-        ComPtr<ID3DBlob> pOutBlob, pErrorBlob;
+        ComPtr<ID3DBlob> blob, error;
 
-        ASSERT_SUCCEEDED(D3D12SerializeRootSignature(&RootDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-            pOutBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
+        ASSERT_SUCCEEDED(
+            D3D12SerializeRootSignature(
+                &RootDesc,
+                D3D_ROOT_SIGNATURE_VERSION_1,
+                &blob,
+                &error));
 
-        ASSERT_SUCCEEDED(g_Device->CreateRootSignature(1, pOutBlob->GetBufferPointer(), pOutBlob->GetBufferSize(),
-            IID_PPV_ARGS(&m_Signature)));
+        ASSERT_SUCCEEDED(
+            g_Device->CreateRootSignature(
+                0,
+                blob->GetBufferPointer(),
+                blob->GetBufferSize(),
+                IID_PPV_ARGS(&m_Signature)));
 
         m_Signature->SetName(name.c_str());
-
         s_RootSignatureHashMap[HashCode].Attach(m_Signature);
-        ASSERT(*RSRef == m_Signature);
     }
     else
     {
         while (*RSRef == nullptr)
-            this_thread::yield();
+            std::this_thread::yield();
+
         m_Signature = *RSRef;
     }
 

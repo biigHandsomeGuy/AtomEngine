@@ -2,12 +2,6 @@
 #include "PBRCommon.hlsli"
 
 
-Texture2D gAlbedeTexture : register(t0);
-Texture2D gNormalTexture : register(t1);
-Texture2D gMetalnessTexture : register(t2);
-Texture2D gRoughnessTexture : register(t3);
-
-
 TextureCube gEnvironmentTexture : register(t10);
 TextureCube gRadianceTexture : register(t11);
 TextureCube gIrradianceMap : register(t12);
@@ -21,7 +15,10 @@ Texture2D gEavg : register(t19);
 
 cbuffer MaterialConstants : register(b0)
 {
-    uint gMatIndex;
+    uint gBaseColorIndex;
+    uint gNormalIndex;
+    uint gRoughnessMetallicIndex;
+    uint gEmissiveIndex;
 };
 
 cbuffer GlobalConstants : register(b1)
@@ -61,6 +58,7 @@ struct VertexOut
     float3x3 tangentBasis : TAASIC;
     float3 Normal : NORMAL;
     float3 Tangent : TANGENT;
+    uint ClusterID : CLUSTERID;
 };
 
 // Returns number of mipmap levels for specular IBL environment map.
@@ -78,8 +76,45 @@ float3 AverageFresnel(float3 r, float3 g)
            + 0.782654 * r - 0.136432 * r * r + 0.278708 * r * r * r
            + 0.19744 * g * r + 0.0360605 * g * g * r - 0.2586 * g * r * r;
 }
+uint Hash(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352d;
+    x ^= x >> 15;
+    x *= 0x846ca68b;
+    x ^= x >> 16;
+    return x;
+}
+
+float3 HashToColor(uint id)
+{
+    uint h = Hash(id);
+
+    float r = ((h >> 0) & 255) / 255.0;
+    float g = ((h >> 8) & 255) / 255.0;
+    float b = ((h >> 16) & 255) / 255.0;
+
+    return float3(r, g, b);
+}
+
+float4 ClusterColor(uint clusterID)
+{
+    float3 color = HashToColor(clusterID);
+
+    // ��ѡ��ѹ�����ȣ��������
+    color = pow(color, 1.0 / 2.2); // gamma
+
+    return float4(color, 1.0);
+}
+
+Texture2D<float4> GetBindlessTexture2D(uint index)
+{
+    return ResourceDescriptorHeap[NonUniformResourceIndex(index)];
+}
+
 float4 main(VertexOut pin) : SV_Target
 {
+    //return ClusterColor(pin.ClusterID);
     float3 albedo = 0;
     float metalness = 0;
     float roughness = 0;
@@ -87,14 +122,18 @@ float4 main(VertexOut pin) : SV_Target
     if (UseTexture)
     {   
         // Sample input textures to get shading model params.
-        albedo = pow(gAlbedeTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb, 2.2);
-        metalness = gMetalnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).r;
-        roughness = gRoughnessTexture.Sample(gsamAnisotropicWrap, pin.TexC).g;
+        Texture2D<float4> baseColorTexture = GetBindlessTexture2D(gBaseColorIndex);
+        Texture2D<float4> normalTexture = GetBindlessTexture2D(gNormalIndex);
+        Texture2D<float4> roughnessMetallicTexture = GetBindlessTexture2D(gRoughnessMetallicIndex);
+
+        albedo = baseColorTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb;
+        float4 roughnessMetallic = roughnessMetallicTexture.Sample(gsamAnisotropicWrap, pin.TexC);
+        metalness = roughnessMetallic.b;
+        roughness = roughnessMetallic.g;
         // Get current fragment's normal and transform to world space.
-        N = normalize(2.0 * gNormalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0);
+        N = normalize(2.0 * normalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0);
 	
         N = normalize(mul(N, pin.tangentBasis));
-        N = normalize(pin.Normal);
     }
 	else
     {
@@ -104,7 +143,6 @@ float4 main(VertexOut pin) : SV_Target
         N = normalize(pin.Normal);
         //return float4(N, 1);
     }
-    N = normalize(pin.Normal);
     //return float4(albedo, 1);
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.WorldPosition);

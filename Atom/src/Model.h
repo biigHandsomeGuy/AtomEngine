@@ -1,182 +1,202 @@
 #pragma once
 
-#include "tinygltf/tiny_gltf.h"
+#include "d3d12.h"
 #include "Math/Matrix4.h"
 #include "Math/Vector.h"
+#include "Math/BoundingBox.h"
+
+#include "tinygltf/tiny_gltf.h"
+
 #include "DescriptorHeap.h"
 #include "TextureManager.h"
+#include <memory>
+#include <wrl/client.h>
+
+class GraphicsContext;
+
+using AABB = Math::AxisAlignedBox;
 
 using namespace DirectX;
 using namespace Math;
-using namespace Microsoft::WRL;
-__declspec(align(256)) struct MeshConstants
+
+using TextureID = uint32_t;
+
+static constexpr uint32_t INVALID_INDEX = 0xffffffff;
+
+// per-instance constants (GPU CBV)
+__declspec(align(256))
+struct MeshConstants
 {
-	Math::Matrix4 ModelMatrix{ Math::kIdentity };
-	Math::Matrix4 NormalMatrix{ Math::kIdentity };
-};
-struct Component
-{
-	OrthogonalTransform Transform{ kIdentity };
-	Vector3 Scaling{ kIdentity };
+    Matrix4 ModelMatrix{ kIdentity };
+    Matrix4 NormalMatrix{ kIdentity };
 };
 
+// transform component
+struct TransformComponent
+{
+    OrthogonalTransform transform;
+
+    float scale = 1.0f;
+
+    Matrix4 GetMatrix() const
+    {
+        AffineTransform RT(transform);
+
+        AffineTransform S = AffineTransform::MakeScale(scale);
+
+        return RT * S;
+    }
+};
+
+
+// vertex layout (gltf compatible)
 struct Vertex
 {
-	Vector3 Position;
-	Vector3 Normal;
-	
-	XMFLOAT2 UV;
-	Vector3 Tangent;
-	Vector3 BiTangent;
+    Vector3 Position;
+
+    Vector3 Normal;
+
+    XMFLOAT2 UV;
+
+    Vector3 Tangent;
+
+    Vector3 Bitangent;
+
+    uint32_t ClusterID = 0;
 };
 
-
-struct Material
+// SubMesh = gltf primitive
+struct SubMesh
 {
-	TextureRef Albedo;
-	TextureRef Normal;
-	TextureRef Metallic;
-	TextureRef Roughness;
-	TextureRef Occlusion;
-	TextureRef Emissive;
+    uint32_t IndexOffset = 0;
 
+    uint32_t IndexCount = 0;
 
-	Vector4 BaseColorFactor{ 1.0f,1.0f,1.0f,1.0f };
-	float MetallicFactor = 1.0f;
-	float RoughnessFactor = 1.0f;
-	Vector3 EmissiveFactor{ 0.0f,0.0f,0.0f };
+    uint32_t MaterialIndex = 0;
 
-
-	bool DoubleSided = false;
-	bool Unlit = false;
-
-
-	uint32_t PipelineStateID = 0;
-	std::string Name;
+    AABB Bounds;
 };
 
-struct Submesh
+// CPU asset
+struct MeshAsset
 {
-	uint32_t IndexCount;
-	uint32_t StartIndex;
-	uint32_t BaseVertex;
+    std::string Name;
 
-	BoundingBox Bounds;
+    std::vector<Vertex> Vertices;
 
-	Material Material;
+    std::vector<uint32_t> Indices;
+
+    std::vector<SubMesh> SubMeshes;
+
+    AABB Bounds;
 };
 
-
-struct Mesh
+// GPU geometry
+struct MeshGPU
 {
-	std::string Name;
+    D3D12_VERTEX_BUFFER_VIEW VBV{};
 
-	std::vector<Vertex>       CPUVertices;
-	std::vector<uint32_t>     CPUIndices;
+    D3D12_INDEX_BUFFER_VIEW IBV{};
 
-	D3D12_VERTEX_BUFFER_VIEW VBV{};
-	D3D12_INDEX_BUFFER_VIEW  IBV{};
+    uint32_t VertexCount = 0;
 
-	uint32_t VertexCount = 0;
-	uint32_t IndexCount = 0;
+    uint32_t IndexCount = 0;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> VertexBuffer;
-	Microsoft::WRL::ComPtr<ID3D12Resource> IndexBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> VertexBuffer;
 
-	
-	std::vector<Submesh> Submeshes;
-
-	DirectX::BoundingBox Bounds;
+    Microsoft::WRL::ComPtr<ID3D12Resource> IndexBuffer;
 };
 
-struct Node
+
+// material asset (CPU)
+struct MaterialAsset
 {
-	int32_t Parent = -1;
-	std::vector<int32_t> Children;
+    std::string Name;
 
+    TextureID BaseColor = INVALID_TEXTURE;
 
-	Matrix4 LocalMatrix{ kIdentity };
-	Matrix4 WorldMatrix{ kIdentity };
+    TextureID Normal = INVALID_TEXTURE;
 
+    TextureID RoughnessMetallic = INVALID_TEXTURE;
 
-	int32_t MeshIndex = -1;
-	int32_t SkinIndex = -1;
-	std::string Name;
+    TextureID Emissive = INVALID_TEXTURE;
+
+    Vector3 EmissiveFactor{ 0,0,0 };
 };
 
 
-struct Skin
+// GPU material
+struct MaterialGPU
 {
-	std::vector<int32_t> Joints; // node indices
-	std::vector<Matrix4> InverseBindMatrices;
-	int32_t SkeletonRoot = -1;
+    uint32_t BaseColorIndex = INVALID_TEXTURE;
+    uint32_t NormalIndex = INVALID_TEXTURE;
+    uint32_t RoughnessMetallicIndex = INVALID_TEXTURE;
+    uint32_t EmissiveIndex = INVALID_TEXTURE;
+    Vector3 EmissiveFactor;
+
+    float padding;
 };
 
 
-struct AnimationSampler
+
+// mesh instance
+struct MeshInstance
 {
-	std::vector<float> Inputs;
-	std::vector<Vector3> Translations;
-	std::vector<Quaternion> Rotations;
-	std::vector<Vector3> Scales;
+    uint32_t MeshIndex = 0;
+
+    MeshConstants Constants;
 };
 
-
-struct AnimationChannel
+// Model Asset (immutable)
+struct ModelAsset
 {
-	int32_t SamplerIndex;
-	int32_t TargetNode;
-	enum class TargetPath { Translation, Rotation, Scale } Path;
+    std::string Name;
+
+    std::vector<MeshAsset> Meshes;
+
+    std::vector<MaterialAsset> Materials;
+
+    AABB Bounds;
 };
 
 
-struct Animation
+// GPU representation
+struct ModelGPU
 {
-	std::string Name;
-	std::vector<AnimationSampler> Samplers;
-	std::vector<AnimationChannel> Channels;
-	float StartTime = 0.f;
-	float EndTime = 0.f;
+    std::vector<MeshGPU> Meshes;
+
+    std::vector<MaterialGPU> Materials;
 };
 
-struct Model
+
+// runtime instance
+class Model
 {
-	std::vector<Mesh> Meshes;
-	std::vector<struct Material> Materials;
-	std::vector<DescriptorHandle> MaterialSRVs;
-	std::vector<Node> Nodes;
-	std::vector<Skin> Skins;
-	std::vector<Animation> Animations;
-	BoundingBox Bounds;
-	std::string Name;
+public:
 
-	void CreateMaterialSRVs();
-	void Draw(ID3D12GraphicsCommandList* cmdList, bool isSkyBox = false);
+    std::shared_ptr<ModelAsset> Asset;
 
-	void UpdateConstants()
-	{
-		//m_MeshConstants.ModelMatrix = Matrix4{ kIdentity };
-		Matrix4 scaleMat = Matrix4::MakeScale(m_MeshComponent.Scaling);
+    ModelGPU GPU;
 
-		// 构建最终 M：Transform * S
-		// 假设 Transform = T * R
-		m_MeshConstants.ModelMatrix = m_MeshComponent.Transform;
-		m_MeshConstants.ModelMatrix = m_MeshConstants.ModelMatrix * scaleMat;
+    TransformComponent Transform;
 
-		m_MeshConstants.NormalMatrix =
-			Math::InverseTranspose(m_MeshConstants.ModelMatrix.Get3x3());
-	}
+    MeshConstants Constants;
 
 
-	MeshConstants m_MeshConstants;
+    void UpdateConstants()
+    {
+        Constants.ModelMatrix = Transform.GetMatrix();
 
-	Component m_MeshComponent;
+        Constants.NormalMatrix = InverseTranspose(Constants.ModelMatrix.Get3x3());
+    }
+    void Draw(GraphicsContext& context, bool bindMaterialData = true);
 };
-void UploadMeshToGPU(Mesh& mesh);
 
-Model LoadGltfModel(const std::string& path);
+struct LoadedModelData
+{
+    std::shared_ptr<ModelAsset> Asset;
+    ModelGPU GPU;
+};
 
-Material ConvertMaterial(
-	const tinygltf::Model& gltf,
-	const tinygltf::Material& gm,
-	const std::string& baseDir);
+LoadedModelData LoadGltfAsset(const std::string& path);
+Model CreateModel(LoadedModelData&& data);

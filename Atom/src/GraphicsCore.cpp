@@ -6,6 +6,7 @@
 #include "CommandContext.h"
 #include "GraphicsCommon.h"
 #include "Renderer.h"
+#include "TextureManager.h"
 
 namespace Graphics
 {
@@ -19,7 +20,8 @@ namespace Graphics
 	// ID3D12CommandAllocator* g_CommandAllocator;
 	CommandListManager g_CommandManager;
 	ContextManager g_ContextManager;
-
+	TextureManager g_TextureManager;
+	DescriptorHeap g_BindlessHeap;
 	DescriptorAllocator g_DescriptorAllocator[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] =
 	{
 		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -67,9 +69,10 @@ namespace Graphics
 		g_Device->SetName(L"g_Device");
 		
 		g_CommandManager.Create(g_Device);
+        g_TextureManager.Initialize();
 
 		Graphics::InitializeCommonState();
-
+    	g_BindlessHeap.Create(L"Bindless Heap", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 100000);
 		Graphics::RtvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		Graphics::DsvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		Graphics::CbvSrvUavDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -84,6 +87,7 @@ namespace Graphics
     {
 		g_CommandManager.IdleGPU();
 		
+        g_TextureManager.Shutdown();
 		g_CommandManager.Shutdown();
 		SSAO::Shutdown();
 		Display::Shutdown();

@@ -7,7 +7,7 @@
 #include "GraphicsCore.h"
 #include "PipelineState.h"
 #include <utility>
-#include "stb_image/stb_image.h"
+#include "stb_image.h"
 #include <Imgui/imgui.h>
 #include <Imgui/backends/imgui_impl_dx12.h>
 #include <Imgui/backends/imgui_impl_win32.h>
@@ -17,6 +17,7 @@
 #include <dxcapi.h>
 #include <d3d12shader.h>
 #include "FileSystem.h"
+#include "GameInput.h"
 #include "Model.h"
 
 namespace CS
@@ -74,10 +75,10 @@ void PbrRenderer::Startup()
 
 	m_Camera.SetEyeAtUp(Vector3(0.0f, 0.0f, -20.0f), Vector3(kZero), Vector3(kYUnitVector));
 	m_Camera.SetZRange(0.1f, 10000.0f);
-	//m_Camera.SetAspectRatio((float)g_DisplayWidth / g_DisplayHeight);
+	m_Camera.SetAspectRatio(9.0f / 16.0f);
 	m_CameraController.reset(new FlyingFPSCamera(m_Camera, Vector3(kYUnitVector)));
 
-	g_IBLTexture = TextureManager::LoadHdrFromFile(FileSystem::GetFullPath(L"Assets/Textures/EnvirMap/sun.hdr"));
+	g_IBLTexture = g_TextureManager.LoadHDR(FileSystem::GetFullPath(L"Assets/Textures/EnvirMap/sun.hdr"));
 
 	PrecomputeCubemaps(gfxContext);
 
@@ -116,9 +117,9 @@ void PbrRenderer::Startup()
 	ImGui_ImplWin32_Init(GameCore::g_hWnd);
 
 	DescriptorHandle ImGuiHandle[3] = 
-	{ Renderer::s_TextureHeap.Alloc(),
-	Renderer::s_TextureHeap.Alloc(),
-	Renderer::s_TextureHeap.Alloc(), };
+	{ Graphics::g_BindlessHeap.Alloc(),
+	Graphics::g_BindlessHeap.Alloc(),
+	Graphics::g_BindlessHeap.Alloc(), };
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srv[3] = { AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
 	AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
@@ -129,22 +130,20 @@ void PbrRenderer::Startup()
 	g_Device->CopyDescriptorsSimple(1, ImGuiHandle[2], srv[2], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	ImGui_ImplDX12_Init(g_Device, 3,
-		DXGI_FORMAT_R16G16B16A16_FLOAT, Renderer::s_TextureHeap.GetHeapPointer(),
+		DXGI_FORMAT_R16G16B16A16_FLOAT, Graphics::g_BindlessHeap.GetHeapPointer(),
 		*ImGuiHandle,
 		*ImGuiHandle);
 
-	m_BackBufferHandle[0] = Renderer::s_TextureHeap.Alloc();
-	m_BackBufferHandle[1] = Renderer::s_TextureHeap.Alloc();
-	m_BackBufferHandle[2] = Renderer::s_TextureHeap.Alloc();
+	m_BackBufferHandle[0] = Graphics::g_BindlessHeap.Alloc();
+	m_BackBufferHandle[1] = Graphics::g_BindlessHeap.Alloc();
+	m_BackBufferHandle[2] = Graphics::g_BindlessHeap.Alloc();
 
-	Model skyBox, pbrModel, pbrModel2;
-	skyBox = LoadGltfModel(FileSystem::GetFullPath("Assets/Models/cube.glb"));
-	pbrModel = LoadGltfModel(FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf"));
+	Model skyBox, pbrModel;
+	skyBox = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/cube.glb")));
+	pbrModel = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/Sponza/Sponza.glb")));
 	//pbrModel.
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
-	m_Scene.Models.push_back(std::move(pbrModel2));
-	m_MaterialConstants.resize(m_Scene.Models.size());
 
 	s_IBL_PSOCache.clear();
 
@@ -156,7 +155,8 @@ void PbrRenderer::Startup()
 
 void PbrRenderer::OnResize()
 {
-	
+    m_Camera.SetAspectRatio(9.0f / 16.0f);
+    m_Camera.Update();
 }
 
 void PbrRenderer::Update(float gt)
@@ -164,12 +164,12 @@ void PbrRenderer::Update(float gt)
 	Renderer::UpdateGlobalDescriptors();
 	
 	m_CameraController->Update(gt);
+    m_Camera.Update();
 
 }
 
 void PbrRenderer::RenderScene()
 {
-	
 	GraphicsContext& GraphicsContext = GraphicsContext::Begin(L"Scene Render");
 	ComputeContext& ComputeContext = ComputeContext::Begin(L"PrecomputeCubemaps");
 	// Start the Dear ImGui frame
@@ -223,7 +223,6 @@ void PbrRenderer::RenderScene()
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 	}
 
-
 	if (ImGui::BeginMenuBar())
 	{
 		if (ImGui::BeginMenu("File"))
@@ -239,7 +238,10 @@ void PbrRenderer::RenderScene()
 
 	
 	static float f = 0.0f;
+    const bool blockEditorUi = GameCore::g_ViewportCapturingMouse;
 
+    if (blockEditorUi)
+        ImGui::BeginDisabled();
 	ImGui::Begin("Inspector");
 	XMVECTOR pos = m_Camera.GetPosition();
 	XMFLOAT4 temp;
@@ -265,22 +267,22 @@ void PbrRenderer::RenderScene()
 	{
 		Vector3 Translate{ kIdentity };
 		Vector3 Rotate{ kIdentity };
-		Vector3 Scale{ kIdentity };
+		float Scale = 1.0f;
 	} ModelMatrix;
 
 	ImGui::DragFloat4("Translate", (float*)&ModelMatrix.Translate, 1.0f);
 	ImGui::DragFloat4("Rotate", (float*)&ModelMatrix.Rotate, 1.0f);
-	ImGui::DragFloat4("Scale", (float*)&ModelMatrix.Scale, 1.0f);
+	ImGui::DragFloat("Scale", (float*)&ModelMatrix.Scale, 1.0f);
 
-	m_Scene.Models[0].m_MeshComponent.Transform.SetTranslation(ModelMatrix.Translate);
+	m_Scene.Models[0].Transform.transform.SetTranslation(ModelMatrix.Translate);
 
 	Quaternion q(
 		XMConvertToRadians(ModelMatrix.Rotate.GetX()),
 		XMConvertToRadians(ModelMatrix.Rotate.GetY()),
 		XMConvertToRadians(ModelMatrix.Rotate.GetZ())
 	);
-	m_Scene.Models[0].m_MeshComponent.Transform.SetRotation(q);
-	m_Scene.Models[0].m_MeshComponent.Scaling = ModelMatrix.Scale;
+	m_Scene.Models[0].Transform.transform.SetRotation(q);
+	m_Scene.Models[0].Transform.scale = ModelMatrix.Scale;
 	if (m_ShaderAttribs.UseSSS)
 	{
 		ImGui::SliderFloat("CurveFactor", &m_ShaderAttribs.CurveFactor, 0, 10);
@@ -298,7 +300,7 @@ void PbrRenderer::RenderScene()
 	UINT PrevBufferIndex = (g_CurrentBuffer + 3 - 1) % 3;
 
 
-	GraphicsContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, s_TextureHeap.GetHeapPointer());
+	GraphicsContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
 	GraphicsContext.SetViewportAndScissor(g_ViewPort, g_Rect);
 
 	GraphicsContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -334,9 +336,9 @@ void PbrRenderer::RenderScene()
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		m_Scene.Models[i].UpdateConstants();
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].m_MeshConstants);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].Constants);
 
-		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
+		m_Scene.Models[i].Draw(GraphicsContext);
 	}
 
 	// --------------------------------- Shadow Map ----------------------------------
@@ -363,9 +365,9 @@ void PbrRenderer::RenderScene()
 		
 		m_Scene.Models[i].UpdateConstants();
 
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].m_MeshConstants);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].Constants);
 
-		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
+		m_Scene.Models[i].Draw(GraphicsContext);
 
 	}
 
@@ -400,9 +402,6 @@ void PbrRenderer::RenderScene()
 	for (int i = 0; i < m_Scene.Models.size(); i++)
 	{
 		{
-			m_MaterialConstants[i].gMatIndex = i;
-		}
-		{
 			m_Scene.Models[i].UpdateConstants();
 			Matrix4 T(
 				{ 0.5f, 0.0f, 0.0f, 0.0f },
@@ -413,25 +412,27 @@ void PbrRenderer::RenderScene()
 			//m_MeshConstants[i].ViewProjTex = viewProjTex;
 
 		}
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].m_MeshConstants);
-		GraphicsContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_MaterialConstants[i]);
+		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].Constants);
 
-		m_Scene.Models[i].Draw(GraphicsContext.GetCommandList());
+		m_Scene.Models[i].Draw(GraphicsContext);
 	}   
 
 
-	GraphicsContext.SetDynamicConstantBufferView(kMaterialConstants, sizeof(MaterialConstants), &m_EnvMapAttribs);
+	GraphicsContext.SetDynamicConstantBufferView(
+		kMaterialConstants,
+		sizeof(EnvMapRenderer::RenderAttribs),
+		&m_EnvMapAttribs);
 
 	GraphicsContext.SetRootSignature(s_RootSig);
 	GraphicsContext.SetPipelineState(s_SkyboxPSO);
-	m_SkyBox.model.Draw(GraphicsContext.GetCommandList(), true);
+	m_SkyBox.model.Draw(GraphicsContext, false);
 
 	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 
 	// ------------------------- postprocess -----------------------
 	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Renderer::s_TextureHeap.GetHeapPointer());
+	ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
 	ComputeContext.SetRootSignature(s_ComputeRootSig);
 	ComputeContext.SetPipelineState(s_PostProcessPSO);
 	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -448,22 +449,38 @@ void PbrRenderer::RenderScene()
 	ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
 	ImGui::End();
+    if (blockEditorUi)
+        ImGui::EndDisabled();
 	
 	
 
 	ImGui::Begin("ViewPort");
+    GameCore::g_ViewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+    GameCore::g_ViewportCapturingMouse = GameCore::g_ViewportHovered && GameInput::IsPressed(GameInput::kMouse1);
 
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-
-	if (viewportPanelSize.x != g_RendererSize.x || viewportPanelSize.y != g_RendererSize.y)
-	{
-		g_RendererSize = { viewportPanelSize.x , viewportPanelSize.y };
-		m_Camera.SetAspectRatio(g_RendererSize.y / g_RendererSize.x);
-	}
+    constexpr float kRenderAspect = 16.0f / 9.0f;
+    const float panelAspect = (viewportPanelSize.y > 0.0f) ? (viewportPanelSize.x / viewportPanelSize.y) : kRenderAspect;
+    ImVec2 uv0(0.0f, 0.0f);
+    ImVec2 uv1(1.0f, 1.0f);
+    if (panelAspect > kRenderAspect)
+    {
+        const float visibleV = kRenderAspect / panelAspect;
+        const float cropV = (1.0f - visibleV) * 0.5f;
+        uv0.y = cropV;
+        uv1.y = 1.0f - cropV;
+    }
+    else if (panelAspect < kRenderAspect)
+    {
+        const float visibleU = panelAspect / kRenderAspect;
+        const float cropU = (1.0f - visibleU) * 0.5f;
+        uv0.x = cropU;
+        uv1.x = 1.0f - cropU;
+    }
 	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_PostProcessBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	auto texID = (ImTextureID)m_BackBufferHandle[g_CurrentBuffer].GetGpuPtr();
-	ImGui::Image(texID, viewportPanelSize);
+	ImGui::Image(texID, viewportPanelSize, uv0, uv1);
 	ImGui::End();
 	
 
@@ -472,7 +489,6 @@ void PbrRenderer::RenderScene()
 	GraphicsContext.TransitionResource(
 		g_DisplayPlane[g_CurrentBuffer],
 		D3D12_RESOURCE_STATE_PRESENT);
-
 
 	ImGui::Render();
 
@@ -498,6 +514,14 @@ void PbrRenderer::UpdateUI()
 void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 {
 	ComputeContext& ComputeContext = ComputeContext::Begin(L"PrecomputeCubemaps");
+    const auto CeilDiv = [](UINT value, UINT divisor) -> UINT
+    {
+        return (value + divisor - 1) / divisor;
+    };
+    const auto MipSize = [](UINT baseSize, UINT level) -> UINT
+    {
+        return std::max(1u, baseSize >> level);
+    };
 
 	__declspec(align(256)) struct ShaderParams
 	{
@@ -543,32 +567,34 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 
 	{
 
-		ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Renderer::s_TextureHeap.GetHeapPointer());
+		ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
 
 		ComputeContext.SetRootSignature(s_ComputeRootSig);
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["EquirectToCube"]);
 
 		ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		ComputeContext.SetDynamicDescriptor(0, 0, g_IBLTexture.GetSRV());
+		ComputeContext.SetDynamicDescriptor(0, 0, g_TextureManager.Get(g_IBLTexture).GetSRV());
 		ComputeContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[0]);
 		ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
-		ComputeContext.Dispatch(16, 16, 6);
+		ComputeContext.Dispatch(CeilDiv(g_EnvirMap.GetWidth(), 32), CeilDiv(g_EnvirMap.GetHeight(), 32), 6);
 
 
 		//// =======================  Generic MipMap
 		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["GenerateMipMap"]);
 	
-		for (UINT level = 1, size = 256; level < 10; ++level, size /= 2)
+        const UINT envMipLevels = g_EnvirMap.GetResource()->GetDesc().MipLevels;
+		for (UINT level = 1; level < envMipLevels; ++level)
 		{
 			ComputeContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[level]);
 
-			const UINT numGroups = std::max(1u, size / 32);
-			shaderParams.param0 = size;
+            const UINT mipWidth = MipSize(g_EnvirMap.GetWidth(), level);
+            const UINT mipHeight = MipSize(g_EnvirMap.GetHeight(), level);
 			shaderParams.param1 = level - 1;
+			shaderParams.param0 = mipWidth;
 			ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
-			ComputeContext.Dispatch(numGroups, numGroups, 6);
+			ComputeContext.Dispatch(CeilDiv(mipWidth, 32), CeilDiv(mipHeight, 32), 6);
 
 			ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		}
@@ -584,14 +610,15 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 
 		const UINT levels = g_RadianceMap.GetResource()->GetDesc().MipLevels;
 		const float deltaRoughness = 1.0f / std::max(float(levels - 1), (float)1);
-		for (UINT level = 0, size = 256; level < levels; ++level, size /= 2)
+		for (UINT level = 0; level < levels; ++level)
 		{
-			const UINT numGroups = std::max<UINT>(1, size / 32);
+            const UINT mipWidth = MipSize(g_RadianceMap.GetWidth(), level);
+            const UINT mipHeight = MipSize(g_RadianceMap.GetHeight(), level);
 			const float spmapRoughness = level * deltaRoughness;
 			ComputeContext.SetDynamicDescriptor(1, 0, g_RadianceMap.GetUAVArray()[level]);
 			shaderParams.param0 = spmapRoughness;
 			ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
-			ComputeContext.Dispatch(numGroups, numGroups, 6);
+			ComputeContext.Dispatch(CeilDiv(mipWidth, 32), CeilDiv(mipHeight, 32), 6);
 
 			ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		}
@@ -611,7 +638,7 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		ComputeContext.SetDynamicDescriptor(1, 0, g_IrradianceMap.GetUAV());
 		ComputeContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		ComputeContext.Dispatch(2, 2, 6);
+		ComputeContext.Dispatch(CeilDiv(g_IrradianceMap.GetWidth(), 32), CeilDiv(g_IrradianceMap.GetHeight(), 32), 6);
 		ComputeContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 		
@@ -623,7 +650,7 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		ComputeContext.SetDynamicDescriptor(1, 0, g_LUT.GetUAV());
 		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		ComputeContext.Dispatch(512/32, 512/32, 1);
+		ComputeContext.Dispatch(CeilDiv(g_LUT.GetWidth(), 32), CeilDiv(g_LUT.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	}	
@@ -633,7 +660,7 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["emu"]);
 		ComputeContext.SetDynamicDescriptor(1, 0, g_Emu.GetUAV());
 		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.Dispatch(CeilDiv(g_Emu.GetWidth(), 32), CeilDiv(g_Emu.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}	
 		
@@ -642,7 +669,7 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 
 		ComputeContext.SetDynamicDescriptor(1, 0, g_Eavg.GetUAV());
 		ComputeContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.Dispatch(CeilDiv(g_Eavg.GetWidth(), 32), CeilDiv(g_Eavg.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 
@@ -651,7 +678,7 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 
 		ComputeContext.SetDynamicDescriptor(1, 0, g_SSSDiffuseLut.GetUAV());
 		ComputeContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.Dispatch(CeilDiv(g_SSSDiffuseLut.GetWidth(), 32), CeilDiv(g_SSSDiffuseLut.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 
@@ -660,7 +687,7 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 
 		ComputeContext.SetDynamicDescriptor(1, 0, g_SSSSpecularLut.GetUAV());
 		ComputeContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(512 / 32, 512 / 32, 1);
+		ComputeContext.Dispatch(CeilDiv(g_SSSSpecularLut.GetWidth(), 32), CeilDiv(g_SSSSpecularLut.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 	ComputeContext.Finish();
