@@ -13,6 +13,8 @@ cbuffer GlobalConstants : register(b1)
     float3 gCameraPos;
     float pad;
     float3 gSunPosition;
+    float2 gJitter;
+    float2 gPad2;
 
 };
 
@@ -39,6 +41,7 @@ VertexOut main(VertexIn vin)
     // Transform to homogeneous clip space.
 
     vout.PosH = mul(gViewProj, mul(gModel, float4(vin.PosL, 1.0f)));
+    vout.PosH.xy += gJitter * vout.PosH.w;
 	
     return vout;
 }

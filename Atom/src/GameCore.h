@@ -23,6 +23,7 @@ namespace GameCore
 	extern bool g_IsExiting;
 	extern bool g_ViewportHovered;
 	extern bool g_ViewportCapturingMouse;
+	extern bool g_ImGuiWantsMouseCapture;
 	// frame work
 	class IGameApp
 	{

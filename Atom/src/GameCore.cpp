@@ -49,6 +49,7 @@ namespace GameCore
 	bool isResize = false;
     bool g_ViewportHovered = false;
     bool g_ViewportCapturingMouse = false;
+    bool g_ImGuiWantsMouseCapture = false;
 
 	HWND g_hWnd = nullptr;
 	void InitializeApplication(IGameApp& game)

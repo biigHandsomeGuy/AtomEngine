@@ -15,24 +15,10 @@
 #include "CameraController.h"
 #include "Camera.h"
 #include "GameInput.h"
+#include "GameCore.h"
 
 using namespace Math;
 using namespace GameCore;
-
-namespace
-{
-    void SetCursorHidden(bool hidden)
-    {
-        if (hidden)
-        {
-            while (ShowCursor(FALSE) >= 0) {}
-        }
-        else
-        {
-            while (ShowCursor(TRUE) < 0) {}
-        }
-    }
-}
 
 FlyingFPSCamera::FlyingFPSCamera(Camera& camera, Vector3 worldUp) : CameraController(camera)
 {
@@ -70,15 +56,25 @@ void FlyingFPSCamera::Update(float deltaTime)
     (deltaTime);
     deltaTime *= 100;
     float timeScale = 1.0f;
+    const bool canStartMouseLook = GameCore::g_ViewportHovered && !GameCore::g_ImGuiWantsMouseCapture;
 
-
-    if (GameCore::g_ViewportHovered && GameInput::IsPressed(GameInput::kMouse1))
+    if (canStartMouseLook && GameInput::IsFirstPressed(GameInput::kMouse1))
     {
-        if (!m_CursorHidden)
+        POINT cursorPos{};
+        if (GetCursorPos(&cursorPos))
         {
-            SetCursorHidden(true);
-            m_CursorHidden = true;
+            GameInput::BeginMouseLook(cursorPos.x, cursorPos.y);
         }
+    }
+
+    if (GameInput::IsMouseLookActive() &&
+        (!GameInput::IsPressed(GameInput::kMouse1) || GameCore::g_ImGuiWantsMouseCapture))
+    {
+        GameInput::EndMouseLook();
+    }
+
+    if (GameInput::IsMouseLookActive())
+    {
         if (GameInput::IsFirstPressed(GameInput::kLThumbClick) || GameInput::IsFirstPressed(GameInput::kKey_lshift))
             m_FineMovement = !m_FineMovement;
 
@@ -136,15 +132,6 @@ void FlyingFPSCamera::Update(float deltaTime)
 
         m_TargetCamera.Update();
     }
-    else
-    {
-        if (m_CursorHidden)
-        {
-            SetCursorHidden(false);
-            m_CursorHidden = false;
-        }
-    }
-    
 }
 
 void FlyingFPSCamera::SetHeadingPitchAndPosition(float heading, float pitch, const Vector3& position)

@@ -64,6 +64,12 @@ private:
     std::unique_ptr<CameraController> m_CameraController;
     ShadowCamera m_SunShadowCamera;
     float mLightRotationAngle = 0.0f;
+    uint32_t m_TaaHistoryReadIndex = 0;
+    uint64_t m_FrameIndex = 0;
+    bool m_TaaHistoryValid = false;
+    bool m_LastUseTAA = false;
+    Math::Matrix4 m_PrevViewProj{ Math::kIdentity };
+    DirectX::XMFLOAT2 m_PrevJitter = { 0.0f, 0.0f };
 
     Vector3 mRotatedLightDirections{ kIdentity };
 

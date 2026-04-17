@@ -13,6 +13,7 @@ namespace Graphics
 {
 	ColorBuffer g_SceneColorBuffer;
 	ColorBuffer g_PostProcessBuffer;
+	ColorBuffer g_TAAHistoryBuffer[2];
 	DepthBuffer g_SceneDepthBuffer;
 	ColorBuffer g_SceneNormalBuffer;
 	DepthBuffer g_ShadowBuffer;
@@ -34,6 +35,8 @@ void Graphics::InitializeRenderingBuffers(uint32_t bufferWidth, uint32_t bufferH
 {
 	g_SceneColorBuffer.Create(L"Main Color Buffer", bufferWidth, bufferHeight, 1, BackBufferFormat);
 	g_PostProcessBuffer.Create(L"Main Color Buffer", bufferWidth, bufferHeight, 1, BackBufferFormat);
+	g_TAAHistoryBuffer[0].Create(L"TAA History Buffer 0", bufferWidth, bufferHeight, 1, BackBufferFormat);
+	g_TAAHistoryBuffer[1].Create(L"TAA History Buffer 1", bufferWidth, bufferHeight, 1, BackBufferFormat);
 	g_SceneDepthBuffer.Create(L"Scene Depth Buffer", bufferWidth, bufferHeight, DXGI_FORMAT_D24_UNORM_S8_UINT);
 	g_SceneNormalBuffer.Create(L"Normals Buffer", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	g_ShadowBuffer.Create(L"Shadow Map", 2048, 2048, DXGI_FORMAT_D16_UNORM);
@@ -54,6 +57,8 @@ void Graphics::ResizeDisplayDependentBuffers(uint32_t bufferWidth, uint32_t buff
 {
 	g_SceneColorBuffer.Create(L"Main Color Buffer", bufferWidth, bufferHeight, 1, BackBufferFormat);
 	g_PostProcessBuffer.Create(L"Main Color Buffer", bufferWidth, bufferHeight, 1, BackBufferFormat);
+	g_TAAHistoryBuffer[0].Create(L"TAA History Buffer 0", bufferWidth, bufferHeight, 1, BackBufferFormat);
+	g_TAAHistoryBuffer[1].Create(L"TAA History Buffer 1", bufferWidth, bufferHeight, 1, BackBufferFormat);
 
 	g_SceneDepthBuffer.Create(L"Scene Depth Buffer", bufferWidth, bufferHeight, DXGI_FORMAT_D24_UNORM_S8_UINT);
 	g_SceneNormalBuffer.Create(L"Normals Buffer", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
@@ -67,6 +72,8 @@ void Graphics::DestroyRenderingBuffers()
 {
 	g_SceneColorBuffer.Destroy();
 	g_PostProcessBuffer.Destroy();
+	g_TAAHistoryBuffer[0].Destroy();
+	g_TAAHistoryBuffer[1].Destroy();
 	g_SceneDepthBuffer.Destroy();
 	g_SceneNormalBuffer.Destroy();
 	g_ShadowBuffer.Destroy();

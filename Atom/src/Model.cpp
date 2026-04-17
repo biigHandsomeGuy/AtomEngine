@@ -157,7 +157,12 @@ static XMFLOAT4 ReadVec4(const tinygltf::Model& model, const tinygltf::Accessor&
     return XMFLOAT4(ptr[0], ptr[1], ptr[2], ptr[3]);
 }
 
-static void LoadPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& primitive, MeshAsset& mesh)
+static void LoadPrimitive(
+    const tinygltf::Model& model,
+    const tinygltf::Primitive& primitive,
+    MeshAsset& mesh,
+    bool& needsNormalRebuild,
+    bool& needsTangentRebuild)
 {
     const auto& posAcc = model.accessors[primitive.attributes.at("POSITION")];
     const tinygltf::Accessor* normAcc = nullptr;
@@ -172,7 +177,12 @@ static void LoadPrimitive(const tinygltf::Model& model, const tinygltf::Primitiv
     if (primitive.attributes.contains("TANGENT"))
         tangentAcc = &model.accessors[primitive.attributes.at("TANGENT")];
 
-    uint32_t vertexCount = static_cast<uint32_t>(posAcc.count);
+    needsNormalRebuild = needsNormalRebuild || (normAcc == nullptr);
+    needsTangentRebuild = needsTangentRebuild || (tangentAcc == nullptr);
+
+    const uint32_t vertexBase = static_cast<uint32_t>(mesh.Vertices.size());
+    const uint32_t indexBase = static_cast<uint32_t>(mesh.Indices.size());
+    const uint32_t vertexCount = static_cast<uint32_t>(posAcc.count);
 
     for (uint32_t i = 0; i < vertexCount; i++)
     {
@@ -196,40 +206,50 @@ static void LoadPrimitive(const tinygltf::Model& model, const tinygltf::Primitiv
         mesh.Vertices.push_back(v);
     }
 
-    const auto& idxAcc = model.accessors[primitive.indices];
-    const auto& view = model.bufferViews[idxAcc.bufferView];
-    const auto& buffer = model.buffers[view.buffer];
-    const uint8_t* data = buffer.data.data() + view.byteOffset + idxAcc.byteOffset;
-
-    for (size_t i = 0; i < idxAcc.count; i++)
+    uint32_t primitiveIndexCount = 0;
+    if (primitive.indices >= 0)
     {
-        uint32_t index = 0;
+        const auto& idxAcc = model.accessors[primitive.indices];
+        const auto& view = model.bufferViews[idxAcc.bufferView];
+        const auto& buffer = model.buffers[view.buffer];
+        const uint8_t* data = buffer.data.data() + view.byteOffset + idxAcc.byteOffset;
+        primitiveIndexCount = static_cast<uint32_t>(idxAcc.count);
 
-        switch (idxAcc.componentType)
+        for (size_t i = 0; i < idxAcc.count; i++)
         {
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-            index = reinterpret_cast<const uint16_t*>(data)[i];
-            break;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-            index = reinterpret_cast<const uint32_t*>(data)[i];
-            break;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-            index = reinterpret_cast<const uint8_t*>(data)[i];
-            break;
-        default:
-            break;
-        }
+            uint32_t index = 0;
 
-        mesh.Indices.push_back(index);
+            switch (idxAcc.componentType)
+            {
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+                index = reinterpret_cast<const uint16_t*>(data)[i];
+                break;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+                index = reinterpret_cast<const uint32_t*>(data)[i];
+                break;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+                index = reinterpret_cast<const uint8_t*>(data)[i];
+                break;
+            default:
+                break;
+            }
+
+            mesh.Indices.push_back(index + vertexBase);
+        }
+    }
+    else
+    {
+        // glTF primitive can be non-indexed; build a sequential index buffer.
+        primitiveIndexCount = vertexCount;
+        for (uint32_t i = 0; i < vertexCount; ++i)
+            mesh.Indices.push_back(vertexBase + i);
     }
 
     SubMesh sub{};
-    sub.IndexOffset = 0;
-    sub.IndexCount = static_cast<uint32_t>(mesh.Indices.size());
-    sub.MaterialIndex = primitive.material >= 0 ? primitive.material : 0;
+    sub.IndexOffset = indexBase;
+    sub.IndexCount = primitiveIndexCount;
+    sub.MaterialIndex = primitive.material >= 0 ? static_cast<uint32_t>(primitive.material) : 0;
     mesh.SubMeshes.push_back(sub);
-
-    RebuildVertexNormalsAndTangents(mesh, normAcc == nullptr, tangentAcc == nullptr);
 }
 
 static void CreateBuffer(ID3D12Resource** resource, const void* data, uint64_t size)
@@ -384,10 +404,12 @@ static void LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
 
         auto loadTex = [&](int texIndex, bool srgb)
         {
-            if (texIndex < 0)
+            if (texIndex < 0 || texIndex >= static_cast<int>(model.textures.size()))
                 return INVALID_TEXTURE;
 
             const auto& tex = model.textures[texIndex];
+            if (tex.source < 0 || tex.source >= static_cast<int>(model.images.size()))
+                return INVALID_TEXTURE;
             const auto& img = model.images[tex.source];
 
             if (!img.image.empty())
@@ -412,10 +434,14 @@ static void LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
     {
         MeshAsset meshAsset{};
         meshAsset.Name = mesh.name;
+        bool needsNormalRebuild = false;
+        bool needsTangentRebuild = false;
 
         for (const auto& primitive : mesh.primitives)
-            LoadPrimitive(model, primitive, meshAsset);
+            LoadPrimitive(model, primitive, meshAsset, needsNormalRebuild, needsTangentRebuild);
 
+        // Rebuild once after all primitives are merged into one mesh.
+        RebuildVertexNormalsAndTangents(meshAsset, needsNormalRebuild, needsTangentRebuild);
         asset.Meshes.push_back(std::move(meshAsset));
     }
 
@@ -440,23 +466,29 @@ void Model::Draw(GraphicsContext& context, bool bindMaterialData)
     for (size_t i = 0; i < GPU.Meshes.size(); i++)
     {
         const auto& mesh = GPU.Meshes[i];
-        const auto& sub = Asset->Meshes[i].SubMeshes[0];
-        const MaterialGPU& mat = GPU.Materials[sub.MaterialIndex];
-
-        if (bindMaterialData)
-        {
-            MaterialConstants materialConstants{};
-            materialConstants.BaseColorIndex = mat.BaseColorIndex;
-            materialConstants.NormalIndex = mat.NormalIndex;
-            materialConstants.RoughnessMetallicIndex = mat.RoughnessMetallicIndex;
-            materialConstants.EmissiveIndex = mat.EmissiveIndex;
-            context.SetDynamicConstantBufferView(Renderer::kMaterialConstants, sizeof(MaterialConstants), &materialConstants);
-        }
+        const auto& meshAsset = Asset->Meshes[i];
 
         context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context.GetCommandList()->IASetVertexBuffers(0, 1, &mesh.VBV);
         context.GetCommandList()->IASetIndexBuffer(&mesh.IBV);
-        context.GetCommandList()->DrawIndexedInstanced(mesh.IndexCount, 1, 0, 0, 0);
+
+        for (const auto& sub : meshAsset.SubMeshes)
+        {
+            const size_t materialIndex = sub.MaterialIndex < GPU.Materials.size() ? sub.MaterialIndex : 0;
+            const MaterialGPU& mat = GPU.Materials[materialIndex];
+
+            if (bindMaterialData)
+            {
+                MaterialConstants materialConstants{};
+                materialConstants.BaseColorIndex = mat.BaseColorIndex;
+                materialConstants.NormalIndex = mat.NormalIndex;
+                materialConstants.RoughnessMetallicIndex = mat.RoughnessMetallicIndex;
+                materialConstants.EmissiveIndex = mat.EmissiveIndex;
+                context.SetDynamicConstantBufferView(Renderer::kMaterialConstants, sizeof(MaterialConstants), &materialConstants);
+            }
+
+            context.GetCommandList()->DrawIndexedInstanced(sub.IndexCount, 1, sub.IndexOffset, 0, 0);
+        }
     }
 }
 

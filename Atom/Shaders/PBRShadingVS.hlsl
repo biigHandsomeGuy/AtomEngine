@@ -19,6 +19,8 @@ cbuffer GlobalConstants : register(b1)
     float pad;
     float3 gSunPosition;
     float pad1;
+    float2 gJitter;
+    float2 gPad2;
     
 };
 
@@ -78,6 +80,7 @@ VertexOut main(VertexIn vin)
     
     // Transform to homogeneous clip space.
     vout.PosH = mul(gViewProj, posW);
+    vout.PosH.xy += gJitter * vout.PosH.w;
     //vout.PosH = mul(gProj, mul(gView, posW));
     // Generate projective tex-coords to project SSAO map onto scene.
     //vout.SsaoPosH = mul(gViewProjTex, posW);

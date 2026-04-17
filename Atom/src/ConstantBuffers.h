@@ -21,6 +21,9 @@ __declspec(align(256)) struct GlobalConstants
     Math::Matrix4 SunShadowMatrix{ Math::kIdentity };
     Math::Vector3 CameraPos = { 0.0f, 0.0f, 0.0f };
     Math::Vector3 SunPos = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT2 Jitter = { 0.0f, 0.0f };
+    float Padding0 = 0.0f;
+    float Padding1 = 0.0f;
 };
 
 __declspec(align(256)) struct SsaoConstants
@@ -55,6 +58,10 @@ namespace PostProcess
 {
     __declspec(align(256)) struct RenderAttribs
     {
+        Math::Matrix4 InvViewProj{ Math::kIdentity };
+        Math::Matrix4 PrevViewProj{ Math::kIdentity };
+        DirectX::XMFLOAT2 CurrJitter = { 0.0f, 0.0f };
+        DirectX::XMFLOAT2 PrevJitter = { 0.0f, 0.0f };
         float exposure = 2.0f;
         bool isRenderingLuminance = false;
         char pad0[3] = { 0,0,0 };
@@ -64,5 +71,10 @@ namespace PostProcess
         char pad2[3] = { 0,0,0 };
         bool aces = true;
         char pad3[3] = { 0,0,0 };
+        bool useTAA = true;
+        char pad4[3] = { 0,0,0 };
+        bool taaHistoryValid = false;
+        char pad5[3] = { 0,0,0 };
+        float taaFeedback = 0.94f;
     };
 }

@@ -38,6 +38,18 @@ namespace
 {
 	std::unordered_map<std::string, ComputePSO> s_IBL_PSOCache;
 
+    float Halton(uint32_t index, uint32_t base)
+    {
+        float f = 1.0f;
+        float r = 0.0f;
+        while (index > 0)
+        {
+            f /= static_cast<float>(base);
+            r += f * static_cast<float>(index % base);
+            index /= base;
+        }
+        return r;
+    }
 
 }
 
@@ -140,7 +152,7 @@ void PbrRenderer::Startup()
 
 	Model skyBox, pbrModel;
 	skyBox = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/cube.glb")));
-	pbrModel = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/Sponza/Sponza.glb")));
+	pbrModel = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf")));
 	//pbrModel.
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
@@ -157,6 +169,10 @@ void PbrRenderer::OnResize()
 {
     m_Camera.SetAspectRatio(9.0f / 16.0f);
     m_Camera.Update();
+    m_TaaHistoryValid = false;
+    m_FrameIndex = 0;
+    m_PrevJitter = { 0.0f, 0.0f };
+    m_PrevViewProj = m_Camera.GetViewProjMatrix();
 }
 
 void PbrRenderer::Update(float gt)
@@ -217,6 +233,8 @@ void PbrRenderer::RenderScene()
 
 	// Submit the DockSpace
 	ImGuiIO& io = ImGui::GetIO();
+    // Only block camera RMB look while text input widgets are actively consuming input.
+    GameCore::g_ImGuiWantsMouseCapture = io.WantTextInput;
 	if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
 	{
 		ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
@@ -253,6 +271,11 @@ void PbrRenderer::RenderScene()
 	ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
 	ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
 	ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
+    ImGui::Checkbox("UseTAA", &m_ppAttribs.useTAA);
+    if (m_ppAttribs.useTAA)
+    {
+        ImGui::SliderFloat("TAA Feedback", &m_ppAttribs.taaFeedback, 0.85f, 0.99f);
+    }
 	ImGui::Checkbox("UseReinhard", &m_ppAttribs.reinhard);
 	ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
 	ImGui::Checkbox("UseAces", &m_ppAttribs.aces);
@@ -318,9 +341,28 @@ void PbrRenderer::RenderScene()
 	GraphicsContext.SetPipelineState(s_PSOs["drawNormals"]);
 
 
+    XMFLOAT2 frameJitter = { 0.0f, 0.0f };
 	{
+        if (m_ppAttribs.useTAA != m_LastUseTAA)
+        {
+            m_TaaHistoryValid = false;
+            m_FrameIndex = 0;
+            m_LastUseTAA = m_ppAttribs.useTAA;
+        }
+
 		m_SunShadowCamera.UpdateMatrix(Vector3({ 15.0f, 15.5f, -15.0f }), Vector3({10, 10, -10}), Vector3(5000, 3000, 3000),
 			(uint32_t)g_ShadowBuffer.GetWidth(), (uint32_t)g_ShadowBuffer.GetHeight(), 16);
+
+        if (m_ppAttribs.useTAA)
+        {
+            const float jitterX = Halton(static_cast<uint32_t>(m_FrameIndex & 1023u) + 1u, 2u) - 0.5f;
+            const float jitterY = Halton(static_cast<uint32_t>(m_FrameIndex & 1023u) + 1u, 3u) - 0.5f;
+            const float invW = 1.0f / std::max(1.0f, g_ViewPort.Width);
+            const float invH = 1.0f / std::max(1.0f, g_ViewPort.Height);
+            // Reduce jitter amplitude to improve static stability (quarter-pixel class).
+            frameJitter.x = jitterX * invW;
+            frameJitter.y = jitterY * invH;
+        }
 
 		m_LightPassGlobalConstants.ViewMatrix = m_Camera.GetViewMatrix();
 		m_LightPassGlobalConstants.ProjMatrix = m_Camera.GetProjMatrix();
@@ -328,6 +370,7 @@ void PbrRenderer::RenderScene()
 		m_LightPassGlobalConstants.SunShadowMatrix = m_SunShadowCamera.GetShadowMatrix();
 		m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition();
 		m_LightPassGlobalConstants.SunPos = {15,15,-15};
+        m_LightPassGlobalConstants.Jitter = frameJitter;
 
 	}
 	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
@@ -353,6 +396,7 @@ void PbrRenderer::RenderScene()
 	{
 		
 		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetViewProjMatrix();
+        m_ShadowPassGlobalConstants.Jitter = { 0.0f, 0.0f };
 	}
 
 	GraphicsContext.SetRootSignature(s_RootSig);
@@ -431,19 +475,54 @@ void PbrRenderer::RenderScene()
 
 
 	// ------------------------- postprocess -----------------------
+    const uint32_t taaReadIndex = m_TaaHistoryReadIndex & 1u;
+    const uint32_t taaWriteIndex = (taaReadIndex + 1u) & 1u;
+    m_ppAttribs.taaHistoryValid = m_ppAttribs.useTAA && m_TaaHistoryValid;
+    m_ppAttribs.InvViewProj = Math::Invert(m_LightPassGlobalConstants.ViewProjMatrix);
+    m_ppAttribs.PrevViewProj = m_TaaHistoryValid ? m_PrevViewProj : m_LightPassGlobalConstants.ViewProjMatrix;
+    m_ppAttribs.CurrJitter = frameJitter;
+    m_ppAttribs.PrevJitter = m_TaaHistoryValid ? m_PrevJitter : frameJitter;
+
 	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    ComputeContext.TransitionResource(g_TAAHistoryBuffer[taaReadIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
 	ComputeContext.SetRootSignature(s_ComputeRootSig);
 	ComputeContext.SetPipelineState(s_PostProcessPSO);
 	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize, g_PostProcessBuffer.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize, g_TAAHistoryBuffer[taaReadIndex].GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 2, g_SceneDepthBuffer.GetDepthSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 3, g_PostProcessBuffer.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	ComputeContext.SetDescriptorTable(0, g_PostProcessTexture);
-	ComputeContext.SetDescriptorTable(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize);
-	ComputeContext.SetDynamicConstantBufferView(2, sizeof(EnvMapRenderer::RenderAttribs), &m_ppAttribs);
-	int width = g_PostProcessBuffer.GetWidth() / 8;
-	int height = g_PostProcessBuffer.GetHeight() / 8;
+	ComputeContext.SetDescriptorTable(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 3);
+	ComputeContext.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
+	int width = (g_PostProcessBuffer.GetWidth() + 7) / 8;
+	int height = (g_PostProcessBuffer.GetHeight() + 7) / 8;
 	ComputeContext.Dispatch(width, height);
+
+    ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    ComputeContext.TransitionResource(g_TAAHistoryBuffer[taaWriteIndex], D3D12_RESOURCE_STATE_COPY_DEST);
+    ComputeContext.GetCommandList()->CopyResource(
+        g_TAAHistoryBuffer[taaWriteIndex].GetResource(),
+        g_PostProcessBuffer.GetResource());
+
 	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    ComputeContext.TransitionResource(g_TAAHistoryBuffer[taaWriteIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+
+    if (m_ppAttribs.useTAA)
+    {
+        m_TaaHistoryReadIndex = taaWriteIndex;
+        m_TaaHistoryValid = true;
+        m_PrevViewProj = m_LightPassGlobalConstants.ViewProjMatrix;
+        m_PrevJitter = frameJitter;
+        ++m_FrameIndex;
+    }
+    else
+    {
+        m_TaaHistoryValid = false;
+        m_FrameIndex = 0;
+        m_PrevViewProj = m_LightPassGlobalConstants.ViewProjMatrix;
+        m_PrevJitter = { 0.0f, 0.0f };
+    }
 
 
 	ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
@@ -455,9 +534,6 @@ void PbrRenderer::RenderScene()
 	
 
 	ImGui::Begin("ViewPort");
-    GameCore::g_ViewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
-    GameCore::g_ViewportCapturingMouse = GameCore::g_ViewportHovered && GameInput::IsPressed(GameInput::kMouse1);
-
 	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
     constexpr float kRenderAspect = 16.0f / 9.0f;
     const float panelAspect = (viewportPanelSize.y > 0.0f) ? (viewportPanelSize.x / viewportPanelSize.y) : kRenderAspect;
@@ -479,8 +555,10 @@ void PbrRenderer::RenderScene()
     }
 	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_PostProcessBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	auto texID = (ImTextureID)m_BackBufferHandle[g_CurrentBuffer].GetGpuPtr();
+    auto texID = (ImTextureID)m_BackBufferHandle[g_CurrentBuffer].GetGpuPtr();
 	ImGui::Image(texID, viewportPanelSize, uv0, uv1);
+    GameCore::g_ViewportHovered = ImGui::IsItemHovered();
+    GameCore::g_ViewportCapturingMouse = GameInput::IsMouseLookActive();
 	ImGui::End();
 	
 

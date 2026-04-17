@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Renderer.h"
 #include "TextureManager.h"
 #include "GraphicsCore.h"
@@ -64,7 +64,7 @@ namespace Renderer
     static void CreateComputeRootSignature()
     {
         s_ComputeRootSig.Reset(3, 4);
-        s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1);
+        s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 3);
         s_ComputeRootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
         s_ComputeRootSig[2].InitAsConstantBuffer(0);
 
@@ -160,7 +160,7 @@ namespace Renderer
     void Initialize(void)
     {
         m_CommonTextures = Graphics::g_BindlessHeap.Alloc(10);
-        g_PostProcessTexture = Graphics::g_BindlessHeap.Alloc(2);
+        g_PostProcessTexture = Graphics::g_BindlessHeap.Alloc(4);
         g_SSAOSrvHeap = Graphics::g_BindlessHeap.Alloc(4);
         g_SSAOUavHeap = Graphics::g_BindlessHeap.Alloc(1);
         g_NullDescriptor = Graphics::g_BindlessHeap.Alloc(1);
@@ -212,3 +212,4 @@ namespace Renderer
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
 }
+

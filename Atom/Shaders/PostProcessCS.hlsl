@@ -1,15 +1,24 @@
 #include "Common.hlsli"
 
 Texture2D ScreenTexture : register(t0);
+Texture2D HistoryTexture : register(t1);
+Texture2D<float> DepthTexture : register(t2);
 RWTexture2D<float4> OutTexture : register(u0);
 
 cbuffer MaterialConstants : register(b0)
 {
+    float4x4 InvViewProj;
+    float4x4 PrevViewProj;
+    float2 CurrJitter;
+    float2 PrevJitter;
     float exposure;
     bool UseFXAA;
     bool UseReinhard;
     bool UseFilmic;
     bool UseAces;
+    bool UseTAA;
+    bool TAAHistoryValid;
+    float TAAFeedback;
 }
 
 #define FXAA_EDGE_THRESHOLD      (1.0/8.0)
@@ -85,6 +94,43 @@ float4 ACESFilm(float4 x)
     return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
+float3 ApplyToneMapping(float3 inColor)
+{
+    float4 color = float4(inColor, 1.0f);
+    if (UseReinhard)
+        color = Reinhard(color);
+    if (UseFilmic)
+        color = Filmic(color);
+    if (UseAces)
+        color = ACESFilm(color);
+    return max(color.rgb, 0.0f);
+}
+
+float2 ReprojectHistoryUv(float2 uv, float depth)
+{
+    float2 ndc;
+    ndc.x = uv.x * 2.0 - 1.0;
+    ndc.y = 1.0 - uv.y * 2.0;
+    ndc -= CurrJitter;
+
+    float4 currClip = float4(ndc, depth, 1.0);
+    float4 worldPos = mul(InvViewProj, currClip);
+    worldPos /= max(worldPos.w, 1e-6);
+
+    float4 prevClip = mul(PrevViewProj, worldPos);
+    if (prevClip.w <= 1e-6)
+    {
+        return float2(-1.0, -1.0);
+    }
+    float2 prevNdc = prevClip.xy / max(prevClip.w, 1e-6);
+    prevNdc += PrevJitter;
+
+    float2 prevUv;
+    prevUv.x = prevNdc.x * 0.5 + 0.5;
+    prevUv.y = 0.5 - prevNdc.y * 0.5;
+    return prevUv;
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
@@ -102,10 +148,70 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 
     float2 uv = (float2(pixel) + 0.5f) / screenSize;
 
-    float4 sceneColor = ScreenTexture.Sample(gsamAnisotropicClamp, uv);
-    float4 color = sceneColor;
+    float3 sceneColor = ScreenTexture.Sample(gsamAnisotropicClamp, uv).rgb;
+    float3 colorLinear = sceneColor;
 
-    if (UseFXAA)
+    if (UseTAA && TAAHistoryValid)
+    {
+        float depth = DepthTexture.Load(int3(pixel, 0));
+        float2 prevUv = ReprojectHistoryUv(uv, depth);
+        bool validPrevUv = all(prevUv >= 0.0) && all(prevUv <= 1.0) && depth < 0.999999;
+        float3 currToneMapped = ApplyToneMapping(sceneColor);
+        float3 historyColor = currToneMapped;
+        if (validPrevUv)
+        {
+            historyColor = HistoryTexture.Sample(gsamAnisotropicClamp, prevUv).rgb;
+            historyColor = pow(saturate(historyColor), 2.2);
+        }
+
+        // Neighborhood clamp to reduce ghost trails without motion vectors.
+        float3 minC = currToneMapped;
+        float3 maxC = currToneMapped;
+        float3 m1 = 0.0;
+        float3 m2 = 0.0;
+        [unroll]
+        for (int y = -1; y <= 1; ++y)
+        {
+            [unroll]
+            for (int x = -1; x <= 1; ++x)
+            {
+                float3 n = ApplyToneMapping(FxaaTexOff(ScreenTexture, uv, int2(x, y)).rgb);
+                minC = min(minC, n);
+                maxC = max(maxC, n);
+                m1 += n;
+                m2 += n * n;
+            }
+        }
+        if (validPrevUv)
+        {
+            historyColor = clamp(historyColor, minC, maxC);
+            float3 mean = m1 / 9.0;
+            float3 sigma = sqrt(max(m2 / 9.0 - mean * mean, 0.0));
+            historyColor = clamp(historyColor, mean - 1.25 * sigma, mean + 1.25 * sigma);
+        }
+
+        const float2 motionPx2 = abs(prevUv - uv) * screenSize;
+        const float motionPx = max(motionPx2.x, motionPx2.y);
+        const float motionBlend = saturate(motionPx / 1.25f);
+
+        const float lumaCurr = GetLuminance(currToneMapped);
+        const float lumaHist = GetLuminance(historyColor);
+        const float chromaDiff = max(max(abs(currToneMapped.r - historyColor.r), abs(currToneMapped.g - historyColor.g)), abs(currToneMapped.b - historyColor.b));
+        const float lumaDiff = abs(lumaCurr - lumaHist);
+        // Keep static regions stable: suppress reject when motion is near zero.
+        const float rejectScale = lerp(0.20f, 1.0f, motionBlend);
+        const float rejectBase = max(chromaDiff * 1.8f, lumaDiff * 2.0f);
+        const float reject = validPrevUv ? saturate(rejectBase * rejectScale) : 1.0f;
+
+        // Dual feedback: high accumulation when static, lower accumulation while moving.
+        const float staticFeedback = saturate(max(TAAFeedback, 0.95f));
+        const float dynamicFeedback = saturate(TAAFeedback * 0.60f);
+        const float feedback = lerp(staticFeedback, dynamicFeedback, motionBlend);
+        const float historyWeight = feedback * (1.0f - reject);
+        colorLinear = lerp(currToneMapped, historyColor, historyWeight);
+    }
+
+    if (UseFXAA && !UseTAA)
     {
         // SEARCH MAP
         float3 rgbN = FxaaTexOff(ScreenTexture, uv, int2(0, -1)).xyz;
@@ -126,7 +232,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 
         if (range < max(FXAA_EDGE_THRESHOLD_MIN, rangeMax * FXAA_EDGE_THRESHOLD))
         {
-            color = float4(FxaaFilterReturn(rgbM), 1.0f);
+            colorLinear = FxaaFilterReturn(rgbM);
         }
         else
         {
@@ -248,18 +354,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
                 uv.x + (horzSpan ? 0.0 : subPixelOffset),
                 uv.y + (horzSpan ? subPixelOffset : 0.0))).xyz;
 
-            color = float4(FxaaFilterReturn(FxaaLerp3(rgbL, rgbF, blendL)), 1.0f);
+            colorLinear = FxaaFilterReturn(FxaaLerp3(rgbL, rgbF, blendL));
         }
     }
 
-    if (UseReinhard)
-        color = Reinhard(color);
-    if (UseFilmic)
-        color = Filmic(color);
-    if (UseAces)
-        color = ACESFilm(color);
+    if (!UseTAA)
+    {
+        colorLinear = ApplyToneMapping(colorLinear);
+    }
 
-    color = pow(color, 1 / 2.2);
+    float3 outColor = pow(max(colorLinear, 0.0f), 1.0 / 2.2);
 
-    OutTexture[pixel] = color;
+    OutTexture[pixel] = float4(outColor, 1.0f);
 }
