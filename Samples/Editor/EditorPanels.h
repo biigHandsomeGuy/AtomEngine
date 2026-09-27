@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Scene.h"
+#include "EditorCommandHistory.h"
 
 namespace AtomEditor
 {
@@ -20,10 +21,10 @@ namespace AtomEditor
     };
 
     void Initialize(UiState& state);
-    void DrawSceneHierarchy(Scene& scene, UiState& state);
-    void DrawInspector(Scene& scene, UiState& state);
-    void DrawContentBrowser(Scene& scene, UiState& state);
+    void DrawSceneHierarchy(Scene& scene, UiState& state, CommandHistory& history);
+    void DrawInspector(Scene& scene, UiState& state, CommandHistory& history);
+    void DrawContentBrowser(Scene& scene, UiState& state, CommandHistory& history);
 
-    bool OpenSceneDialog(Scene& scene, UiState& state);
+    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history);
     bool SaveSceneDialog(const Scene& scene, UiState& state);
 }

@@ -11,5 +11,6 @@
   <ItemGroup>
     <ClInclude Include="..\PBR\PbrRenderer.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="EditorPanels.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="EditorCommandHistory.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
 </Project>

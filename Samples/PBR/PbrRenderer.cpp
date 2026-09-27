@@ -424,10 +424,20 @@ void PbrRenderer::RenderScene()
 
 	if (ImGui::BeginMenuBar())
 	{
+		if (ImGui::BeginMenu("Edit"))
+		{
+			const bool canUndo = m_EditorHistory.CanUndo();
+			const bool canRedo = m_EditorHistory.CanRedo();
+			if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo))
+				m_EditorHistory.Undo(m_Scene);
+			if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo))
+				m_EditorHistory.Redo(m_Scene);
+			ImGui::EndMenu();
+		}
 		if (ImGui::BeginMenu("File"))
 		{
 			if (ImGui::MenuItem("Open Scene..."))
-				AtomEditor::OpenSceneDialog(m_Scene, m_EditorUi);
+				AtomEditor::OpenSceneDialog(m_Scene, m_EditorUi, m_EditorHistory);
 			if (ImGui::MenuItem("Save Scene As..."))
 				AtomEditor::SaveSceneDialog(m_Scene, m_EditorUi);
 			ImGui::Separator();
@@ -439,6 +449,12 @@ void PbrRenderer::RenderScene()
 
 		ImGui::EndMenuBar();
 	}
+	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Z, false))
+		m_EditorHistory.Undo(m_Scene);
+	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Y, false))
+		m_EditorHistory.Redo(m_Scene);
+	if (m_Scene.FindModel(m_EditorUi.SelectedEntity) == nullptr)
+		m_EditorUi.SelectedEntity = m_Scene.Models.empty() ? InvalidEntityId : m_Scene.Models.front().Id;
 
 	
 	static float f = 0.0f;
@@ -493,9 +509,9 @@ void PbrRenderer::RenderScene()
 		ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);
 		ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);
 	}
-	AtomEditor::DrawSceneHierarchy(m_Scene, m_EditorUi);
-	AtomEditor::DrawInspector(m_Scene, m_EditorUi);
-	AtomEditor::DrawContentBrowser(m_Scene, m_EditorUi);
+	AtomEditor::DrawSceneHierarchy(m_Scene, m_EditorUi, m_EditorHistory);
+	AtomEditor::DrawInspector(m_Scene, m_EditorUi, m_EditorHistory);
+	AtomEditor::DrawContentBrowser(m_Scene, m_EditorUi, m_EditorHistory);
 
 
 	UINT PrevBufferIndex = (g_CurrentBuffer + 3 - 1) % 3;

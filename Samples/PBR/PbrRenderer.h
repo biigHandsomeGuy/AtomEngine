@@ -89,6 +89,7 @@ private:
 
     Scene m_Scene;
     AtomEditor::UiState m_EditorUi;
+    AtomEditor::CommandHistory m_EditorHistory;
     RenderGraph m_GeometryGraph;
     RenderGraph m_LightingGraph;
     RenderGraph m_PostProcessGraphs[2];

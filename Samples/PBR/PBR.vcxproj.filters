@@ -29,5 +29,8 @@
     <ClInclude Include="..\Editor\EditorPanels.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\Editor\EditorCommandHistory.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -14,6 +14,8 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <memory>
+#include <optional>
 #include <system_error>
 #include <unordered_set>
 
@@ -47,6 +49,34 @@ namespace
         const float roll = std::atan2(2.0f * (q.w * q.z + q.x * q.y), 1.0f - 2.0f * (q.x * q.x + q.z * q.z));
         constexpr float toDegrees = 180.0f / DirectX::XM_PI;
         return { pitch * toDegrees, yaw * toDegrees, roll * toDegrees };
+    }
+
+    struct TransformSnapshot
+    {
+        DirectX::XMFLOAT3 Translation{};
+        DirectX::XMFLOAT4 Rotation{};
+        float Scale = 1.0f;
+    };
+
+    TransformSnapshot CaptureTransform(const Model& model)
+    {
+        const auto translation = model.Transform.transform.GetTranslation();
+        TransformSnapshot snapshot;
+        snapshot.Translation = { translation.GetX(), translation.GetY(), translation.GetZ() };
+        DirectX::XMStoreFloat4(&snapshot.Rotation, static_cast<DirectX::XMVECTOR>(model.Transform.transform.GetRotation()));
+        snapshot.Scale = model.Transform.scale;
+        return snapshot;
+    }
+
+    void ApplyTransform(Scene& scene, EntityId id, const TransformSnapshot& snapshot)
+    {
+        if (Model* model = scene.FindModel(id))
+        {
+            model->Transform.transform.SetTranslation(Math::Vector3(snapshot.Translation.x, snapshot.Translation.y, snapshot.Translation.z));
+            model->Transform.transform.SetRotation(Math::Quaternion(DirectX::XMVectorSet(
+                snapshot.Rotation.x, snapshot.Rotation.y, snapshot.Rotation.z, snapshot.Rotation.w)));
+            model->Transform.scale = snapshot.Scale;
+        }
     }
 
     std::filesystem::path AssetPathForDocument(const Model& model)
@@ -254,7 +284,7 @@ namespace AtomEditor
         RefreshEntries(state);
     }
 
-    void DrawSceneHierarchy(Scene& scene, UiState& state)
+    void DrawSceneHierarchy(Scene& scene, UiState& state, CommandHistory& history)
     {
         ImGui::Begin("Scene Hierarchy");
         for (size_t i = 0; i < scene.Models.size(); ++i)
@@ -268,15 +298,32 @@ namespace AtomEditor
             state.SelectedEntity = InvalidEntityId;
         if (state.SelectedEntity != InvalidEntityId && ImGui::Button("Delete selected"))
         {
-            const auto selected = std::find_if(scene.Models.begin(), scene.Models.end(), [&state](const Model& model) { return model.Id == state.SelectedEntity; });
+            const EntityId removedId = state.SelectedEntity;
+            const auto selected = std::find_if(scene.Models.begin(), scene.Models.end(), [removedId](const Model& model) { return model.Id == removedId; });
             const size_t selectedIndex = static_cast<size_t>(std::distance(scene.Models.begin(), selected));
-            scene.RemoveModel(state.SelectedEntity);
+            auto removedModel = std::make_shared<std::optional<Model>>(scene.ExtractModel(removedId));
+            if (removedModel->has_value())
+            {
+                history.RecordApplied("Delete model",
+                    [removedModel, selectedIndex](Scene& target)
+                    {
+                        if (removedModel->has_value())
+                        {
+                            target.InsertModel(selectedIndex, std::move(removedModel->value()));
+                            removedModel->reset();
+                        }
+                    },
+                    [removedModel, removedId](Scene& target)
+                    {
+                        *removedModel = target.ExtractModel(removedId);
+                    });
+            }
             state.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models[std::min(selectedIndex, scene.Models.size() - 1)].Id;
         }
         ImGui::End();
     }
 
-    void DrawInspector(Scene& scene, UiState& state)
+    void DrawInspector(Scene& scene, UiState& state, CommandHistory& history)
     {
         ImGui::Begin("Inspector");
         Model* selectedModel = scene.FindModel(state.SelectedEntity);
@@ -288,21 +335,90 @@ namespace AtomEditor
         }
 
         auto& model = *selectedModel;
+        static EntityId pendingNameEntity = InvalidEntityId;
+        static std::string initialName;
+        static EntityId pendingTransformEntity = InvalidEntityId;
+        static TransformSnapshot initialTransform;
+
         char name[256]{};
         strncpy_s(name, model.InstanceName.c_str(), _TRUNCATE);
-        if (ImGui::InputText("Name", name, sizeof(name)))
+        const bool nameChanged = ImGui::InputText("Name", name, sizeof(name));
+        if (ImGui::IsItemActivated())
+        {
+            pendingNameEntity = model.Id;
+            initialName = model.InstanceName;
+        }
+        if (nameChanged)
             model.InstanceName = name;
+        if (ImGui::IsItemDeactivatedAfterEdit() && pendingNameEntity == model.Id)
+        {
+            const EntityId id = model.Id;
+            const std::string finalName = model.InstanceName;
+            const std::string originalName = initialName;
+            history.RecordApplied("Rename model",
+                [id, originalName](Scene& target) { if (Model* item = target.FindModel(id)) item->InstanceName = originalName; },
+                [id, finalName](Scene& target) { if (Model* item = target.FindModel(id)) item->InstanceName = finalName; });
+            pendingNameEntity = InvalidEntityId;
+        }
         ImGui::SeparatorText("Transform");
         auto translation = model.Transform.transform.GetTranslation();
         float position[3] = { translation.GetX(), translation.GetY(), translation.GetZ() };
-        if (ImGui::DragFloat3("Position", position, 0.05f))
+        const bool positionChanged = ImGui::DragFloat3("Position", position, 0.05f);
+        if (ImGui::IsItemActivated())
+        {
+            pendingTransformEntity = model.Id;
+            initialTransform = CaptureTransform(model);
+        }
+        if (positionChanged)
             model.Transform.transform.SetTranslation(Vector3(position[0], position[1], position[2]));
+        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
+        {
+            const EntityId id = model.Id;
+            const TransformSnapshot finalTransform = CaptureTransform(model);
+            const TransformSnapshot originalTransform = initialTransform;
+            history.RecordApplied("Move model",
+                [id, originalTransform](Scene& target) { ApplyTransform(target, id, originalTransform); },
+                [id, finalTransform](Scene& target) { ApplyTransform(target, id, finalTransform); });
+            pendingTransformEntity = InvalidEntityId;
+        }
 
         auto rotation = RotationToEulerDegrees(model.Transform.transform.GetRotation());
         float euler[3] = { rotation.x, rotation.y, rotation.z };
-        if (ImGui::DragFloat3("Rotation", euler, 0.5f))
+        const bool rotationChanged = ImGui::DragFloat3("Rotation", euler, 0.5f);
+        if (ImGui::IsItemActivated())
+        {
+            pendingTransformEntity = model.Id;
+            initialTransform = CaptureTransform(model);
+        }
+        if (rotationChanged)
             model.Transform.transform.SetRotation(Quaternion(DirectX::XMConvertToRadians(euler[0]), DirectX::XMConvertToRadians(euler[1]), DirectX::XMConvertToRadians(euler[2])));
+        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
+        {
+            const EntityId id = model.Id;
+            const TransformSnapshot finalTransform = CaptureTransform(model);
+            const TransformSnapshot originalTransform = initialTransform;
+            history.RecordApplied("Rotate model",
+                [id, originalTransform](Scene& target) { ApplyTransform(target, id, originalTransform); },
+                [id, finalTransform](Scene& target) { ApplyTransform(target, id, finalTransform); });
+            pendingTransformEntity = InvalidEntityId;
+        }
+
         ImGui::DragFloat("Uniform Scale", &model.Transform.scale, 0.01f, 0.001f, 10000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+        if (ImGui::IsItemActivated())
+        {
+            pendingTransformEntity = model.Id;
+            initialTransform = CaptureTransform(model);
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
+        {
+            const EntityId id = model.Id;
+            const TransformSnapshot finalTransform = CaptureTransform(model);
+            const TransformSnapshot originalTransform = initialTransform;
+            history.RecordApplied("Scale model",
+                [id, originalTransform](Scene& target) { ApplyTransform(target, id, originalTransform); },
+                [id, finalTransform](Scene& target) { ApplyTransform(target, id, finalTransform); });
+            pendingTransformEntity = InvalidEntityId;
+        }
         ImGui::SeparatorText("Model Asset");
         ImGui::Text("Meshes: %u", model.Asset ? static_cast<unsigned>(model.Asset->Meshes.size()) : 0u);
         ImGui::Text("Materials: %u", model.Asset ? static_cast<unsigned>(model.Asset->Materials.size()) : 0u);
@@ -311,7 +427,7 @@ namespace AtomEditor
         ImGui::End();
     }
 
-    void DrawContentBrowser(Scene& scene, UiState& state)
+    void DrawContentBrowser(Scene& scene, UiState& state, CommandHistory& history)
     {
         ImGui::Begin("Content Browser");
         if (ImGui::Button("Up") && state.CurrentFolder != state.ContentRoot && state.CurrentFolder.has_parent_path())
@@ -346,8 +462,21 @@ namespace AtomEditor
             auto loaded = ModelUtility::LoadGltfAsset(ToUtf8(state.SelectedAsset), &error);
             if (loaded.Asset)
             {
-                auto& importedModel = scene.AddModel(ModelUtility::CreateModel(std::move(loaded)));
-                state.SelectedEntity = importedModel.Id;
+                const size_t importedIndex = scene.Models.size();
+                auto modelPayload = std::make_shared<std::optional<Model>>();
+                Model& importedModel = scene.AddModel(ModelUtility::CreateModel(std::move(loaded)));
+                const EntityId importedId = importedModel.Id;
+                history.RecordApplied("Import model",
+                    [modelPayload, importedId](Scene& target) { *modelPayload = target.ExtractModel(importedId); },
+                    [modelPayload, importedIndex](Scene& target)
+                    {
+                        if (modelPayload->has_value())
+                        {
+                            target.InsertModel(importedIndex, std::move(modelPayload->value()));
+                            modelPayload->reset();
+                        }
+                    });
+                state.SelectedEntity = importedId;
                 SetStatus(state, "Imported " + ToUtf8(state.SelectedAsset.filename()));
             }
             else
@@ -363,7 +492,7 @@ namespace AtomEditor
         ImGui::End();
     }
 
-    bool OpenSceneDialog(Scene& scene, UiState& state)
+    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history)
     {
         std::filesystem::path path;
         if (!ShowSceneDialog(false, path))
@@ -374,6 +503,7 @@ namespace AtomEditor
             SetStatus(state, "Open failed: " + error, true);
             return false;
         }
+        history.Clear();
         SetStatus(state, "Opened " + ToUtf8(path.filename()));
         return true;
     }

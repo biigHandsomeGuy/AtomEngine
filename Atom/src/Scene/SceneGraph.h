@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -14,13 +15,29 @@ struct Scene
 
 	Model& AddModel(Model&& model)
 	{
-		if (model.Id == InvalidEntityId || FindModel(model.Id) != nullptr)
-			model.Id = AllocateEntityId();
-		else if (model.Id >= m_NextEntityId)
-			m_NextEntityId = model.Id == UINT64_MAX ? InvalidEntityId : model.Id + 1;
+		PrepareModelId(model);
 
 		Models.push_back(std::move(model));
 		return Models.back();
+	}
+
+	bool InsertModel(size_t index, Model&& model)
+	{
+		if (model.Id != InvalidEntityId && FindModel(model.Id) != nullptr)
+			return false;
+		PrepareModelId(model);
+		Models.insert(Models.begin() + std::min(index, Models.size()), std::move(model));
+		return true;
+	}
+
+	std::optional<Model> ExtractModel(EntityId id)
+	{
+		auto found = std::find_if(Models.begin(), Models.end(), [id](const Model& model) { return model.Id == id; });
+		if (found == Models.end())
+			return std::nullopt;
+		Model model = std::move(*found);
+		Models.erase(found);
+		return model;
 	}
 
 	Model* FindModel(EntityId id)
@@ -41,11 +58,7 @@ struct Scene
 
 	bool RemoveModel(EntityId id)
 	{
-		auto found = std::find_if(Models.begin(), Models.end(), [id](const Model& model) { return model.Id == id; });
-		if (found == Models.end())
-			return false;
-		Models.erase(found);
-		return true;
+		return ExtractModel(id).has_value();
 	}
 
 	void ReplaceModels(std::vector<Model> models)
@@ -66,6 +79,14 @@ struct Scene
 	}
 
 	private:
+	void PrepareModelId(Model& model)
+	{
+		if (model.Id == InvalidEntityId || FindModel(model.Id) != nullptr)
+			model.Id = AllocateEntityId();
+		else if (model.Id >= m_NextEntityId)
+			m_NextEntityId = model.Id == UINT64_MAX ? InvalidEntityId : model.Id + 1;
+	}
+
 	EntityId AllocateEntityId()
 	{
 		for (;;)

@@ -99,6 +99,7 @@
   <ItemGroup>
     <ClInclude Include="PbrRenderer.h" />
     <ClInclude Include="..\Editor\EditorPanels.h" />
+    <ClInclude Include="..\Editor\EditorCommandHistory.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Atom\Atom.vcxproj">
