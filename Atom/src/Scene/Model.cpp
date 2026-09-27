@@ -305,7 +305,7 @@ static void LoadPrimitive(
     SubMesh sub{};
     sub.IndexOffset = indexBase;
     sub.IndexCount = primitiveIndexCount;
-    sub.MaterialIndex = primitive.material >= 0 ? static_cast<uint32_t>(primitive.material) : 0;
+    sub.MaterialIndex = primitive.material >= 0 ? static_cast<uint32_t>(primitive.material) : INVALID_INDEX;
     mesh.SubMeshes.push_back(sub);
 }
 
@@ -431,8 +431,8 @@ static bool DecodeModelFromGLTF(const std::string& path, ModelAsset& asset, std:
     std::map<std::pair<int, bool>, uint32_t> decodedImages;
 
     asset.Materials.resize(model.materials.size());
-    if (asset.Materials.empty())
-        asset.Materials.emplace_back();
+    // A primitive with no authored material gets the glTF default, not material zero.
+    asset.Materials.emplace_back();
 
     for (size_t i = 0; i < model.materials.size(); i++)
     {
@@ -454,12 +454,21 @@ static bool DecodeModelFromGLTF(const std::string& path, ModelAsset& asset, std:
             decodedImages.emplace(key, index);
             return index;
         };
+        out.Name = mat.name;
+        const auto& pbr = mat.pbrMetallicRoughness;
+        if (pbr.baseColorFactor.size() != 4 || mat.emissiveFactor.size() != 3)
+            throw std::runtime_error("Malformed glTF material factors.");
+        out.Parameters.BaseColorFactor = { float(pbr.baseColorFactor[0]), float(pbr.baseColorFactor[1]),
+            float(pbr.baseColorFactor[2]), float(pbr.baseColorFactor[3]) };
+        out.Parameters.MetallicFactor = float(pbr.metallicFactor);
+        out.Parameters.RoughnessFactor = float(pbr.roughnessFactor);
+        out.Parameters.NormalScale = float(mat.normalTexture.scale);
+        out.Parameters.EmissiveFactor = { float(mat.emissiveFactor[0]), float(mat.emissiveFactor[1]), float(mat.emissiveFactor[2]) };
+        if (!ValidMaterialParameters(out.Parameters)) throw std::runtime_error("Invalid glTF material parameters.");
         out.BaseColor = loadTex(mat.pbrMetallicRoughness.baseColorTexture.index, true);
         out.Normal = loadTex(mat.normalTexture.index, false);
         out.RoughnessMetallic = loadTex(mat.pbrMetallicRoughness.metallicRoughnessTexture.index, false);
         out.Emissive = loadTex(mat.emissiveTexture.index, true);
-        if (mat.emissiveFactor.size() == 3)
-            out.EmissiveFactor = Vector3(float(mat.emissiveFactor[0]), float(mat.emissiveFactor[1]), float(mat.emissiveFactor[2]));
     }
 
     for (const auto& mesh : model.meshes)
@@ -472,7 +481,11 @@ static bool DecodeModelFromGLTF(const std::string& path, ModelAsset& asset, std:
         bool needsTangentRebuild = false;
 
         for (const auto& primitive : mesh.primitives)
+        {
+            if (primitive.material < -1 || primitive.material >= static_cast<int>(model.materials.size()))
+                throw std::runtime_error("glTF primitive references an invalid material.");
             LoadPrimitive(model, primitive, meshAsset, needsNormalRebuild, needsTangentRebuild, cancelled);
+        }
 
         // Rebuild once after all primitives are merged into one mesh.
         RebuildVertexNormalsAndTangents(meshAsset, needsNormalRebuild, needsTangentRebuild, cancelled);
@@ -480,6 +493,41 @@ static bool DecodeModelFromGLTF(const std::string& path, ModelAsset& asset, std:
     }
 
     return true;
+}
+
+MaterialParameters Model::MaterialValues(uint32_t index) const
+{
+    if (!Asset || index >= Asset->Materials.size()) throw std::out_of_range("Invalid material index.");
+    const auto found = MaterialOverrides.find(index);
+    return found == MaterialOverrides.end() ? Asset->Materials[index].Parameters : found->second;
+}
+
+bool Model::SetMaterialOverride(uint32_t index, const MaterialParameters& parameters)
+{
+    if (!Asset || index >= Asset->Materials.size() || !ValidMaterialParameters(parameters)) return false;
+    MaterialOverrides[index] = parameters;
+    return true;
+}
+
+bool Model::ResetMaterialOverride(uint32_t index) { return MaterialOverrides.erase(index) != 0; }
+
+MaterialConstants Model::MaterialData(uint32_t index) const
+{
+    if (!GPU || index >= GPU->Materials.size()) throw std::out_of_range("Invalid GPU material index.");
+    const auto& gpu = GPU->Materials[index];
+    const auto values = MaterialValues(index);
+    MaterialConstants constants{};
+    constants.BaseColorIndex = gpu.BaseColorIndex;
+    constants.NormalIndex = gpu.NormalIndex;
+    constants.RoughnessMetallicIndex = gpu.RoughnessMetallicIndex;
+    constants.EmissiveIndex = gpu.EmissiveIndex;
+    constants.BaseColorFactor = values.BaseColorFactor;
+    constants.EmissiveFactor = values.EmissiveFactor;
+    constants.NormalScale = values.NormalScale;
+    constants.MetallicFactor = values.MetallicFactor;
+    constants.RoughnessFactor = values.RoughnessFactor;
+    constants.TextureFlags = gpu.TextureFlags & values.TextureFlags;
+    return constants;
 }
 
 void Model::Draw(GraphicsContext& context, bool bindMaterialData)
@@ -498,16 +546,11 @@ void Model::Draw(GraphicsContext& context, bool bindMaterialData)
 
         for (const auto& sub : meshAsset.SubMeshes)
         {
-            const size_t materialIndex = sub.MaterialIndex < GPU->Materials.size() ? sub.MaterialIndex : 0;
-            const MaterialGPU& mat = GPU->Materials[materialIndex];
+            const uint32_t materialIndex = sub.MaterialIndex < GPU->Materials.size() ? sub.MaterialIndex : static_cast<uint32_t>(GPU->Materials.size() - 1);
 
             if (bindMaterialData)
             {
-                MaterialConstants materialConstants{};
-                materialConstants.BaseColorIndex = mat.BaseColorIndex;
-                materialConstants.NormalIndex = mat.NormalIndex;
-                materialConstants.RoughnessMetallicIndex = mat.RoughnessMetallicIndex;
-                materialConstants.EmissiveIndex = mat.EmissiveIndex;
+                const auto materialConstants = MaterialData(materialIndex);
                 context.SetDynamicConstantBufferView(Renderer::kMaterialConstants, sizeof(MaterialConstants), &materialConstants);
             }
 
@@ -572,7 +615,10 @@ namespace ModelUtility
             result.NormalIndex = resolve(material.Normal);
             result.RoughnessMetallicIndex = resolve(material.RoughnessMetallic);
             result.EmissiveIndex = resolve(material.Emissive);
-            result.EmissiveFactor = material.EmissiveFactor;
+            result.TextureFlags = (material.BaseColor != INVALID_INDEX ? 1u : 0u) |
+                (material.Normal != INVALID_INDEX ? 2u : 0u) |
+                (material.RoughnessMetallic != INVALID_INDEX ? 4u : 0u) |
+                (material.Emissive != INVALID_INDEX ? 8u : 0u);
             gpu->Materials.push_back(result);
         }
         return gpu;

@@ -22,13 +22,13 @@ namespace AtomEditor
         std::array<float, 4> Rotation{ 0, 0, 0, 1 };
         float Scale = 1.0f;
     };
-    struct SceneModelRecord : SceneEntityRecord { std::string AssetPath; };
+    struct SceneModelRecord : SceneEntityRecord { std::string AssetPath; std::map<uint32_t, MaterialParameters> MaterialOverrides; };
     struct SceneCameraRecord : SceneEntityRecord { CameraComponent Camera; };
     struct SceneLightRecord : SceneEntityRecord { DirectionalLightComponent Light; };
 
     struct SceneDocumentData
     {
-        int Version = 3;
+        int Version = 4;
         EntityId NextEntityId = 1;
         std::vector<SceneModelRecord> Models;
         std::vector<SceneCameraRecord> Cameras;

@@ -22,6 +22,7 @@ namespace AtomEditor
         std::filesystem::path file;
         if (!SelectSceneFile(false, file)) return;
         CancelPendingImports(m_State, *m_Assets);
+        m_OpenMaterialLab = false;
         m_DocumentLoader->Begin(file);
         m_State.StatusMessage = "Loading " + PathToUtf8(file.filename());
         m_State.StatusIsError = false;
@@ -63,6 +64,8 @@ namespace AtomEditor
             const auto status = m_DocumentLoader->Status();
             m_DocumentPath = status.File;
             renderer.SetSceneCameraSource(InvalidEntityId);
+            if (m_OpenMaterialLab) { renderer.UseSceneCamera(true); renderer.ShadingSettings().UseTexture = true; }
+            m_OpenMaterialLab = false;
             m_State.StatusMessage = "Opened " + PathToUtf8(status.File.filename());
             if (!status.Warnings.empty()) m_State.StatusMessage += "\n" + status.Warnings;
             m_State.StatusIsError = false;
@@ -74,6 +77,7 @@ namespace AtomEditor
             {
                 m_State.StatusMessage = status.State == SceneLoadState::Failed ? status.Error : "Scene load cancelled.";
                 m_State.StatusIsError = status.State == SceneLoadState::Failed;
+                m_OpenMaterialLab = false;
             }
             m_LastLoadState = status.State;
         }
@@ -87,6 +91,14 @@ namespace AtomEditor
             if (ImGui::BeginMenu("File"))
             {
                 if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) OpenDocument();
+                if (ImGui::MenuItem("Open Material Lab", nullptr, false, editing))
+                {
+                    CancelPendingImports(m_State, *m_Assets);
+                    m_DocumentLoader->Begin(m_ProjectRoot / "Samples/Editor/Scenes/MaterialLab.atomscene");
+                    m_State.StatusMessage = "Loading Material Lab";
+                    m_State.StatusIsError = false;
+                    m_OpenMaterialLab = true;
+                }
                 if (ImGui::MenuItem("Save Scene", "Ctrl+S", false, editing)) SaveDocument(scene, false);
                 if (ImGui::MenuItem("Save Scene As...", nullptr, false, editing)) SaveDocument(scene, true);
                 ImGui::EndMenu();

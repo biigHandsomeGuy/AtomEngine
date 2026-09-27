@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <optional>
 #include <vector>
 
 #include "SceneGraph.h"
@@ -25,6 +26,8 @@ namespace AtomEditor
     };
 
     void Initialize(UiState& state);
+    bool EditMaterial(Scene& scene, CommandHistory& history, EntityId id, uint32_t material,
+        const std::optional<MaterialParameters>& parameters);
     void CreateCamera(Scene& scene, UiState& state, CommandHistory& history, const Math::Camera& view);
     void CreateDirectionalLight(Scene& scene, UiState& state, CommandHistory& history);
     void DeleteSelectedEntity(Scene& scene, UiState& state, CommandHistory& history);

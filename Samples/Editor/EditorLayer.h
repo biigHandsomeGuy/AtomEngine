@@ -29,6 +29,7 @@ namespace AtomEditor
         std::unique_ptr<SceneDocumentChecks> m_Checks;
         std::filesystem::path m_ProjectRoot;
         std::filesystem::path m_DocumentPath;
+        bool m_OpenMaterialLab = false;
         SceneLoadState m_LastLoadState = SceneLoadState::Idle;
     };
 }

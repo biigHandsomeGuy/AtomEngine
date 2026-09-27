@@ -1,0 +1,1158 @@
+{
+  "format": "AtomEngineScene",
+  "version": 4,
+  "nextEntityId": 33,
+  "activeCamera": 31,
+  "activeLight": 32,
+  "models": [
+    {
+      "id": 1,
+      "name": "Metallic 0.00 / Roughness 0.00",
+      "translation": [
+        5.0,
+        5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.0,
+          "roughnessFactor": 0.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Metallic 0.00 / Roughness 0.25",
+      "translation": [
+        2.5,
+        5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.0,
+          "roughnessFactor": 0.25,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Metallic 0.00 / Roughness 0.50",
+      "translation": [
+        0.0,
+        5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.0,
+          "roughnessFactor": 0.5,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Metallic 0.00 / Roughness 0.75",
+      "translation": [
+        -2.5,
+        5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.0,
+          "roughnessFactor": 0.75,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Metallic 0.00 / Roughness 1.00",
+      "translation": [
+        -5.0,
+        5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.0,
+          "roughnessFactor": 1.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Metallic 0.25 / Roughness 0.00",
+      "translation": [
+        5.0,
+        2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.25,
+          "roughnessFactor": 0.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Metallic 0.25 / Roughness 0.25",
+      "translation": [
+        2.5,
+        2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.25,
+          "roughnessFactor": 0.25,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Metallic 0.25 / Roughness 0.50",
+      "translation": [
+        0.0,
+        2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.25,
+          "roughnessFactor": 0.5,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Metallic 0.25 / Roughness 0.75",
+      "translation": [
+        -2.5,
+        2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.25,
+          "roughnessFactor": 0.75,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Metallic 0.25 / Roughness 1.00",
+      "translation": [
+        -5.0,
+        2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.25,
+          "roughnessFactor": 1.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Metallic 0.50 / Roughness 0.00",
+      "translation": [
+        5.0,
+        0.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.5,
+          "roughnessFactor": 0.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Metallic 0.50 / Roughness 0.25",
+      "translation": [
+        2.5,
+        0.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.5,
+          "roughnessFactor": 0.25,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Metallic 0.50 / Roughness 0.50",
+      "translation": [
+        0.0,
+        0.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.5,
+          "roughnessFactor": 0.5,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Metallic 0.50 / Roughness 0.75",
+      "translation": [
+        -2.5,
+        0.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.5,
+          "roughnessFactor": 0.75,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Metallic 0.50 / Roughness 1.00",
+      "translation": [
+        -5.0,
+        0.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.5,
+          "roughnessFactor": 1.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Metallic 0.75 / Roughness 0.00",
+      "translation": [
+        5.0,
+        -2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.75,
+          "roughnessFactor": 0.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Metallic 0.75 / Roughness 0.25",
+      "translation": [
+        2.5,
+        -2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.75,
+          "roughnessFactor": 0.25,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Metallic 0.75 / Roughness 0.50",
+      "translation": [
+        0.0,
+        -2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.75,
+          "roughnessFactor": 0.5,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Metallic 0.75 / Roughness 0.75",
+      "translation": [
+        -2.5,
+        -2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.75,
+          "roughnessFactor": 0.75,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Metallic 0.75 / Roughness 1.00",
+      "translation": [
+        -5.0,
+        -2.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0.75,
+          "roughnessFactor": 1.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Metallic 1.00 / Roughness 0.00",
+      "translation": [
+        5.0,
+        -5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 1.0,
+          "roughnessFactor": 0.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Metallic 1.00 / Roughness 0.25",
+      "translation": [
+        2.5,
+        -5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 1.0,
+          "roughnessFactor": 0.25,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Metallic 1.00 / Roughness 0.50",
+      "translation": [
+        0.0,
+        -5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 1.0,
+          "roughnessFactor": 0.5,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Metallic 1.00 / Roughness 0.75",
+      "translation": [
+        -2.5,
+        -5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 1.0,
+          "roughnessFactor": 0.75,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Metallic 1.00 / Roughness 1.00",
+      "translation": [
+        -5.0,
+        -5.0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.25,
+            0.08,
+            1
+          ],
+          "metallicFactor": 1.0,
+          "roughnessFactor": 1.0,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Pure color R",
+      "translation": [
+        2.5,
+        -7.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.8,
+            0.08,
+            0.05,
+            1
+          ],
+          "metallicFactor": 0,
+          "roughnessFactor": 0.6,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "Pure color G",
+      "translation": [
+        0.0,
+        -7.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.05,
+            0.8,
+            0.08,
+            1
+          ],
+          "metallicFactor": 0,
+          "roughnessFactor": 0.6,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "name": "Pure color B",
+      "translation": [
+        -2.5,
+        -7.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0.08,
+            0.15,
+            0.8,
+            1
+          ],
+          "metallicFactor": 0,
+          "roughnessFactor": 0.6,
+          "normalScale": 1,
+          "emissiveFactor": [
+            0,
+            0,
+            0
+          ],
+          "textureFlags": 15
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "name": "Textured factors and normal",
+      "translation": [
+        5,
+        -7.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/TexturedSphere.gltf",
+      "materialOverrides": []
+    },
+    {
+      "id": 30,
+      "name": "Emission without textures",
+      "translation": [
+        -5,
+        -7.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": 1,
+      "asset": "Assets/Models/MaterialLab/Sphere.gltf",
+      "materialOverrides": [
+        {
+          "material": 0,
+          "baseColorFactor": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "metallicFactor": 0,
+          "roughnessFactor": 1,
+          "normalScale": 1,
+          "emissiveFactor": [
+            3,
+            0.8,
+            0.1
+          ],
+          "textureFlags": 0
+        }
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "id": 31,
+      "name": "Material Lab Camera",
+      "translation": [
+        0,
+        -1.25,
+        -27
+      ],
+      "rotation": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "scale": 1,
+      "verticalFovDegrees": 45,
+      "nearClip": 0.1,
+      "farClip": 100
+    }
+  ],
+  "lights": [
+    {
+      "id": 32,
+      "name": "Material Lab Sun",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        -0.1159169,
+        0.8804763,
+        0.27984816,
+        0.3647052
+      ],
+      "scale": 1,
+      "type": "directional",
+      "color": [
+        1,
+        1,
+        1
+      ],
+      "intensity": 2,
+      "enabled": true,
+      "castsShadows": true,
+      "shadowCenter": [
+        0,
+        -1.25,
+        0
+      ],
+      "shadowBounds": [
+        30,
+        30,
+        30
+      ]
+    }
+  ]
+}

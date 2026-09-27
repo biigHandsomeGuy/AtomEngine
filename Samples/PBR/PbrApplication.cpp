@@ -24,6 +24,7 @@
 #include "ReadbackBuffer.h"
 #include <DirectXPackedVector.h>
 #include <cmath>
+#include "tinygltf/json.hpp"
 
 using namespace Graphics;
 
@@ -60,6 +61,7 @@ void PbrApplication::Startup()
         m_Ui->StartValidation(m_Scene, m_Assets);
         CheckViewIsolation();
         CheckFrameScheduler();
+        CheckMaterials(); // Blocking smoke setup must precede asynchronous cancellation fixtures.
         StartAssetChecks();
         CheckAssetCache();
         CheckSceneEntities();
@@ -132,6 +134,7 @@ void PbrApplication::Cleanup()
         ++m_AssetErrors;
     if (m_SmokeFrameLimit != 0 && m_CacheChecks != 12) ++m_CacheErrors;
     if (m_SmokeFrameLimit >= 60 && m_SceneChecks != 15) ++m_SceneErrors;
+    if (m_SmokeFrameLimit >= 60 && m_MaterialChecks != 18) ++m_MaterialErrors;
     m_Ui->Shutdown();
     if (m_UiInitialized)
     {
@@ -141,11 +144,16 @@ void PbrApplication::Cleanup()
         m_UiInitialized = false;
     }
     m_Scene.ReplaceContent({}, {}, {}, InvalidEntityId, InvalidEntityId, 1);
+    m_MaterialScene.ReplaceContent({}, {}, {}, InvalidEntityId, InvalidEntityId, 1);
+    m_MaterialSource = {}; m_TexturedMaterialSource = {};
     m_Assets.Shutdown();
     m_Renderer.Shutdown();
     if (m_SecondRenderer) m_SecondRenderer->Shutdown();
     m_SecondRenderer.reset();
     m_SecondView.Destroy();
+    if (m_MaterialRenderer) m_MaterialRenderer->Shutdown();
+    m_MaterialRenderer.reset();
+    m_MaterialView.Destroy();
     m_RenderResources.Shutdown();
     m_CameraController.reset();
     m_View.Destroy();
@@ -181,7 +189,7 @@ void PbrApplication::Cleanup()
                 m_CompletedFrames - FrameScheduler::FramesInFlight : 0) ||
             m_Frames.FrameOpen() || m_Frames.PendingFrames() != 0 || m_Frames.RetainedResources() != 0)
             ++m_FrameErrors;
-        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 || m_CacheErrors != 0 || m_SceneErrors != 0 ||
+        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 || m_CacheErrors != 0 || m_SceneErrors != 0 || m_MaterialErrors != 0 ||
             m_FrameErrors != 0 || uiValidation.Errors != 0 || uiValidation.Completed != uiValidation.Expected ||
             m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
         std::cout << "PBR_SMOKE frames=" << m_CompletedFrames << " errors=" << validationErrors
@@ -196,7 +204,8 @@ void PbrApplication::Cleanup()
             << " presentationChecks=" << m_PresentationChecks << " multiViewChecks=" << m_MultiViewChecks
             << " secondViewFrames=" << m_SecondViewFrames
             << " cacheErrors=" << m_CacheErrors << " cacheChecks=" << m_CacheChecks
-            << " sceneErrors=" << m_SceneErrors << " sceneChecks=" << m_SceneChecks << '\n';
+            << " sceneErrors=" << m_SceneErrors << " sceneChecks=" << m_SceneChecks
+            << " materialErrors=" << m_MaterialErrors << " materialChecks=" << m_MaterialChecks << '\n';
     }
 }
 
@@ -301,6 +310,7 @@ void PbrApplication::RenderScene()
     GraphicsContext& graphics = GraphicsContext::Begin(L"PBR application frame");
     const auto secondViewFrameBefore = m_SecondView.FrameIndex;
     if (m_SmokeFrameLimit >= 60) PrepareSceneViewChecks();
+    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 24) PrepareMaterialProbe();
     for (const auto& model : m_Scene.Models) m_Frames.Retain(model.GPU);
     m_Renderer.Render(graphics);
     if (m_SecondRenderer)
@@ -314,6 +324,12 @@ void PbrApplication::RenderScene()
     if (m_SmokeFrameLimit >= 60) PollSceneViewChecks(secondViewFrameBefore);
     if (m_SmokeFrameLimit >= 60 && (m_CompletedFrames == 6 || m_CompletedFrames == 7))
         CaptureLightProbe(graphics);
+    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 24)
+    {
+        for (const auto& model : m_MaterialScene.Models) m_Frames.Retain(model.GPU);
+        m_MaterialRenderer->Render(graphics);
+        CaptureMaterialProbe(graphics);
+    }
     graphics.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, g_BindlessHeap.GetHeapPointer());
     graphics.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET, true);
     graphics.ClearColor(g_DisplayPlane[g_CurrentBuffer]);
@@ -336,6 +352,7 @@ void PbrApplication::OnFramePresented()
     // Covers the main list, font uploads, detached ImGui viewports and Present.
     const auto fence = m_Frames.EndFrame();
     if (m_LightProbe && m_LightProbeFrame + 1 == m_CompletedFrames) FinishLightProbe(fence);
+    if (m_MaterialProbe && m_MaterialProbeFrame + 1 == m_CompletedFrames) FinishMaterialProbe(fence);
 }
 
 void PbrApplication::CheckViewIsolation()
@@ -929,4 +946,227 @@ uint32_t PbrApplication::ParseSmokeFrameLimit(const wchar_t* commandLine)
         return 0;
     const unsigned long limit = std::wcstoul(arguments.c_str() + offset + prefix.size(), nullptr, 10);
     return static_cast<uint32_t>(std::min(limit, 10000ul));
+}
+
+
+void PbrApplication::MaterialCheck(bool passed, const char* label)
+{
+    ++m_MaterialChecks;
+    if (!passed) { ++m_MaterialErrors; std::cerr << "MATERIAL_CHECK_FAILED " << label << '\n'; }
+}
+
+void PbrApplication::CheckMaterials()
+{
+    static_assert(offsetof(MaterialConstants, BaseColorFactor) == 16);
+    static_assert(offsetof(MaterialConstants, EmissiveFactor) == 32);
+    static_assert(offsetof(MaterialConstants, NormalScale) == 44);
+    static_assert(offsetof(MaterialConstants, MetallicFactor) == 48);
+    static_assert(offsetof(MaterialConstants, TextureFlags) == 56);
+    try
+    {
+        const auto root = PathFromUtf8(FileSystem::GetFullPath("."));
+        m_MaterialSource = m_Assets.LoadBlocking(PathToUtf8(root / "Assets/Models/MaterialLab/Sphere.gltf"));
+        m_TexturedMaterialSource = m_Assets.LoadBlocking(PathToUtf8(root / "Assets/Models/MaterialLab/TexturedSphere.gltf"));
+        const auto& asset = *m_TexturedMaterialSource.Asset;
+        const auto& params = asset.Materials[0].Parameters;
+        MaterialCheck(asset.Materials[0].Name == "Factor Probe" && params.BaseColorFactor.x == 0.2f &&
+            params.BaseColorFactor.z == 0.8f && params.MetallicFactor == 0.6f && params.RoughnessFactor == 0.7f &&
+            params.NormalScale == 0.25f && params.EmissiveFactor.z == 0.125f, "glTF factors and material names");
+        MaterialCheck(asset.Images.size() == 4 && asset.Images[0].Srgb && !asset.Images[1].Srgb &&
+            !asset.Images[2].Srgb && asset.Images[3].Srgb, "sRGB base/emissive and linear normal/metallic-roughness images");
+        const auto folder = root / "bin-int/smoke-materials";
+        std::filesystem::create_directories(folder);
+        nlohmann::json document;
+        std::ifstream(root / "Assets/Models/MaterialLab/Sphere.gltf") >> document;
+        document["meshes"][0]["primitives"][0].erase("material");
+        const auto fallbackFile = folder / "default.gltf";
+        std::ofstream(fallbackFile) << document.dump();
+        auto fallback = ModelUtility::DecodeGltfAsset(PathToUtf8(fallbackFile));
+        MaterialCheck(fallback && fallback->Materials.size() == 2 &&
+            fallback->Meshes[0].SubMeshes[0].MaterialIndex == INVALID_INDEX &&
+            fallback->Materials.back().Parameters.BaseColorFactor.x == 1 &&
+            fallback->Materials.back().Parameters.MetallicFactor == 1 &&
+            fallback->Materials.back().Parameters.RoughnessFactor == 1, "unassigned primitives use the distinct default material");
+        document["materials"][0]["pbrMetallicRoughness"]["roughnessFactor"] = -1;
+        const auto invalidFile = folder / "invalid.gltf";
+        std::ofstream(invalidFile) << document.dump();
+        std::string error;
+        const bool invalidFactor = !ModelUtility::DecodeGltfAsset(PathToUtf8(invalidFile), &error) && !error.empty();
+        document["materials"][0]["pbrMetallicRoughness"]["roughnessFactor"] = 1;
+        document["meshes"][0]["primitives"][0]["material"] = 999;
+        std::ofstream(invalidFile) << document.dump();
+        MaterialCheck(invalidFactor && !ModelUtility::DecodeGltfAsset(PathToUtf8(invalidFile), &error),
+            "invalid material factor and source material reference reject import");
+        auto first = ModelUtility::CreateModel(LoadedModelData{m_MaterialSource.Asset, m_MaterialSource.GPU});
+        auto second = ModelUtility::CreateModel(LoadedModelData{m_MaterialSource.Asset, m_MaterialSource.GPU});
+        auto values = first.MaterialValues(0);
+        values.BaseColorFactor = {0.2f, 0.3f, 0.4f, 1}; values.RoughnessFactor = 0;
+        first.SetMaterialOverride(0, values);
+        MaterialCheck(first.GPU == second.GPU && first.Asset == second.Asset &&
+            first.MaterialValues(0).BaseColorFactor.x == 0.2f && second.MaterialValues(0).BaseColorFactor.x == 0.8f &&
+            m_MaterialSource.Asset->Materials[0].Parameters.BaseColorFactor.x == 0.8f, "instance overrides preserve immutable shared assets");
+        auto textured = ModelUtility::CreateModel(LoadedModelData{m_TexturedMaterialSource.Asset, m_TexturedMaterialSource.GPU});
+        const auto constants = textured.MaterialData(0);
+        MaterialCheck(first.MaterialData(0).TextureFlags == 0 && constants.TextureFlags == 15 &&
+            constants.BaseColorFactor.z == 0.8f && constants.NormalScale == 0.25f && constants.RoughnessFactor == 0.7f &&
+            constants.EmissiveFactor.z == 0.125f, "GPU material constants carry factors and actual texture availability");
+        auto toggle = textured.MaterialValues(0); toggle.TextureFlags = 5;
+        textured.SetMaterialOverride(0, toggle);
+        MaterialCheck(textured.MaterialData(0).TextureFlags == 5 && first.MaterialData(0).TextureFlags == 0,
+            "per-instance texture toggles and missing-texture fallback flags");
+        auto invalid = values; invalid.MetallicFactor = -1;
+        MaterialCheck(!first.SetMaterialOverride(0, invalid) && !first.SetMaterialOverride(UINT32_MAX, values) &&
+            first.MaterialValues(0).MetallicFactor == values.MetallicFactor, "invalid override leaves the instance unchanged");
+        MaterialCheck(first.ResetMaterialOverride(0) && first.MaterialOverrides.empty() &&
+            first.MaterialValues(0).BaseColorFactor.x == 0.8f, "reset resolves the original source parameters");
+        m_MaterialScene.AddModel(std::move(first));
+        m_MaterialView.Resize(256, 256);
+        m_MaterialView.EditorCamera.SetEyeAtUp(Vector3(0, 0, -3.2f), Vector3(kZero), Vector3(kYUnitVector));
+        m_MaterialView.EditorCamera.SetZRange(0.1f, 100);
+        m_MaterialView.EditorCamera.Update();
+        m_MaterialRenderer = std::make_unique<PbrRenderer>(m_MaterialScene, m_MaterialView, m_RenderResources);
+        m_MaterialRenderer->Initialize();
+        m_MaterialRenderer->PostSettings().useTAA = false;
+    }
+    catch (const std::exception& error)
+    {
+        ++m_MaterialErrors;
+        std::cerr << "MATERIAL_CHECK_FAILED setup: " << error.what() << '\n';
+    }
+}
+
+void PbrApplication::PrepareMaterialProbe()
+{
+    auto& model = m_MaterialScene.Models.front();
+    auto values = model.MaterialValues(0);
+    switch (m_CompletedFrames)
+    {
+    case 14:
+        values = {}; values.BaseColorFactor = {0.5f, 0.5f, 0.5f, 1};
+        values.MetallicFactor = 0; values.RoughnessFactor = 0.2f;
+        break;
+    case 15: values.BaseColorFactor = {0.8f, 0.1f, 0.05f, 1}; break;
+    case 16: values.MetallicFactor = 1; break;
+    case 17: values.RoughnessFactor = 1; break;
+    case 18: values.EmissiveFactor = {2, 0.5f, 0.1f}; break;
+    case 19:
+        model.Asset = m_TexturedMaterialSource.Asset; model.GPU = m_TexturedMaterialSource.GPU;
+        model.MaterialOverrides.clear(); values = model.MaterialValues(0); values.NormalScale = 0;
+        break;
+    case 20: values.NormalScale = 1; break;
+    case 21: values.TextureFlags = 0; break;
+    case 22:
+        values = {}; values.BaseColorFactor = {0, 0, 0, 1}; values.MetallicFactor = 0;
+        values.EmissiveFactor = {4, 2, 1}; values.TextureFlags = 8;
+        break;
+    case 23: values.TextureFlags = 0; break;
+    case 24:
+    {
+        std::vector<Model> models;
+        auto make = [&](LoadedModelData source, float x, float y, const MaterialParameters& parameters)
+        {
+            auto item = ModelUtility::CreateModel(std::move(source));
+            item.Id = models.size() + 1;
+            item.Transform.transform.SetTranslation(Vector3(x, y, 0));
+            item.SetMaterialOverride(0, parameters);
+            models.push_back(std::move(item));
+        };
+        for (uint32_t row = 0; row < 5; ++row)
+            for (uint32_t col = 0; col < 5; ++col)
+            {
+                MaterialParameters parameters;
+                parameters.BaseColorFactor = {0.8f, 0.25f, 0.08f, 1};
+                parameters.MetallicFactor = row / 4.0f; parameters.RoughnessFactor = col / 4.0f;
+                make(m_MaterialSource, (2-float(col))*2.5f, (2-float(row))*2.5f, parameters);
+            }
+        const XMFLOAT4 colors[] = {{0.8f,0.08f,0.05f,1}, {0.05f,0.8f,0.08f,1}, {0.08f,0.15f,0.8f,1}};
+        for (uint32_t col = 0; col < 3; ++col)
+        {
+            MaterialParameters parameters; parameters.BaseColorFactor = colors[col];
+            parameters.MetallicFactor = 0; parameters.RoughnessFactor = 0.6f;
+            make(m_MaterialSource, (1-float(col))*2.5f, -7.5f, parameters);
+        }
+        make(m_TexturedMaterialSource, 5, -7.5f, m_TexturedMaterialSource.Asset->Materials[0].Parameters);
+        MaterialParameters emission; emission.BaseColorFactor = {0,0,0,1}; emission.MetallicFactor = 0;
+        emission.EmissiveFactor = {3,0.8f,0.1f}; emission.TextureFlags = 0;
+        make(m_MaterialSource, -5, -7.5f, emission);
+        m_MaterialScene.ReplaceContent(std::move(models), {}, {}, 0, 0, 31);
+        auto sun = Scene::DefaultSun(); sun.Light.Intensity = 2; sun.Light.CastsShadows = false;
+        m_MaterialScene.SetActiveLight(m_MaterialScene.AddLight(sun).Id);
+        m_MaterialView.EditorCamera.SetEyeAtUp(Vector3(0,-1.25f,-23), Vector3(0,-1.25f,0), Vector3(kYUnitVector));
+        m_MaterialView.EditorCamera.Update();
+        return;
+    }
+    }
+    model.SetMaterialOverride(0, values);
+    m_MaterialScene.MarkModified();
+}
+
+void PbrApplication::CaptureMaterialProbe(GraphicsContext& graphics)
+{
+    m_MaterialProbe = std::make_shared<ReadbackBuffer>();
+    m_MaterialProbeFrame = m_CompletedFrames;
+    m_MaterialProbePitch = graphics.ReadbackTexture(*m_MaterialProbe, m_MaterialView.SceneColor);
+    graphics.TransitionResource(m_MaterialView.SceneColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    m_Frames.Retain(m_MaterialProbe);
+}
+
+void PbrApplication::FinishMaterialProbe(uint64_t fence)
+{
+    g_CommandManager.WaitForFence(fence);
+    const auto* bytes = static_cast<const uint8_t*>(m_MaterialProbe->Map());
+    std::vector<float> pixels;
+    bool finite = true;
+    for (uint32_t y = 0; y < m_MaterialView.Height(); ++y)
+    {
+        const auto* row = reinterpret_cast<const uint16_t*>(bytes + size_t(y)*m_MaterialProbePitch);
+        for (uint32_t x = 0; x < m_MaterialView.Width(); ++x)
+            for (uint32_t channel = 0; channel < 3; ++channel)
+            {
+                const float value = PackedVector::XMConvertHalfToFloat(row[x*4+channel]);
+                finite &= std::isfinite(value); pixels.push_back(value);
+            }
+    }
+    const auto folder = PathFromUtf8(FileSystem::GetFullPath("bin-int/smoke-materials"));
+#if defined(DEBUG) || defined(_DEBUG)
+    const std::string configuration = "Debug";
+#else
+    const std::string configuration = "Release";
+#endif
+    const std::string app = m_Ui->Validation().Expected ? "Editor" : "PBR";
+    std::ofstream file(folder / (app + "-" + configuration + "-" + std::to_string(m_MaterialProbeFrame) + ".rgba16f"), std::ios::binary);
+    const uint32_t header[] = {m_MaterialView.Width(), m_MaterialView.Height(), m_MaterialProbePitch};
+    file.write(reinterpret_cast<const char*>(header), sizeof(header));
+    file.write(reinterpret_cast<const char*>(bytes), size_t(m_MaterialProbePitch)*m_MaterialView.Height()); file.close();
+    m_MaterialProbe->Unmap(); m_MaterialProbe.reset();
+    double difference = 0;
+    if (m_MaterialPixels.size() == pixels.size())
+        for (size_t i = 0; i < pixels.size(); ++i) difference += std::abs(double(pixels[i]) - m_MaterialPixels[i]);
+    const size_t center = (size_t(m_MaterialView.Height()/2)*m_MaterialView.Width() + m_MaterialView.Width()/2)*3;
+    const bool valid = finite && bool(file);
+    if (m_MaterialProbeFrame == 14)
+        MaterialCheck(valid, "untextured material renders finite HDR pixels");
+    else if (m_MaterialProbeFrame == 24)
+        MaterialCheck(valid && m_MaterialScene.Models.size() == 30 && difference > 1, "complete 30-sphere material gallery renders finite HDR pixels");
+    else if (m_MaterialProbeFrame != 19 && m_MaterialProbeFrame != 22)
+    {
+        bool exact = true;
+        if (m_MaterialProbeFrame == 18 || m_MaterialProbeFrame == 23)
+        {
+            const float emission[] = {2, 0.5f, 0.1f};
+            const float factors[] = {4, 2, 1};
+            const float texels[] = {128.0f/255, 64.0f/255, 32.0f/255};
+            for (size_t channel = 0; channel < 3 && m_MaterialPixels.size() == pixels.size(); ++channel)
+            {
+                const float linear = texels[channel] <= 0.04045f ? texels[channel]/12.92f : std::pow((texels[channel]+0.055f)/1.055f, 2.4f);
+                const float expected = m_MaterialProbeFrame == 18 ? emission[channel] : factors[channel]*(1-linear);
+                exact &= std::abs(pixels[center+channel] - m_MaterialPixels[center+channel] - expected) < 0.02f;
+            }
+        }
+        const char* labels[] = {"base color factor", "metallic factor", "roughness factor", "emissive factor", "normal scale", "texture toggle", "sRGB emission texture"};
+        const size_t label = m_MaterialProbeFrame <= 18 ? size_t(m_MaterialProbeFrame-15) : m_MaterialProbeFrame == 20 ? 4 : m_MaterialProbeFrame == 21 ? 5 : 6;
+        MaterialCheck(valid && m_MaterialPixelsValid && difference > 1 && exact, labels[label]);
+    }
+    std::cout << "MATERIAL_PROBE frame=" << m_MaterialProbeFrame << " rgbDifference=" << difference << " finite=" << finite << '\n';
+    m_MaterialPixels = std::move(pixels); m_MaterialPixelsValid = valid;
 }

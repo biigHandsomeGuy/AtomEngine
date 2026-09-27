@@ -149,11 +149,11 @@ namespace AtomEditor
             input >> document;
             SceneDocumentData parsed;
             if (!document.at("version").is_number_integer() ||
-                (document.at("version") != 1 && document.at("version") != 2 && document.at("version") != 3))
+                (document.at("version") < 1 || document.at("version") > 4))
                 throw std::runtime_error("Scene version must be an integer.");
             parsed.Version = document.at("version").get<int>();
             if (document.at("format").get<std::string>() != "AtomEngineScene" ||
-                (parsed.Version != 1 && parsed.Version != 2 && parsed.Version != 3) || !document.at("models").is_array())
+                (parsed.Version < 1 || parsed.Version > 4) || !document.at("models").is_array())
                 throw std::runtime_error("Unsupported or malformed AtomEngine scene document.");
             if (parsed.Version >= 2 && document.contains("nextEntityId"))
                 parsed.NextEntityId = ReadNextId(document.at("nextEntityId"));
@@ -169,9 +169,34 @@ namespace AtomEditor
                 if (path.is_relative()) path = root / path;
                 model.AssetPath = PathToUtf8(path.lexically_normal());
                 model.Name = item.value("name", PathToUtf8(path.stem()));
+                if (parsed.Version >= 4)
+                {
+                    const auto& overrides = item.at("materialOverrides");
+                    if (!overrides.is_array()) throw std::runtime_error("Material overrides must be an array.");
+                    for (const auto& entry : overrides)
+                    {
+                        const auto& indexValue = entry.at("material");
+                        if (!indexValue.is_number_integer() || indexValue < 0 || indexValue >= UINT32_MAX)
+                            throw std::runtime_error("Invalid material override index.");
+                        const auto index = indexValue.get<uint32_t>();
+                        MaterialParameters parameters;
+                        const auto& color = entry.at("baseColorFactor");
+                        if (!color.is_array() || color.size() != 4) throw std::runtime_error("Material color requires four values.");
+                        parameters.BaseColorFactor = { color.at(0).get<float>(), color.at(1).get<float>(), color.at(2).get<float>(), color.at(3).get<float>() };
+                        parameters.EmissiveFactor = ReadVector3(entry.at("emissiveFactor"));
+                        parameters.NormalScale = entry.at("normalScale").get<float>();
+                        parameters.MetallicFactor = entry.at("metallicFactor").get<float>();
+                        parameters.RoughnessFactor = entry.at("roughnessFactor").get<float>();
+                        const auto& flags = entry.at("textureFlags");
+                        if (!flags.is_number_integer() || flags < 0 || flags > 15) throw std::runtime_error("Invalid material texture flags.");
+                        parameters.TextureFlags = flags.get<uint32_t>();
+                        if (!ValidMaterialParameters(parameters) || !model.MaterialOverrides.emplace(index, parameters).second)
+                            throw std::runtime_error("Invalid or duplicate material override.");
+                    }
+                }
                 parsed.Models.push_back(std::move(model));
             }
-            if (parsed.Version == 3)
+            if (parsed.Version >= 3)
             {
                 if (!document.at("cameras").is_array() || !document.at("lights").is_array())
                     throw std::runtime_error("Scene cameras and lights must be arrays.");
@@ -245,7 +270,7 @@ namespace AtomEditor
         std::filesystem::path temporary;
         try
         {
-            Json document = { {"format", "AtomEngineScene"}, {"version", 3},
+            Json document = { {"format", "AtomEngineScene"}, {"version", 4},
                 {"nextEntityId", scene.GetNextEntityId()}, {"models", Json::array()}, {"cameras", Json::array()},
                 {"lights", Json::array()}, {"activeCamera", scene.ActiveCameraId()}, {"activeLight", scene.ActiveLightId()} };
             ReadNextId(document.at("nextEntityId"));
@@ -262,6 +287,18 @@ namespace AtomEditor
             {
                 auto item = writeEntity(model);
                 item["asset"] = PathToUtf8(PortableAssetPath(model, root));
+                item["materialOverrides"] = Json::array();
+                for (const auto& [index, parameters] : model.MaterialOverrides)
+                {
+                    if (!model.Asset || index >= model.Asset->Materials.size() || !ValidMaterialParameters(parameters))
+                        throw std::runtime_error("Invalid model material override.");
+                    const auto& color = parameters.BaseColorFactor;
+                    item["materialOverrides"].push_back({ {"material", index},
+                        {"baseColorFactor", Json::array({color.x, color.y, color.z, color.w})},
+                        {"emissiveFactor", WriteVector3(parameters.EmissiveFactor)}, {"normalScale", parameters.NormalScale},
+                        {"metallicFactor", parameters.MetallicFactor}, {"roughnessFactor", parameters.RoughnessFactor},
+                        {"textureFlags", parameters.TextureFlags} });
+                }
                 document["models"].push_back(std::move(item));
             }
             for (const auto& camera : scene.Cameras)
@@ -410,7 +447,19 @@ namespace AtomEditor
             }
             if (asset.State == AssetLoadState::Ready) ++job.Status.ReadyModels;
         }
-        if (job.Status.ReadyModels == job.Status.TotalModels) job.Status.State = SceneLoadState::Ready;
+        if (job.Status.ReadyModels == job.Status.TotalModels)
+        {
+            for (size_t i = 0; i < job.Document.Models.size(); ++i)
+                for (const auto& [index, parameters] : job.Document.Models[i].MaterialOverrides)
+                    if (index >= assets.Snapshot(job.Assets[i]).Data.Asset->Materials.size())
+                    {
+                        job.Status.Error = "Material override references a missing source material.";
+                        job.Status.State = SceneLoadState::Failed;
+                        job.Assets.clear(); job.RequestedPaths.clear();
+                        return;
+                    }
+            job.Status.State = SceneLoadState::Ready;
+        }
     }
 
     bool SceneDocumentLoader::Apply(Scene& scene, CommandHistory& history, EntityId& selection, ModelAssetManager& assets)
@@ -428,6 +477,7 @@ namespace AtomEditor
             const auto& record = job.Document.Models[i];
             model.Id = record.Id;
             model.InstanceName = record.Name;
+            model.MaterialOverrides = record.MaterialOverrides;
             ApplyEntity(model.Transform, record);
             model.UpdateConstants();
             models.push_back(std::move(model));

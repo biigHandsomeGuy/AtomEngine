@@ -10,6 +10,13 @@ __declspec(align(256)) struct MaterialConstants
     uint32_t NormalIndex;
     uint32_t RoughnessMetallicIndex;
     uint32_t EmissiveIndex;
+    DirectX::XMFLOAT4 BaseColorFactor{ 1, 1, 1, 1 };
+    DirectX::XMFLOAT3 EmissiveFactor{ 0, 0, 0 };
+    float NormalScale = 1;
+    float MetallicFactor = 1;
+    float RoughnessFactor = 1;
+    uint32_t TextureFlags = 0;
+    uint32_t Padding = 0;
 };
 
 __declspec(align(256)) struct GlobalConstants

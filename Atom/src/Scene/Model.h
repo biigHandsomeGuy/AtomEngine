@@ -9,6 +9,8 @@
 
 #include "DescriptorHeap.h"
 #include "TextureManager.h"
+#include "Material.h"
+#include <map>
 #include <cstdint>
 #include <atomic>
 #include <memory>
@@ -16,6 +18,7 @@
 
 class GraphicsContext;
 class CommandContext;
+struct MaterialConstants;
 
 using AABB = Math::AxisAlignedBox;
 
@@ -126,7 +129,7 @@ struct MaterialAsset
 
     uint32_t Emissive = INVALID_INDEX;
 
-    Vector3 EmissiveFactor{ 0,0,0 };
+    MaterialParameters Parameters;
 };
 
 
@@ -137,9 +140,7 @@ struct MaterialGPU
     uint32_t NormalIndex = INVALID_TEXTURE;
     uint32_t RoughnessMetallicIndex = INVALID_TEXTURE;
     uint32_t EmissiveIndex = INVALID_TEXTURE;
-    Vector3 EmissiveFactor;
-
-    float padding;
+    uint32_t TextureFlags = 0;
 };
 
 
@@ -202,6 +203,13 @@ public:
     std::shared_ptr<const ModelGPU> GPU;
 
     TransformComponent Transform;
+
+    // Overrides are local to this scene instance; GPU geometry/images stay shared.
+    std::map<uint32_t, MaterialParameters> MaterialOverrides;
+    MaterialParameters MaterialValues(uint32_t index) const;
+    MaterialConstants MaterialData(uint32_t index) const;
+    bool SetMaterialOverride(uint32_t index, const MaterialParameters& parameters);
+    bool ResetMaterialOverride(uint32_t index);
 
     MeshConstants Constants;
 

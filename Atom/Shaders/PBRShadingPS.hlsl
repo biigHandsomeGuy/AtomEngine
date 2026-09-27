@@ -19,6 +19,13 @@ cbuffer MaterialConstants : register(b0)
     uint gNormalIndex;
     uint gRoughnessMetallicIndex;
     uint gEmissiveIndex;
+    float4 gBaseColorFactor;
+    float3 gEmissiveFactor;
+    float gNormalScale;
+    float gMetallicFactor;
+    float gRoughnessFactor;
+    uint gMaterialTextureFlags;
+    uint gMaterialPadding;
 };
 
 cbuffer GlobalConstants : register(b1)
@@ -119,35 +126,41 @@ Texture2D<float4> GetBindlessTexture2D(uint index)
 
 float4 main(VertexOut pin) : SV_Target
 {
-    float3 albedo = 0;
-    float metalness = 0;
-    float roughness = 0;
-    float3 N = 0;
+    float3 albedo = gBaseColorFactor.rgb;
+    float metalness = gMetallicFactor;
+    float roughness = gRoughnessFactor;
+    float3 N = normalize(pin.Normal);
+    float3 emissive = gEmissiveFactor;
     if (UseTexture)
-    {   
-        // Sample input textures to get shading model params.
-        Texture2D<float4> baseColorTexture = GetBindlessTexture2D(gBaseColorIndex);
-        Texture2D<float4> normalTexture = GetBindlessTexture2D(gNormalIndex);
-        Texture2D<float4> roughnessMetallicTexture = GetBindlessTexture2D(gRoughnessMetallicIndex);
-
-        albedo = baseColorTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb;
-        float4 roughnessMetallic = roughnessMetallicTexture.Sample(gsamAnisotropicWrap, pin.TexC);
-        metalness = roughnessMetallic.b;
-        roughness = roughnessMetallic.g;
-        // Get current fragment's normal and transform to world space.
-        N = normalize(2.0 * normalTexture.Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0);
-	
-        N = normalize(mul(N, pin.tangentBasis));
-    }
-	else
     {
+        if (gMaterialTextureFlags & 1)
+            albedo *= GetBindlessTexture2D(gBaseColorIndex).Sample(gsamAnisotropicWrap, pin.TexC).rgb;
+        if (gMaterialTextureFlags & 4)
+        {
+            float4 mr = GetBindlessTexture2D(gRoughnessMetallicIndex).Sample(gsamAnisotropicWrap, pin.TexC);
+            metalness *= mr.b;
+            roughness *= mr.g;
+        }
+        if (gMaterialTextureFlags & 2)
+        {
+            float3 tangentNormal = 2.0 * GetBindlessTexture2D(gNormalIndex).Sample(gsamAnisotropicWrap, pin.TexC).rgb - 1.0;
+            tangentNormal.xy *= gNormalScale;
+            N = normalize(mul(normalize(tangentNormal), pin.tangentBasis));
+        }
+        if (gMaterialTextureFlags & 8)
+            emissive *= GetBindlessTexture2D(gEmissiveIndex).Sample(gsamAnisotropicWrap, pin.TexC).rgb;
+    }
+    else
+    {
+        // Global material preview controls are an explicit sample/debug override.
         albedo = Albedo;
         metalness = Metallic;
         roughness = Roughness;
-        N = normalize(pin.Normal);
-        //return float4(N, 1);
+        emissive = 0;
     }
-    //return float4(N, 1);
+    metalness = saturate(metalness);
+    roughness = clamp(roughness, 0.045, 1.0);
+    // Material inputs are now resolved.
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.WorldPosition);
     
@@ -163,7 +176,7 @@ float4 main(VertexOut pin) : SV_Target
 
 	// Direct lighting calculation for analytical lights.
     float3 directLighting = 0.0;
-    for (uint i = 0; i < 1; ++i)
+    if (any(gSunRadiance.rgb > 0))
     {
         float alphaRoughness = roughness * roughness;
         
@@ -177,7 +190,7 @@ float4 main(VertexOut pin) : SV_Target
         float NoL = max(0.0, dot(N, Li));
         float NoH = max(0.0, dot(N, Lh));
 
-        if(NoL > 0.0f || NoV > 0.0f)
+        if(NoL > 0.0f && NoV > 0.0f)
 		{
             // Calculate Fresnel term for direct lighting. 
             float3 F = F_Schlick(F0, max(0.0, dot(Lh, Lo)));
@@ -258,7 +271,7 @@ float4 main(VertexOut pin) : SV_Target
 
 		// Sample pre-filtered specular reflection environment at correct mipmap level.
         uint specularTextureLevels = querySpecularTextureLevels();
-        float3 specularIrradiance = gRadianceTexture.SampleLevel(gsamAnisotropicWrap, Lr, roughness * specularTextureLevels).rgb;
+        float3 specularIrradiance = gRadianceTexture.SampleLevel(gsamAnisotropicWrap, Lr, roughness * max(1, specularTextureLevels - 1)).rgb;
 
 		// Split-sum approximation factors for Cook-Torrance specular BRDF.
         float2 specularBRDF = gLUTMap.Sample(gsamAnisotropicClamp, float2(NoV, roughness)).rg;
@@ -280,6 +293,6 @@ float4 main(VertexOut pin) : SV_Target
     }
     
 	// Final fragment color.
-    return float4(directLighting + ambientLighting * ambientOcclution, 1.0);
+    return float4(directLighting + ambientLighting * ambientOcclution + emissive, 1.0);
 }
  

@@ -252,6 +252,113 @@ namespace AtomEditor
         }
     }
 
+    namespace
+    {
+        using MaterialEdit = std::optional<MaterialParameters>;
+        MaterialEdit OverrideOf(const Model& model, uint32_t index)
+        {
+            const auto found = model.MaterialOverrides.find(index);
+            return found == model.MaterialOverrides.end() ? MaterialEdit{} : MaterialEdit{found->second};
+        }
+        void ApplyMaterial(Scene& scene, EntityId id, uint32_t index, const MaterialEdit& values)
+        {
+            if (auto* model = scene.FindModel(id))
+            {
+                if (values) model->SetMaterialOverride(index, *values);
+                else model->ResetMaterialOverride(index);
+            }
+        }
+        void RecordMaterial(Scene& scene, CommandHistory& history, EntityId id, uint32_t index,
+            const MaterialEdit& before, const MaterialEdit& after)
+        {
+            history.RecordApplied("Edit material",
+                [id, index, before](Scene& target) { ApplyMaterial(target, id, index, before); },
+                [id, index, after](Scene& target) { ApplyMaterial(target, id, index, after); });
+            scene.MarkModified();
+        }
+        void TrackMaterial(Scene& scene, CommandHistory& history, Model& model, uint32_t index,
+            const MaterialEdit& before, const MaterialParameters& after, bool changed, bool instant = false)
+        {
+            static EntityId pending = InvalidEntityId;
+            static uint32_t pendingIndex = 0;
+            static MaterialEdit initial;
+            if (ImGui::IsItemActivated()) { pending = model.Id; pendingIndex = index; initial = before; }
+            if (changed && model.SetMaterialOverride(index, after)) scene.MarkModified();
+            if ((instant && changed) || (ImGui::IsItemDeactivatedAfterEdit() && pending == model.Id && pendingIndex == index))
+            {
+                RecordMaterial(scene, history, model.Id, index, instant ? before : initial, OverrideOf(model, index));
+                pending = InvalidEntityId;
+            }
+        }
+        void DrawMaterials(Scene& scene, CommandHistory& history, Model& model)
+        {
+            if (!model.Asset || !model.GPU) return;
+            ImGui::SeparatorText("Materials");
+            for (uint32_t index = 0; index < model.Asset->Materials.size(); ++index)
+            {
+                const bool used = std::any_of(model.Asset->Meshes.begin(), model.Asset->Meshes.end(), [&](const MeshAsset& mesh)
+                {
+                    return std::any_of(mesh.SubMeshes.begin(), mesh.SubMeshes.end(), [&](const SubMesh& sub)
+                    {
+                        const auto resolved = sub.MaterialIndex < model.Asset->Materials.size() ? sub.MaterialIndex : model.Asset->Materials.size() - 1;
+                        return resolved == index;
+                    });
+                });
+                if (!used) continue;
+                ImGui::PushID(static_cast<int>(index));
+                const auto& name = model.Asset->Materials[index].Name;
+                const auto label = name.empty() ? "Material " + std::to_string(index) : name;
+                if (ImGui::TreeNode("material", "%s%s", label.c_str(), model.MaterialOverrides.count(index) ? " *" : ""))
+                {
+                    auto values = model.MaterialValues(index);
+                    auto before = OverrideOf(model, index);
+                    bool changed = ImGui::ColorEdit3("Base color (linear)", &values.BaseColorFactor.x, ImGuiColorEditFlags_Float);
+                    TrackMaterial(scene, history, model, index, before, values, changed);
+                    before = OverrideOf(model, index);
+                    changed = ImGui::SliderFloat("Metallic", &values.MetallicFactor, 0, 1);
+                    TrackMaterial(scene, history, model, index, before, values, changed);
+                    before = OverrideOf(model, index);
+                    changed = ImGui::SliderFloat("Roughness", &values.RoughnessFactor, 0, 1);
+                    TrackMaterial(scene, history, model, index, before, values, changed);
+                    before = OverrideOf(model, index);
+                    changed = ImGui::ColorEdit3("Emission (linear HDR)", &values.EmissiveFactor.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+                    TrackMaterial(scene, history, model, index, before, values, changed);
+                    before = OverrideOf(model, index);
+                    changed = ImGui::DragFloat("Normal scale", &values.NormalScale, 0.01f, 0, 10, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    TrackMaterial(scene, history, model, index, before, values, changed);
+                    const char* textures[] = { "Base color texture", "Normal texture", "Metallic/roughness texture", "Emissive texture" };
+                    for (uint32_t bit = 0; bit < 4; ++bit)
+                    {
+                        const uint32_t mask = 1u << bit;
+                        const bool available = (model.GPU->Materials[index].TextureFlags & mask) != 0;
+                        ImGui::BeginDisabled(!available);
+                        bool enabled = (values.TextureFlags & mask) != 0;
+                        before = OverrideOf(model, index);
+                        changed = ImGui::Checkbox(textures[bit], &enabled);
+                        if (changed) values.TextureFlags = enabled ? values.TextureFlags | mask : values.TextureFlags & ~mask;
+                        TrackMaterial(scene, history, model, index, before, values, changed, true);
+                        ImGui::EndDisabled();
+                    }
+                    if (model.MaterialOverrides.count(index) && ImGui::Button("Reset to imported material"))
+                        EditMaterial(scene, history, model.Id, index, {});
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+        }
+    }
+
+    bool EditMaterial(Scene& scene, CommandHistory& history, EntityId id, uint32_t index, const MaterialEdit& parameters)
+    {
+        auto* model = scene.FindModel(id);
+        if (!model || !model->Asset || index >= model->Asset->Materials.size() ||
+            (parameters && !ValidMaterialParameters(*parameters))) return false;
+        const auto before = OverrideOf(*model, index);
+        ApplyMaterial(scene, id, index, parameters);
+        RecordMaterial(scene, history, id, index, before, parameters);
+        return true;
+    }
+
     void DrawInspector(Scene& scene, UiState& state, CommandHistory& history, PbrRenderer& renderer)
     {
         ImGui::Begin("Inspector");
@@ -364,8 +471,9 @@ namespace AtomEditor
                 pendingTransformEntity = InvalidEntityId;
             }
         }
-        if (const auto* model = scene.FindModel(id))
+        if (auto* model = scene.FindModel(id))
         {
+            DrawMaterials(scene, history, *model);
             ImGui::SeparatorText("Model Asset");
             ImGui::Text("Meshes: %u", model->Asset ? static_cast<unsigned>(model->Asset->Meshes.size()) : 0u);
             ImGui::Text("Materials: %u", model->Asset ? static_cast<unsigned>(model->Asset->Materials.size()) : 0u);

@@ -38,7 +38,7 @@ void DrawRendererSettings(PbrRenderer& renderer)
     }
     ImGui::Checkbox("UseSsao", &shading.UseSSAO);
     ImGui::Checkbox("UseShadow", &shading.UseShadow);
-    ImGui::Checkbox("UseTexture", &shading.UseTexture);
+    ImGui::Checkbox("Use scene materials", &shading.UseTexture);
     ImGui::Checkbox("UseEmu", &shading.UseEmu);
     ImGui::Checkbox("UseSSS", &shading.UseSSS);
     if (shading.UseSSS)

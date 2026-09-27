@@ -106,11 +106,26 @@ namespace AtomEditor
             const bool lightDeleted = m_History.Redo(m_Scene) && !m_Scene.FindLight(lightId) && !m_Scene.ActiveLightId();
             Check(lightRemoved && lightRestored && lightDeleted && m_History.Undo(m_Scene),
                 "active light deletion undo/redo restores its scene reference");
+            MaterialParameters material;
+            material.BaseColorFactor = { 0.2f, 0.4f, 0.8f, 1 };
+            material.MetallicFactor = 0.23f; material.RoughnessFactor = 0.37f;
+            material.EmissiveFactor = { 0.1f, 0.2f, 0.3f }; material.NormalScale = 0.25f; material.TextureFlags = 5;
+            const auto originalColor = m_Asset->Materials[0].Parameters.BaseColorFactor.x;
+            const bool edited = EditMaterial(m_Scene, m_History, id, 0, material);
+            const bool materialUndo = m_History.Undo(m_Scene) && m_Scene.FindModel(id)->MaterialOverrides.empty();
+            Check(edited && materialUndo && m_History.Redo(m_Scene) &&
+                m_Scene.FindModel(id)->MaterialValues(0).RoughnessFactor == 0.37f &&
+                m_Scene.FindModel(importedId)->MaterialOverrides.empty() && m_Asset->Materials[0].Parameters.BaseColorFactor.x == originalColor,
+                "material override undo/redo preserves shared source and other instances");
+            const bool reset = EditMaterial(m_Scene, m_History, id, 0, {}) && m_Scene.FindModel(id)->MaterialOverrides.empty();
+            const bool resetUndo = m_History.Undo(m_Scene) && m_Scene.FindModel(id)->MaterialOverrides.count(0);
+            Check(reset && resetUndo && m_History.Redo(m_Scene) && m_Scene.FindModel(id)->MaterialOverrides.empty() &&
+                m_History.Undo(m_Scene), "reset imported material undo/redo");
             m_Scene.SetNextEntityId(123);
 
             const auto folder = root / "bin-int" / "smoke-documents";
             std::filesystem::create_directories(folder);
-            for (size_t i = 0; i < 15; ++i) m_Files[i] = folder / ("scene-" + std::to_string(i) + ".atomscene");
+            for (size_t i = 0; i < 20; ++i) m_Files[i] = folder / ("scene-" + std::to_string(i) + ".atomscene");
             m_BadFile = folder / "superseded.atomscene";
             std::string error;
             if (!SaveSceneDocument(m_Scene, m_Files[0], root, error)) throw std::runtime_error(error);
@@ -170,13 +185,27 @@ namespace AtomEditor
             auto components = valid;
             components["models"] = Json::array();
             Write(m_Files[14], components);
+            auto invalidMaterial = valid;
+            invalidMaterial["models"][0]["materialOverrides"][0]["roughnessFactor"] = -0.1;
+            Write(m_Files[15], invalidMaterial);
+            auto duplicateMaterial = valid;
+            duplicateMaterial["models"][0]["materialOverrides"].push_back(duplicateMaterial["models"][0]["materialOverrides"][0]);
+            Write(m_Files[16], duplicateMaterial);
+            auto missingMaterial = valid;
+            missingMaterial["models"][0]["materialOverrides"][0]["material"] = 999999;
+            Write(m_Files[17], missingMaterial);
+            auto version3 = valid;
+            version3["version"] = 3;
+            for (auto& item : version3["models"]) item.erase("materialOverrides");
+            Write(m_Files[18], version3);
+            m_Files[19] = root / "Samples/Editor/Scenes/MaterialLab.atomscene";
 
         }
         catch (const std::exception& error)
         {
             ++m_Result.Errors;
             std::cerr << "EDITOR_CHECK_FAILED fixture: " << error.what() << '\n';
-            m_Case = 15;
+            m_Case = 20;
             assets.SetBudget(m_OriginalBudget);
         }
     }
@@ -211,14 +240,14 @@ namespace AtomEditor
 
     void SceneDocumentChecks::Update(ModelAssetManager& assets)
     {
-        if (m_Case >= 15) return;
+        if (m_Case >= 20) return;
         if (!m_Pending) BeginCase();
         m_Loader.Update(assets);
         m_Unchanged = m_Unchanged && SceneUnchanged();
         const auto status = m_Loader.Status();
         if (m_Loader.Busy() && status.State != SceneLoadState::Ready) return;
         bool passed = m_Unchanged && status.File == m_Files[m_Case];
-        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7 || m_Case == 8 || m_Case == 9 || m_Case == 14;
+        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7 || m_Case == 8 || m_Case == 9 || m_Case == 14 || m_Case == 18 || m_Case == 19;
         if (success)
         {
             passed = passed && status.State == SceneLoadState::Ready &&
@@ -227,6 +256,15 @@ namespace AtomEditor
                 m_Loader.Status().State == SceneLoadState::Applied;
             if (m_Case == 7)
                 passed = passed && m_Scene.EntityCount() == 0 && m_State.SelectedEntity == InvalidEntityId;
+            else if (m_Case == 19)
+            {
+                passed = passed && m_Scene.Models.size() == 30 && m_Scene.Cameras.size() == 1 && m_Scene.Lights.size() == 1;
+                if (passed)
+                    passed = m_Scene.Models[0].GPU == m_Scene.Models[24].GPU &&
+                        m_Scene.Models[0].MaterialValues(0).MetallicFactor == 0 && m_Scene.Models[24].MaterialValues(0).MetallicFactor == 1 &&
+                        m_Scene.Models[0].MaterialValues(0).RoughnessFactor == 0 && m_Scene.Models[4].MaterialValues(0).RoughnessFactor == 1 &&
+                        m_Scene.Models[28].GPU != m_Scene.Models[0].GPU && m_Scene.Models[29].MaterialValues(0).EmissiveFactor.x == 3;
+            }
             else if (m_Case == 14)
                 passed = passed && m_Scene.Models.empty() && m_Scene.Cameras.size() == 1 && m_Scene.Lights.size() == 1 &&
                     m_State.SelectedEntity == m_Scene.ActiveCameraId() && std::abs(m_Scene.FindCamera(m_Scene.ActiveCameraId())->Camera.VerticalFovDegrees - 73) < 0.001f;
@@ -248,11 +286,17 @@ namespace AtomEditor
                         first.InstanceName == "Roundtrip model" && first.Transform.scale == 2.5f &&
                         position.GetX() == 1.0f && position.GetY() == 2.0f && position.GetZ() == 3.0f &&
                         m_State.SelectedEntity == first.Id && first.Id != second.Id;
+                    if (m_Case == 0 || m_Case == 6)
+                        passed = passed && first.MaterialOverrides.size() == 1 && second.MaterialOverrides.empty() &&
+                            first.MaterialValues(0).RoughnessFactor == 0.37f && first.MaterialValues(0).MetallicFactor == 0.23f &&
+                            first.MaterialValues(0).NormalScale == 0.25f && first.MaterialValues(0).TextureFlags == 5 &&
+                            first.MaterialValues(0).BaseColorFactor.z == 0.8f && first.MaterialValues(0).EmissiveFactor.z == 0.3f;
+                    if (m_Case == 1 || m_Case == 9 || m_Case == 18) passed = passed && first.MaterialOverrides.empty();
                     if (m_Case != 1) passed = passed && first.Id == 41 && second.Id == 42 && m_Scene.GetNextEntityId() == (m_Case == 9 ? 125 : 123);
                     else passed = passed && first.Id != InvalidEntityId && second.Id != InvalidEntityId;
                 }
             }
-            if (m_Case != 7)
+            if (m_Case != 7 && m_Case != 19)
             {
                 passed = passed && m_Scene.Cameras.size() == 1 && m_Scene.Lights.size() == 1 &&
                     m_Scene.FindCamera(m_Scene.ActiveCameraId()) && m_Scene.FindLight(m_Scene.ActiveLightId());
@@ -270,13 +314,14 @@ namespace AtomEditor
             passed = passed && status.State == expected && (m_Case == 5 || !status.Error.empty()) &&
                 !m_Loader.Apply(m_Scene, m_History, m_State.SelectedEntity, assets) && SceneUnchanged();
         }
-        const char* labels[] = { "version 3 component roundtrip", "version 1 migration", "duplicate IDs",
+        const char* labels[] = { "version 4 material/component roundtrip", "version 1 migration", "duplicate IDs",
             "invalid transform", "partial asset failure", "cancel", "superseded load", "empty scene",
             "new multi-asset scene transaction survives zero cache budgets", "version 2 migration", "cross-type duplicate IDs",
-            "wrong-type active camera reference", "invalid camera clipping", "invalid light color", "component-only scene" };
+            "wrong-type active camera reference", "invalid camera clipping", "invalid light color", "component-only scene",
+            "invalid material factor", "duplicate material override", "missing source material", "version 3 migration", "Material Lab shared-assets scene" };
         Check(passed, labels[m_Case]);
         ++m_Case;
-        if (m_Case == 15) assets.SetBudget(m_OriginalBudget);
+        if (m_Case == 20) assets.SetBudget(m_OriginalBudget);
         m_Pending = false;
     }
 }
