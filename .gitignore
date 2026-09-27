@@ -1,12 +1,19 @@
-﻿################################################################################
-# 此 .gitignore 文件已由 Microsoft(R) Visual Studio 自动创建。
-################################################################################
+# IDE state
+/.vs/
+**/.vs/
+/.idea/
+**/.idea/
 
+# Build output (projects write these beside their own project files)
+/bin/
+/bin-int/
+**/bin/
+**/bin-int/
+**/x64/
+
+# Generated shader headers
+/Atom/CompiledShaders/
+
+# Legacy files kept out of the project
 /Atom/src/d3d12.cpp
 /Atom/src/d3d.h
-/bin
-/bin-int
-/Samples/PBR/x64/Debug
-/Atom/CompiledShaders
-/.vs
-/x64
