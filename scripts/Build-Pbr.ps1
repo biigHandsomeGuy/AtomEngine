@@ -91,6 +91,10 @@ foreach ($item in $targets) {
             Write-Output $smoke.Output
             throw "Frame lifetime, reuse or drain checks failed: $item (log: $smokeLog)"
         }
+        if ($smoke.Output -notmatch 'multiViewChecks=4 secondViewFrames=60') {
+            Write-Output $smoke.Output
+            throw "Shared renderer resources and actual multi-view rendering checks failed: $item (log: $smokeLog)"
+        }
         Write-Output "$item rendered 60 frames and exited normally ($validation; log: $smokeLog)"
     }
 }

@@ -10,6 +10,7 @@
 #include "SkyBox.h"
 #include "RenderGraph.h"
 #include "ConstantBuffers.h"
+#include "PbrResources.h"
 #include <DirectXCollision.h>
 
 
@@ -35,12 +36,12 @@ __declspec(align(256)) struct ShaderParams
     float SpecularFactor = {};
 };
 
-inline TextureID g_IBLTexture = INVALID_TEXTURE;
-
 class PbrRenderer
 {
 public:
-    PbrRenderer(Scene& scene, RenderView& view);
+    // Shared resources outlive every view. Finish GPU use before Shutdown;
+    // ResizeView waits for GPU completion before rebuilding its attachments.
+    PbrRenderer(Scene& scene, RenderView& view, PbrResources& resources);
     PbrRenderer(const PbrRenderer& rhs) = delete;
     PbrRenderer& operator=(const PbrRenderer& rhs) = delete;
     void Initialize();
@@ -54,21 +55,18 @@ public:
     ShaderParams& ShadingSettings() { return m_ShaderAttribs; }
     EnvMapRenderer::RenderAttribs& EnvironmentSettings() { return m_EnvMapAttribs; }
     PostProcess::RenderAttribs& PostSettings() { return m_ppAttribs; }
+    const PbrResources& SharedResources() const { return m_Resources; }
 
 private:
 	void SetupGeometryGraph();
 	void SetupLightingGraph();
 	void SetupPostProcessGraphs();
 
-    void PrecomputeCubemaps();
     void UpdateViewDescriptors();
 
 
 private:
     ShadowCamera m_SunShadowCamera;
-    float mLightRotationAngle = 0.0f;
-
-    Vector3 mRotatedLightDirections{ kIdentity };
 
     ShaderParams m_ShaderAttribs;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
@@ -79,6 +77,8 @@ private:
 
     Scene& m_Scene;
     RenderView& m_View;
+    PbrResources& m_Resources;
+    bool m_Initialized = false;
     uint64_t m_LastSceneRevision = UINT64_MAX;
     std::unique_ptr<SSAO::ViewPasses> m_SsaoPasses;
     DescriptorHandle m_CommonTextures;
@@ -86,5 +86,4 @@ private:
     RenderGraph m_GeometryGraph;
     RenderGraph m_LightingGraph;
     RenderGraph m_PostProcessGraphs[2];
-    SkyBox m_SkyBox;
 };

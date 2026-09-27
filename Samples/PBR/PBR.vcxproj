@@ -92,12 +92,10 @@
   <ItemGroup>
     <ClCompile Include="PbrMain.cpp" />
     <ClCompile Include="PbrApplication.cpp" />
-    <ClCompile Include="PbrRenderer.cpp" />
     <ClCompile Include="PbrUiPanels.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PbrApplication.h" />
-    <ClInclude Include="PbrRenderer.h" />
     <ClInclude Include="PbrUiPanels.h" />
   </ItemGroup>
   <ItemGroup>

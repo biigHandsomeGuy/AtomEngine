@@ -8,27 +8,12 @@
 #include "PipelineState.h"
 #include "BufferManager.h"
 #include "CommandListManager.h"
-#include "FileSystem.h"
+#include <stdexcept>
 
 #include "Model.h"
 
-namespace CS
-{
-#include "../CompiledShaders/SpecularBRDFCS.h"
-#include "../CompiledShaders/IrradianceMapCS.h"
-#include "../CompiledShaders/SpecularMapCS.h"
-#include "../CompiledShaders/EquirectToCubeCS.h"
-#include "../CompiledShaders/GenerateMipMapCS.h"
-#include "../CompiledShaders/Emu.h"
-#include "../CompiledShaders/Eavg.h"
-#include "../CompiledShaders/PreIntegralDiffuseSSSCS.h"
-#include "../CompiledShaders/PreIntegralSpecularSSSCS.h"
-
-}
-
 namespace
 {
-	std::unordered_map<std::string, ComputePSO> s_IBL_PSOCache;
 
     float Halton(uint32_t index, uint32_t base)
     {
@@ -49,30 +34,30 @@ using namespace Graphics;
 using namespace Renderer;
 using namespace Microsoft::WRL;
 
-using namespace CS;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
-PbrRenderer::PbrRenderer(Scene& scene, RenderView& view) : m_Scene(scene), m_View(view)
+PbrRenderer::PbrRenderer(Scene& scene, RenderView& view, PbrResources& resources)
+    : m_Scene(scene), m_View(view), m_Resources(resources)
 {
 }
 
 void PbrRenderer::Initialize()
 {
-    Renderer::Initialize(false, { m_View.SceneColor.GetFormat(), m_View.SceneDepth.GetFormat(),
-        m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() });
+    if (m_Initialized) throw std::logic_error("PBR view is already initialized.");
+    if (!m_Resources.Initialized() || !m_Resources.Pipelines.Matches({
+        m_View.SceneColor.GetFormat(), m_View.SceneDepth.GetFormat(),
+        m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() }))
+        throw std::logic_error("PBR view requires initialized resources with matching formats.");
     m_CommonTextures = g_BindlessHeap.Alloc(10);
     for (auto& table : m_PostProcessTextures) table = g_BindlessHeap.Alloc(4);
     m_SsaoPasses = std::make_unique<SSAO::ViewPasses>(SSAO::ViewResources{
         m_View.SceneDepth, m_View.SceneNormal, m_View.LinearDepthFull, m_View.LinearDepthHalf,
         m_View.SsaoFull, m_View.SsaoHalf, m_View.SsaoBlur });
-    g_IBLTexture = g_TextureManager.LoadHDR(FileSystem::GetFullPath(L"Assets/Textures/EnvirMap/sun.hdr"));
-    PrecomputeCubemaps();
-    m_SkyBox.model = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/cube.glb")));
     SetupGeometryGraph();
     SetupLightingGraph();
     SetupPostProcessGraphs();
     UpdateViewDescriptors();
-    s_IBL_PSOCache.clear();
+    m_Initialized = true;
 }
 void PbrRenderer::Shutdown()
 {
@@ -80,11 +65,10 @@ void PbrRenderer::Shutdown()
     m_LightingGraph.Clear();
     for (auto& graph : m_PostProcessGraphs)
         graph.Clear();
-    m_SkyBox.model = Model{};
-    m_SsaoPasses.reset();
-    Renderer::Shutdown();
-}
 
+    m_SsaoPasses.reset();
+    m_Initialized = false;
+}
 
 void PbrRenderer::SetupGeometryGraph()
 {
@@ -98,8 +82,8 @@ void PbrRenderer::SetupGeometryGraph()
 		context.ClearColor(m_View.SceneNormal);
 		context.ClearDepthAndStencil(m_View.SceneDepth);
 		context.SetRenderTarget(m_View.SceneNormal.GetRTV(), m_View.SceneDepth.GetDSV());
-		context.SetRootSignature(s_RootSig);
-		context.SetPipelineState(s_PSOs["drawNormals"]);
+		context.SetRootSignature(m_Resources.Pipelines.GraphicsRoot);
+		context.SetPipelineState(m_Resources.Pipelines.Graphics.at("drawNormals"));
 
 		m_View.Jitter = { 0.0f, 0.0f };
 		if (m_ppAttribs.useTAA != m_View.LastUseTAA)
@@ -151,8 +135,8 @@ void PbrRenderer::SetupGeometryGraph()
 
 		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetViewProjMatrix();
 		m_ShadowPassGlobalConstants.Jitter = { 0.0f, 0.0f };
-		context.SetRootSignature(s_RootSig);
-		context.SetPipelineState(s_PSOs["shadow"]);
+		context.SetRootSignature(m_Resources.Pipelines.GraphicsRoot);
+		context.SetPipelineState(m_Resources.Pipelines.Graphics.at("shadow"));
 		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_ShadowPassGlobalConstants);
 
 		for (auto& model : m_Scene.Models)
@@ -168,7 +152,6 @@ void PbrRenderer::SetupGeometryGraph()
 	}, {});
 }
 
-
 void PbrRenderer::SetupLightingGraph()
 {
 	m_LightingGraph.Clear();
@@ -181,8 +164,8 @@ void PbrRenderer::SetupLightingGraph()
 	{
 		auto& context = commandContext.GetGraphicsContext();
 		context.SetViewportAndScissor(m_View.Viewport, m_View.Scissor);
-		context.SetRootSignature(s_RootSig);
-		context.SetPipelineState(s_PSOs["opaque"]);
+		context.SetRootSignature(m_Resources.Pipelines.GraphicsRoot);
+		context.SetPipelineState(m_Resources.Pipelines.Graphics.at("opaque"));
 		context.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, m_CommonTextures);
 		context.ClearColor(m_View.SceneColor);
 		context.SetRenderTarget(m_View.SceneColor.GetRTV(), m_View.SceneDepth.GetDSV());
@@ -200,12 +183,11 @@ void PbrRenderer::SetupLightingGraph()
 			kMaterialConstants,
 			sizeof(EnvMapRenderer::RenderAttribs),
 			&m_EnvMapAttribs);
-		context.SetRootSignature(s_RootSig);
-		context.SetPipelineState(s_SkyboxPSO);
-		m_SkyBox.model.Draw(context, false);
+		context.SetRootSignature(m_Resources.Pipelines.GraphicsRoot);
+		context.SetPipelineState(m_Resources.Pipelines.Skybox);
+		m_Resources.Skybox.Draw(context, false);
 	});
 }
-
 
 void PbrRenderer::SetupPostProcessGraphs()
 {
@@ -223,8 +205,8 @@ void PbrRenderer::SetupPostProcessGraphs()
 		{
 			auto& compute = commandContext.GetComputeContext();
 			compute.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
-			compute.SetRootSignature(s_ComputeRootSig);
-			compute.SetPipelineState(s_PostProcessPSO);
+			compute.SetRootSignature(m_Resources.Pipelines.ComputeRoot);
+			compute.SetPipelineState(m_Resources.Pipelines.Post);
 			compute.SetDescriptorTable(0, m_PostProcessTextures[historyReadIndex]);
 			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex] + Graphics::CbvSrvUavDescriptorSize * 3);
 			compute.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
@@ -266,9 +248,9 @@ bool PbrRenderer::ResizeView(uint32_t width, uint32_t height)
 void PbrRenderer::UpdateViewDescriptors()
 {
     D3D12_CPU_DESCRIPTOR_HANDLE source[] = {
-        g_EnvirMap.GetSRV(), g_RadianceMap.GetSRV(), g_IrradianceMap.GetSRV(),
-        m_View.SsaoFull.GetSRV(), m_View.Shadow.GetDepthSRV(), g_LUT.GetSRV(),
-        g_SSSDiffuseLut.GetSRV(), g_SSSSpecularLut.GetSRV(), g_Emu.GetSRV(), g_Eavg.GetSRV()
+        m_Resources.Environment.GetSRV(), m_Resources.Radiance.GetSRV(), m_Resources.Irradiance.GetSRV(),
+        m_View.SsaoFull.GetSRV(), m_View.Shadow.GetDepthSRV(), m_Resources.BrdfLut.GetSRV(),
+        m_Resources.SssDiffuse.GetSRV(), m_Resources.SssSpecular.GetSRV(), m_Resources.Emu.GetSRV(), m_Resources.Eavg.GetSRV()
     };
     for (uint32_t index = 0; index < _countof(source); ++index)
         g_Device->CopyDescriptorsSimple(1, m_CommonTextures + index * CbvSrvUavDescriptorSize,
@@ -285,6 +267,7 @@ void PbrRenderer::UpdateViewDescriptors()
 }
 void PbrRenderer::Render(GraphicsContext& graphics)
 {
+    if (!m_Initialized || !m_Resources.Initialized()) throw std::logic_error("PBR view is not initialized.");
     if (m_Scene.Revision() != m_LastSceneRevision)
     {
         m_View.InvalidateHistory();
@@ -304,7 +287,6 @@ void PbrRenderer::Render(GraphicsContext& graphics)
 	m_LightingGraph.Execute(graphics);
 	graphics.TransitionResource(m_View.SceneColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	graphics.TransitionResource(m_View.SceneDepth, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-
 
 	// ------------------------- postprocess -----------------------
     const uint32_t taaReadIndex = m_View.HistoryReadIndex & 1u;
@@ -334,187 +316,3 @@ void PbrRenderer::Render(GraphicsContext& graphics)
     }
 }
 
-void PbrRenderer::PrecomputeCubemaps()
-{
-	ComputeContext& ComputeContext = ComputeContext::Begin(L"PrecomputeCubemaps");
-    const auto CeilDiv = [](UINT value, UINT divisor) -> UINT
-    {
-        return (value + divisor - 1) / divisor;
-    };
-    const auto MipSize = [](UINT baseSize, UINT level) -> UINT
-    {
-        return std::max(1u, baseSize >> level);
-    };
-
-	__declspec(align(256)) struct ShaderParams
-	{
-		DWORD param0 = 0;
-		DWORD param1 = 0;
-	};
-	ShaderParams shaderParams;
-	s_IBL_PSOCache["EquirectToCube"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["EquirectToCube"].SetComputeShader(g_pEquirectToCubeCS, sizeof(g_pEquirectToCubeCS));
-	s_IBL_PSOCache["EquirectToCube"].Finalize();
-
-	s_IBL_PSOCache["GenerateMipMap"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["GenerateMipMap"].SetComputeShader(g_pGenerateMipMapCS, sizeof(g_pGenerateMipMapCS));
-	s_IBL_PSOCache["GenerateMipMap"].Finalize();
-
-	s_IBL_PSOCache["PrefilterSpecularMap"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["PrefilterSpecularMap"].SetComputeShader(g_pSpecularMapCS, sizeof(g_pSpecularMapCS));
-	s_IBL_PSOCache["PrefilterSpecularMap"].Finalize();
-
-	s_IBL_PSOCache["PrecomputeIrradianceMap"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["PrecomputeIrradianceMap"].SetComputeShader(g_pIrradianceMapCS, sizeof(g_pIrradianceMapCS));
-	s_IBL_PSOCache["PrecomputeIrradianceMap"].Finalize();
-
-	s_IBL_PSOCache["PrecomputeBRDF"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["PrecomputeBRDF"].SetComputeShader(g_pSpecularBRDFCS, sizeof(g_pSpecularBRDFCS));
-	s_IBL_PSOCache["PrecomputeBRDF"].Finalize();
-
-	s_IBL_PSOCache["emu"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["emu"].SetComputeShader(g_pEmu, sizeof(g_pEmu));
-	s_IBL_PSOCache["emu"].Finalize();
-
-	s_IBL_PSOCache["eavg"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["eavg"].SetComputeShader(g_pEavg, sizeof(g_pEavg));
-	s_IBL_PSOCache["eavg"].Finalize();
-
-	s_IBL_PSOCache["PreintegralDiffuseSSS"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["PreintegralDiffuseSSS"].SetComputeShader(g_pPreIntegralDiffuseSSSCS, sizeof(g_pPreIntegralDiffuseSSSCS));
-	s_IBL_PSOCache["PreintegralDiffuseSSS"].Finalize();
-
-	s_IBL_PSOCache["PreintegralSpecularSSS"].SetRootSignature(s_ComputeRootSig);
-	s_IBL_PSOCache["PreintegralSpecularSSS"].SetComputeShader(g_pPreIntegralSpecularSSSCS, sizeof(g_pPreIntegralSpecularSSSCS));
-	s_IBL_PSOCache["PreintegralSpecularSSS"].Finalize();
-
-	{
-
-		ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
-
-		ComputeContext.SetRootSignature(s_ComputeRootSig);
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["EquirectToCube"]);
-
-		ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-		ComputeContext.SetDynamicDescriptor(0, 0, g_TextureManager.Get(g_IBLTexture).GetSRV());
-		ComputeContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[0]);
-		ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
-		ComputeContext.Dispatch(CeilDiv(g_EnvirMap.GetWidth(), 32), CeilDiv(g_EnvirMap.GetHeight(), 32), 6);
-
-
-		//// =======================  Generic MipMap
-		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["GenerateMipMap"]);
-
-        const UINT envMipLevels = g_EnvirMap.GetResource()->GetDesc().MipLevels;
-		for (UINT level = 1; level < envMipLevels; ++level)
-		{
-			ComputeContext.SetDynamicDescriptor(1, 0, g_EnvirMap.GetUAVArray()[level]);
-
-            const UINT mipWidth = MipSize(g_EnvirMap.GetWidth(), level);
-            const UINT mipHeight = MipSize(g_EnvirMap.GetHeight(), level);
-			shaderParams.param1 = level - 1;
-			shaderParams.param0 = mipWidth;
-			ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
-			ComputeContext.Dispatch(CeilDiv(mipWidth, 32), CeilDiv(mipHeight, 32), 6);
-
-			ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		}
-		ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_GENERIC_READ);
-	}
-
-	// Compute pre-filtered specular environment map
-	{
-		__declspec(align(256)) struct SpecularParameters
-		{
-			float Roughness = 0.0f;
-		};
-		SpecularParameters specularParameters;
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrefilterSpecularMap"]);
-		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
-		ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-
-		const UINT levels = g_RadianceMap.GetResource()->GetDesc().MipLevels;
-		const float deltaRoughness = 1.0f / std::max(float(levels - 1), (float)1);
-		for (UINT level = 0; level < levels; ++level)
-		{
-            const UINT mipWidth = MipSize(g_RadianceMap.GetWidth(), level);
-            const UINT mipHeight = MipSize(g_RadianceMap.GetHeight(), level);
-			const float spmapRoughness = level * deltaRoughness;
-			ComputeContext.SetDynamicDescriptor(1, 0, g_RadianceMap.GetUAVArray()[level]);
-			specularParameters.Roughness = spmapRoughness;
-			ComputeContext.SetDynamicConstantBufferView(2, sizeof(SpecularParameters), &specularParameters);
-			ComputeContext.Dispatch(CeilDiv(mipWidth, 32), CeilDiv(mipHeight, 32), 6);
-
-			ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		}
-		ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-	}
-
-	// create irradiance map compute pso
-	{
-
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrecomputeIrradianceMap"]);
-
-
-		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
-		ComputeContext.SetDynamicDescriptor(1, 0, g_IrradianceMap.GetUAV());
-		ComputeContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-		ComputeContext.Dispatch(CeilDiv(g_IrradianceMap.GetWidth(), 32), CeilDiv(g_IrradianceMap.GetHeight(), 32), 6);
-		ComputeContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	}
-
-
-	{
-
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrecomputeBRDF"]);
-
-		ComputeContext.SetDynamicDescriptor(1, 0, g_LUT.GetUAV());
-		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-		ComputeContext.Dispatch(CeilDiv(g_LUT.GetWidth(), 32), CeilDiv(g_LUT.GetHeight(), 32), 1);
-		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-	}
-
-	{
-
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["emu"]);
-		ComputeContext.SetDynamicDescriptor(1, 0, g_Emu.GetUAV());
-		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(CeilDiv(g_Emu.GetWidth(), 32), CeilDiv(g_Emu.GetHeight(), 32), 1);
-		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	}
-
-	{
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["eavg"]);
-
-		ComputeContext.SetDynamicDescriptor(1, 0, g_Eavg.GetUAV());
-		ComputeContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(CeilDiv(g_Eavg.GetWidth(), 32), CeilDiv(g_Eavg.GetHeight(), 32), 1);
-		ComputeContext.TransitionResource(g_Eavg, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	}
-
-	{
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["PreintegralDiffuseSSS"]);
-
-		ComputeContext.SetDynamicDescriptor(1, 0, g_SSSDiffuseLut.GetUAV());
-		ComputeContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(CeilDiv(g_SSSDiffuseLut.GetWidth(), 32), CeilDiv(g_SSSDiffuseLut.GetHeight(), 32), 1);
-		ComputeContext.TransitionResource(g_SSSDiffuseLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	}
-
-	{
-		ComputeContext.SetPipelineState(s_IBL_PSOCache["PreintegralSpecularSSS"]);
-
-		ComputeContext.SetDynamicDescriptor(1, 0, g_SSSSpecularLut.GetUAV());
-		ComputeContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		ComputeContext.Dispatch(CeilDiv(g_SSSSpecularLut.GetWidth(), 32), CeilDiv(g_SSSSpecularLut.GetHeight(), 32), 1);
-		ComputeContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	}
-	ComputeContext.Finish(true);
-}

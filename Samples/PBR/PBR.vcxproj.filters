@@ -7,12 +7,10 @@
   <ItemGroup>
     <ClCompile Include="PbrMain.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="PbrApplication.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="PbrRenderer.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="PbrUiPanels.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PbrApplication.h"><Filter>Header Files</Filter></ClInclude>
-    <ClInclude Include="PbrRenderer.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="PbrUiPanels.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
 </Project>

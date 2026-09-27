@@ -100,9 +100,11 @@ void Display::Initialize(bool useLegacySceneBuffers)
         g_DisplayPlane[i].CreateFromSwapChain(L"Primary SwapChain Buffer", displayPlane.Detach());
     }
 
-    InitializeSharedRenderingBuffers();
     if (s_UseLegacySceneBuffers)
+    {
+        InitializeSharedRenderingBuffers();
         InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
+    }
 }
 
 void Display::Shutdown(void)

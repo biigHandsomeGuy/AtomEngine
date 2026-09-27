@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "Renderer.h"
+#include "PbrResources.h"
+#include <stdexcept>
 #include "TextureManager.h"
 #include "GraphicsCore.h"
 #include "DescriptorHeap.h"
@@ -39,7 +41,7 @@ namespace Renderer
     GraphicsPSO s_SkyboxPSO(L"Skybox PSO");
     ComputePSO s_PostProcessPSO(L"Post Process PSO");
 
-    static void CreateGraphicsRootSignature()
+    static void CreateGraphicsRootSignature(RootSignature& s_RootSig)
     {
         s_RootSig.Reset(kNumRootBindings, 5);
         s_RootSig[kMeshConstants].InitAsConstantBuffer(0, D3D12_SHADER_VISIBILITY_VERTEX);
@@ -61,7 +63,7 @@ namespace Renderer
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
     }
 
-    static void CreateComputeRootSignature()
+    static void CreateComputeRootSignature(RootSignature& s_ComputeRootSig)
     {
         s_ComputeRootSig.Reset(3, 4);
         s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 3);
@@ -90,7 +92,8 @@ namespace Renderer
             D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED);
     }
 
-    static void CreatePSOs(const PipelineFormats& formats)
+    static void CreatePSOs(const PipelineFormats& formats, RootSignature& s_RootSig, RootSignature& s_ComputeRootSig,
+        std::unordered_map<std::string, GraphicsPSO>& s_PSOs, GraphicsPSO& s_SkyboxPSO, ComputePSO& s_PostProcessPSO)
     {
         static const D3D12_INPUT_ELEMENT_DESC kInputLayout[] =
         {
@@ -161,6 +164,25 @@ namespace Renderer
         s_PostProcessPSO.Finalize();
     }
 
+    bool PbrPipelines::Matches(PipelineFormats formats) const
+    {
+        return m_Initialized && formats.Color == m_Formats.Color && formats.Depth == m_Formats.Depth &&
+            formats.Normal == m_Formats.Normal && formats.Shadow == m_Formats.Shadow;
+    }
+
+    void PbrPipelines::Initialize(PipelineFormats formats)
+    {
+        if (m_Initialized)
+        {
+            if (!Matches(formats)) throw std::logic_error("PBR pipelines require matching attachment formats.");
+            return;
+        }
+        CreateGraphicsRootSignature(GraphicsRoot);
+        CreateComputeRootSignature(ComputeRoot);
+        CreatePSOs(formats, GraphicsRoot, ComputeRoot, Graphics, Skybox, Post);
+        m_Formats = formats;
+        m_Initialized = true;
+    }
     void Initialize(bool useLegacyDescriptors, PipelineFormats formats)
     {
         m_CommonTextures = Graphics::g_BindlessHeap.Alloc(10);
@@ -176,10 +198,10 @@ namespace Renderer
         nullSrv.Texture2D.MipLevels = 1;
         g_Device->CreateShaderResourceView(nullptr, &nullSrv, g_NullDescriptor);
 
-        CreateGraphicsRootSignature();
-        CreateComputeRootSignature();
+        CreateGraphicsRootSignature(s_RootSig);
+        CreateComputeRootSignature(s_ComputeRootSig);
         CreateBindlessRootSignature();
-        CreatePSOs(formats);
+        CreatePSOs(formats, s_RootSig, s_ComputeRootSig, s_PSOs, s_SkyboxPSO, s_PostProcessPSO);
         if (useLegacyDescriptors)
             UpdateGlobalDescriptors();
     }

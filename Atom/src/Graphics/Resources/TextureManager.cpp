@@ -25,6 +25,14 @@ void TextureManager::Initialize()
     m_PathMap.clear();
 
     m_Textures.emplace_back();
+    const auto descriptor = Graphics::g_BindlessHeap.AllocBindless();
+    D3D12_SHADER_RESOURCE_VIEW_DESC nullSrv{};
+    nullSrv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    nullSrv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    nullSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    nullSrv.Texture2D.MipLevels = 1;
+    Graphics::g_Device->CreateShaderResourceView(nullptr, &nullSrv, descriptor.Handle);
+    m_NullSrvIndex = descriptor.Index;
 }
 
 void TextureManager::Shutdown()
@@ -36,6 +44,7 @@ void TextureManager::Shutdown()
 
     m_Textures.clear();
     m_PathMap.clear();
+    m_NullSrvIndex = INVALID_TEXTURE;
 }
 
 TextureID TextureManager::LoadTexture(const std::wstring& path, bool srgb)

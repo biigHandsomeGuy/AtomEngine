@@ -24,7 +24,8 @@
 using namespace Graphics;
 
 PbrApplication::PbrApplication(std::unique_ptr<PbrApplicationUi> ui, uint32_t smokeFrameLimit)
-    : m_Frames(g_CommandManager), m_Renderer(m_Scene, m_View), m_Ui(std::move(ui)), m_SmokeFrameLimit(smokeFrameLimit)
+    : m_Frames(g_CommandManager), m_Renderer(m_Scene, m_View, m_RenderResources),
+      m_Ui(std::move(ui)), m_SmokeFrameLimit(smokeFrameLimit)
 {
 }
 
@@ -35,6 +36,8 @@ void PbrApplication::Startup()
     m_View.Camera.SetZRange(m_View.NearClip, m_View.FarClip);
     m_View.Resize(1280, 720);
     m_CameraController = std::make_unique<FlyingFPSCamera>(m_View.Camera, Math::Vector3(Math::kYUnitVector));
+    m_RenderResources.Initialize(PathFromUtf8(FileSystem::GetFullPath(".")), m_Assets,
+        { m_View.SceneColor.GetFormat(), m_View.SceneDepth.GetFormat(), m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() });
     m_Renderer.Initialize();
     auto model = ModelUtility::CreateModel(m_Assets.LoadBlocking(
         FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf")));
@@ -116,6 +119,10 @@ void PbrApplication::Cleanup()
     m_Scene.ReplaceModels({});
     m_Assets.Shutdown();
     m_Renderer.Shutdown();
+    if (m_SecondRenderer) m_SecondRenderer->Shutdown();
+    m_SecondRenderer.reset();
+    m_SecondView.Destroy();
+    m_RenderResources.Shutdown();
     m_CameraController.reset();
     m_View.Destroy();
     if (m_SmokeFrameLimit != 0)
@@ -143,6 +150,7 @@ void PbrApplication::Cleanup()
         const bool deviceRemoved = FAILED(g_Device->GetDeviceRemovedReason());
         if (m_SmokeFrameLimit >= 60 && (m_ResizeChecks != 4 || m_WindowResizes != 1))
             ++m_ViewErrors;
+        if (m_SecondViewFrames != m_CompletedFrames || m_MultiViewChecks != 4) ++m_ViewErrors;
         if (m_FrameChecks != 5 || (m_SmokeFrameLimit >= 60 && m_PresentationChecks != 2) ||
             m_Frames.Stats().Submissions != m_CompletedFrames ||
             m_Frames.Stats().SlotReuses != (m_CompletedFrames > FrameScheduler::FramesInFlight ?
@@ -161,7 +169,8 @@ void PbrApplication::Cleanup()
             << " frameErrors=" << m_FrameErrors << " frameChecks=" << m_FrameChecks
             << " submissions=" << m_Frames.Stats().Submissions << " slotReuses=" << m_Frames.Stats().SlotReuses
             << " drained=" << (m_Frames.PendingFrames() == 0 && m_Frames.RetainedResources() == 0)
-            << " presentationChecks=" << m_PresentationChecks << '\n';
+            << " presentationChecks=" << m_PresentationChecks << " multiViewChecks=" << m_MultiViewChecks
+            << " secondViewFrames=" << m_SecondViewFrames << '\n';
     }
 }
 
@@ -227,12 +236,52 @@ void PbrApplication::RenderScene()
             ++m_ViewErrors;
     }
     g_Device->CopyDescriptorsSimple(1, descriptor, m_View.Output.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    if (m_SecondRenderer && m_CompletedFrames == 5)
+    {
+        auto* primaryOutput = m_View.Output.GetResource();
+        const bool history = m_View.HistoryValid;
+        m_SecondRenderer->ResizeView(321, 179);
+        ++m_MultiViewChecks;
+        if (m_View.Output.GetResource() != primaryOutput || m_View.HistoryValid != history ||
+            m_SecondView.HistoryValid || m_SecondView.LinearDepthHalf.GetWidth() != 161 ||
+            m_SecondView.LinearDepthHalf.GetHeight() != 90) ++m_ViewErrors;
+    }
+    if (m_SecondRenderer && m_CompletedFrames == 10)
+    {
+        const auto primaryFrame = m_View.FrameIndex;
+        m_SecondView.InvalidateHistory();
+        ++m_MultiViewChecks;
+        if (!m_View.HistoryValid || m_View.FrameIndex != primaryFrame || m_SecondView.HistoryValid ||
+            m_SecondView.FrameIndex != 0) ++m_ViewErrors;
+    }
+    if (m_SecondRenderer && m_CompletedFrames == 50)
+    {
+        g_CommandManager.IdleGPU();
+        const auto* signature = m_RenderResources.Pipelines.GraphicsRoot.GetSignature();
+        const bool history = m_View.HistoryValid;
+        m_SecondRenderer->Shutdown();
+        m_SecondRenderer = std::make_unique<PbrRenderer>(m_Scene, m_SecondView, m_RenderResources);
+        m_SecondRenderer->Initialize();
+        m_SecondRenderer->PostSettings().useTAA = true;
+        ++m_MultiViewChecks;
+        if (m_RenderResources.PrecomputeCount() != 1 ||
+            m_RenderResources.Pipelines.GraphicsRoot.GetSignature() != signature ||
+            m_View.HistoryValid != history) ++m_ViewErrors;
+    }
     ImGui::Render();
 
     // Geometry, compute passes and main UI share one ordered direct command list.
     GraphicsContext& graphics = GraphicsContext::Begin(L"PBR application frame");
     for (const auto& model : m_Scene.Models) m_Frames.Retain(model.GPU);
     m_Renderer.Render(graphics);
+    if (m_SecondRenderer)
+    {
+        m_SecondRenderer->Render(graphics);
+        ++m_SecondViewFrames;
+        if (!m_SecondView.HistoryValid || m_SecondView.Output.GetResource() == m_View.Output.GetResource() ||
+            m_SecondView.Camera.GetPosition().GetX() != 7.0f) ++m_ViewErrors;
+        if (m_CompletedFrames >= 35 && m_CompletedFrames < 40 && m_View.HistoryValid) ++m_ViewErrors;
+    }
     graphics.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, g_BindlessHeap.GetHeapPointer());
     graphics.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET, true);
     graphics.ClearColor(g_DisplayPlane[g_CurrentBuffer]);
@@ -272,6 +321,22 @@ void PbrApplication::CheckViewIsolation()
     if (m_View.Output.GetResource() != output || other.Width() != 33 || other.Height() != 25 || other.HistoryValid)
         ++m_ViewErrors;
     other.Destroy();
+    m_SecondView.Resize(320, 180);
+    m_SecondView.Camera.SetEyeAtUp(Math::Vector3(7, 3, -20), Math::Vector3(Math::kZero), Math::Vector3(Math::kYUnitVector));
+    m_SecondView.Camera.SetZRange(m_SecondView.NearClip, m_SecondView.FarClip);
+    m_SecondView.Camera.Update();
+    m_SecondRenderer = std::make_unique<PbrRenderer>(m_Scene, m_SecondView, m_RenderResources);
+    m_SecondRenderer->Initialize();
+    m_SecondRenderer->PostSettings().useTAA = true;
+    auto formats = Renderer::PipelineFormats{};
+    formats.Color = DXGI_FORMAT_R32_FLOAT;
+    bool rejected = false;
+    try { m_RenderResources.Pipelines.Initialize(formats); }
+    catch (const std::logic_error&) { rejected = true; }
+    ++m_MultiViewChecks;
+    if (!rejected || &m_Renderer.SharedResources() != &m_SecondRenderer->SharedResources() ||
+        m_RenderResources.PrecomputeCount() != 1 || Graphics::g_EnvirMap.GetResource() ||
+        !Renderer::s_PSOs.empty()) ++m_ViewErrors;
 }
 
 void PbrApplication::CheckFrameScheduler()

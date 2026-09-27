@@ -69,7 +69,10 @@ private:
     ModelAssetManager m_Assets;
     FrameScheduler m_Frames;
     RenderView m_View;
+    PbrResources m_RenderResources;
     PbrRenderer m_Renderer;
+    RenderView m_SecondView;
+    std::unique_ptr<PbrRenderer> m_SecondRenderer;
     std::unique_ptr<CameraController> m_CameraController;
     std::unique_ptr<PbrApplicationUi> m_Ui;
     DescriptorHandle m_ViewportDescriptors[FrameScheduler::FramesInFlight];
@@ -88,4 +91,6 @@ private:
     uint32_t m_FrameErrors = 0;
     uint32_t m_FrameChecks = 0;
     uint32_t m_PresentationChecks = 0;
+    uint32_t m_MultiViewChecks = 0;
+    uint64_t m_SecondViewFrames = 0;
 };

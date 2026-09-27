@@ -11,7 +11,6 @@
     <ClCompile Include="SceneDocument.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="SceneDocumentChecks.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\PBR\PbrApplication.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="..\PBR\PbrRenderer.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\PBR\PbrUiPanels.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -21,7 +20,6 @@
     <ClInclude Include="SceneDocumentChecks.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="EditorCommandHistory.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="..\PBR\PbrApplication.h"><Filter>Header Files</Filter></ClInclude>
-    <ClInclude Include="..\PBR\PbrRenderer.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="..\PBR\PbrUiPanels.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
 </Project>

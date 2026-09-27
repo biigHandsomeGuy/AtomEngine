@@ -97,7 +97,6 @@
     <ClCompile Include="SceneDocument.cpp" />
     <ClCompile Include="SceneDocumentChecks.cpp" />
     <ClCompile Include="..\PBR\PbrApplication.cpp" />
-    <ClCompile Include="..\PBR\PbrRenderer.cpp" />
     <ClCompile Include="..\PBR\PbrUiPanels.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -107,7 +106,6 @@
     <ClInclude Include="SceneDocumentChecks.h" />
     <ClInclude Include="EditorCommandHistory.h" />
     <ClInclude Include="..\PBR\PbrApplication.h" />
-    <ClInclude Include="..\PBR\PbrRenderer.h" />
     <ClInclude Include="..\PBR\PbrUiPanels.h" />
   </ItemGroup>
   <ItemGroup>

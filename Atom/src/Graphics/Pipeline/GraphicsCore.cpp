@@ -70,10 +70,10 @@ namespace Graphics
 		g_Device->SetName(L"g_Device");
 		
 		g_CommandManager.Create(g_Device);
-        g_TextureManager.Initialize();
 
 		Graphics::InitializeCommonState();
     	g_BindlessHeap.Create(L"Bindless Heap", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 100000);
+        g_TextureManager.Initialize();
 		Graphics::RtvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		Graphics::DsvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		Graphics::CbvSrvUavDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);

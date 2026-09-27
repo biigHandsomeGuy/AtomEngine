@@ -341,7 +341,7 @@ static MeshGPU UploadMesh(const MeshAsset& asset, CommandContext& context)
 static uint32_t ToSceneHeapIndex(TextureID textureId, TextureManager& textureManager)
 {
     if (textureId == INVALID_TEXTURE)
-        return Graphics::g_BindlessHeap.GetOffsetOfHandle(Renderer::g_NullDescriptor);
+        return textureManager.GetNullBindlessIndex();
 
     return textureManager.GetBindlessIndex(textureId);
 }

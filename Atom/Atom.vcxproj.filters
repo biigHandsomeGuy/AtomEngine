@@ -148,6 +148,8 @@
     <ClInclude Include="src\Renderer\RenderGraph.h">
       <Filter>Renderer</Filter>
     </ClInclude>
+    <ClInclude Include="src\Renderer\PbrRenderer.h"><Filter>Renderer</Filter></ClInclude>
+    <ClInclude Include="src\Renderer\PbrResources.h"><Filter>Renderer</Filter></ClInclude>
     <ClInclude Include="src\Renderer\RenderView.h">
       <Filter>Renderer</Filter>
     </ClInclude>
@@ -319,6 +321,8 @@
     <ClCompile Include="src\Renderer\RenderGraph.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
+    <ClCompile Include="src\Renderer\PbrRenderer.cpp"><Filter>Renderer</Filter></ClCompile>
+    <ClCompile Include="src\Renderer\PbrResources.cpp"><Filter>Renderer</Filter></ClCompile>
     <ClCompile Include="src\Renderer\RenderView.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>

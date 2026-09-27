@@ -57,6 +57,7 @@ public:
 
 	uint32_t GetBindlessIndex(TextureID id) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSrvHandle(TextureID id) const;
+    uint32_t GetNullBindlessIndex() const { return m_NullSrvIndex; }
 
 private:
 
@@ -71,4 +72,5 @@ private:
 	std::unordered_map<std::wstring, TextureID> m_PathMap;
 
 	std::recursive_mutex m_Mutex;
+    uint32_t m_NullSrvIndex = INVALID_TEXTURE;
 };
