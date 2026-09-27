@@ -14,21 +14,27 @@
 
 namespace AtomEditor
 {
-    struct SceneModelRecord
+    struct SceneEntityRecord
     {
         EntityId Id = InvalidEntityId;
         std::string Name;
-        std::string AssetPath;
         std::array<float, 3> Translation{};
         std::array<float, 4> Rotation{ 0, 0, 0, 1 };
         float Scale = 1.0f;
     };
+    struct SceneModelRecord : SceneEntityRecord { std::string AssetPath; };
+    struct SceneCameraRecord : SceneEntityRecord { CameraComponent Camera; };
+    struct SceneLightRecord : SceneEntityRecord { DirectionalLightComponent Light; };
 
     struct SceneDocumentData
     {
-        int Version = 2;
+        int Version = 3;
         EntityId NextEntityId = 1;
         std::vector<SceneModelRecord> Models;
+        std::vector<SceneCameraRecord> Cameras;
+        std::vector<SceneLightRecord> Lights;
+        EntityId ActiveCamera = InvalidEntityId;
+        EntityId ActiveLight = InvalidEntityId;
     };
 
     bool ReadSceneDocument(const std::filesystem::path& file, const std::filesystem::path& projectRoot,

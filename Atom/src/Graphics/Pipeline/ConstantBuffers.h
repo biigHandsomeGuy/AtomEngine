@@ -24,6 +24,8 @@ __declspec(align(256)) struct GlobalConstants
     DirectX::XMFLOAT2 Jitter = { 0.0f, 0.0f };
     float Padding0 = 0.0f;
     float Padding1 = 0.0f;
+    DirectX::XMFLOAT4 SunDirection{ 0, 0, -1, 0 }; // Direction of emitted rays.
+    DirectX::XMFLOAT4 SunRadiance{ 0, 0, 0, 0 }; // Linear RGB color * intensity.
 };
 
 __declspec(align(256)) struct SsaoConstants

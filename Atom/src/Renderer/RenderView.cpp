@@ -32,6 +32,8 @@ bool RenderView::Resize(uint32_t width, uint32_t height)
     Viewport = { 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f };
     Scissor = { 0, 0, LONG(width), LONG(height) };
     Camera.SetAspectRatio(float(height) / float(width));
+    EditorCamera.SetAspectRatio(float(height) / float(width));
+    EditorCamera.Update();
     Camera.Update();
     InvalidateHistory();
     return true;

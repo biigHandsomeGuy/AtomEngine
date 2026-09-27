@@ -17,6 +17,12 @@
 
 using namespace Math;
 
+void BaseCamera::SetTransform(const OrthogonalTransform& transform)
+{
+    SetRotation(transform.GetRotation());
+    SetPosition(transform.GetTranslation());
+}
+
 void BaseCamera::SetLookDirection(Vector3 forward, Vector3 up)
 {
     // Given, but ensure normalization

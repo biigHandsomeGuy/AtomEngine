@@ -20,7 +20,7 @@ namespace AtomEditor
         void DrawMenu(Scene& scene);
         void OpenDocument();
         void SaveDocument(const Scene& scene, bool saveAs);
-        void UpdateDocument(Scene& scene);
+        void UpdateDocument(Scene& scene, PbrRenderer& renderer);
 
         UiState m_State;
         CommandHistory m_History;

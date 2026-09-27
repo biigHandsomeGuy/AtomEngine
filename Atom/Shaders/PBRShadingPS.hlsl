@@ -30,6 +30,11 @@ cbuffer GlobalConstants : register(b1)
     float3 gCameraPos;
     float pad;
     float3 gSunPosition;
+    float pad1;
+    float2 gJitter;
+    float2 gPad2;
+    float4 gSunDirection;
+    float4 gSunRadiance;
 };
 
 cbuffer ShaderParams : register(b2)
@@ -162,8 +167,8 @@ float4 main(VertexOut pin) : SV_Target
     {
         float alphaRoughness = roughness * roughness;
         
-        float3 Li = normalize(gSunPosition - pin.WorldPosition);
-        float3 Lradiance = { 1, 1, 1 };
+        float3 Li = -gSunDirection.xyz;
+        float3 Lradiance = gSunRadiance.rgb;
 
 		// Half-vector between Li and Lo.
         float3 Lh = normalize(Li + Lo);

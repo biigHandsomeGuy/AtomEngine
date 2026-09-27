@@ -18,8 +18,8 @@ void DrawRendererSettings(PbrRenderer& renderer)
     DirectX::XMFLOAT4 position;
     DirectX::XMStoreFloat4(&position, renderer.Camera().GetPosition());
     ImGui::Text("Camera Position: (%.3f, %.3f, %.3f)", position.x, position.y, position.z);
-    ImGui::DragFloat("Camera Near", &renderer.CameraNearClip(), 0.05f, 0.01f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
-    ImGui::DragFloat("Camera Far", &renderer.CameraFarClip(), 10.0f, 10.0f, 200000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+    ImGui::DragFloat("Free camera near", &renderer.CameraNearClip(), 0.05f, 0.01f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    ImGui::DragFloat("Free camera far", &renderer.CameraFarClip(), 10.0f, 10.0f, 200000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
     ImGui::SliderFloat("Env mip map", &environment.EnvMapMipLevel, 0.0f, 10.0f);
     ImGui::SliderFloat("exposure", &post.exposure, 0.1f, 5.0f);
     ImGui::Checkbox("UseFXAA", &post.isRenderingLuminance);

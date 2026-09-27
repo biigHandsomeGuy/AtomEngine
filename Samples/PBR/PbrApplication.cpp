@@ -21,6 +21,9 @@
 #include "FileSystem.h"
 #include "GraphicsCore.h"
 #include "PathUtils.h"
+#include "ReadbackBuffer.h"
+#include <DirectXPackedVector.h>
+#include <cmath>
 
 using namespace Graphics;
 
@@ -33,16 +36,24 @@ PbrApplication::PbrApplication(std::unique_ptr<PbrApplicationUi> ui, uint32_t sm
 void PbrApplication::Startup()
 {
     InitializeUi();
-    m_View.Camera.SetEyeAtUp(Math::Vector3(0.0f, 0.0f, -20.0f), Math::Vector3(Math::kZero), Math::Vector3(Math::kYUnitVector));
-    m_View.Camera.SetZRange(m_View.NearClip, m_View.FarClip);
+    m_View.EditorCamera.SetEyeAtUp(Math::Vector3(0.0f, 0.0f, -20.0f), Math::Vector3(Math::kZero), Math::Vector3(Math::kYUnitVector));
+    m_View.EditorCamera.SetZRange(m_View.NearClip, m_View.FarClip);
+    m_View.EditorCamera.Update();
+    m_View.Camera = m_View.EditorCamera;
     m_View.Resize(1280, 720);
-    m_CameraController = std::make_unique<FlyingFPSCamera>(m_View.Camera, Math::Vector3(Math::kYUnitVector));
+    m_CameraController = std::make_unique<FlyingFPSCamera>(m_View.EditorCamera, Math::Vector3(Math::kYUnitVector));
     m_RenderResources.Initialize(PathFromUtf8(FileSystem::GetFullPath(".")), m_Assets,
         { m_View.SceneColor.GetFormat(), m_View.SceneDepth.GetFormat(), m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() });
     m_Renderer.Initialize();
     auto model = ModelUtility::CreateModel(m_Assets.LoadBlocking(
         FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf")));
     m_Scene.AddModel(std::move(model));
+    CameraEntity camera;
+    camera.InstanceName = "Scene Camera";
+    camera.Transform.transform.SetTranslation(m_View.EditorCamera.GetPosition());
+    camera.Transform.transform.SetRotation(m_View.EditorCamera.GetRotation());
+    m_Scene.SetActiveCamera(m_Scene.AddCamera(std::move(camera)).Id);
+    m_Scene.SetActiveLight(m_Scene.AddLight(Scene::DefaultSun()).Id);
     m_Ui->Initialize(m_Scene, m_Assets);
     if (m_SmokeFrameLimit != 0)
     {
@@ -51,6 +62,15 @@ void PbrApplication::Startup()
         CheckFrameScheduler();
         StartAssetChecks();
         CheckAssetCache();
+        CheckSceneEntities();
+        m_CheckCamera = *m_Scene.FindCamera(m_Scene.ActiveCameraId());
+        m_CheckLight = *m_Scene.FindLight(m_Scene.ActiveLightId());
+        CameraEntity other;
+        other.InstanceName = "Second view camera";
+        other.Transform.transform.SetTranslation(m_SecondView.EditorCamera.GetPosition());
+        other.Transform.transform.SetRotation(m_SecondView.EditorCamera.GetRotation());
+        other.Camera = { 55, 0.4f, 250 };
+        m_SecondSceneCamera = m_Scene.AddCamera(other).Id;
     }
 }
 
@@ -111,6 +131,7 @@ void PbrApplication::Cleanup()
     if (m_SmokeFrameLimit >= 60 && m_AssetChecks != 6)
         ++m_AssetErrors;
     if (m_SmokeFrameLimit != 0 && m_CacheChecks != 12) ++m_CacheErrors;
+    if (m_SmokeFrameLimit >= 60 && m_SceneChecks != 15) ++m_SceneErrors;
     m_Ui->Shutdown();
     if (m_UiInitialized)
     {
@@ -119,7 +140,7 @@ void PbrApplication::Cleanup()
         ImGui::DestroyContext();
         m_UiInitialized = false;
     }
-    m_Scene.ReplaceModels({});
+    m_Scene.ReplaceContent({}, {}, {}, InvalidEntityId, InvalidEntityId, 1);
     m_Assets.Shutdown();
     m_Renderer.Shutdown();
     if (m_SecondRenderer) m_SecondRenderer->Shutdown();
@@ -160,7 +181,7 @@ void PbrApplication::Cleanup()
                 m_CompletedFrames - FrameScheduler::FramesInFlight : 0) ||
             m_Frames.FrameOpen() || m_Frames.PendingFrames() != 0 || m_Frames.RetainedResources() != 0)
             ++m_FrameErrors;
-        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 || m_CacheErrors != 0 ||
+        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 || m_CacheErrors != 0 || m_SceneErrors != 0 ||
             m_FrameErrors != 0 || uiValidation.Errors != 0 || uiValidation.Completed != uiValidation.Expected ||
             m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
         std::cout << "PBR_SMOKE frames=" << m_CompletedFrames << " errors=" << validationErrors
@@ -174,7 +195,8 @@ void PbrApplication::Cleanup()
             << " drained=" << (m_Frames.PendingFrames() == 0 && m_Frames.RetainedResources() == 0)
             << " presentationChecks=" << m_PresentationChecks << " multiViewChecks=" << m_MultiViewChecks
             << " secondViewFrames=" << m_SecondViewFrames
-            << " cacheErrors=" << m_CacheErrors << " cacheChecks=" << m_CacheChecks << '\n';
+            << " cacheErrors=" << m_CacheErrors << " cacheChecks=" << m_CacheChecks
+            << " sceneErrors=" << m_SceneErrors << " sceneChecks=" << m_SceneChecks << '\n';
     }
 }
 
@@ -184,9 +206,10 @@ void PbrApplication::Update(float deltaTime)
     if (m_SmokeFrameLimit != 0)
         PollAssetChecks();
     m_View.FarClip = std::max(m_View.FarClip, m_View.NearClip + 0.01f);
-    m_View.Camera.SetZRange(m_View.NearClip, m_View.FarClip);
-    m_CameraController->Update(deltaTime);
-    m_View.Camera.Update();
+    m_View.EditorCamera.SetZRange(m_View.NearClip, m_View.FarClip);
+    if (!m_View.UseSceneCamera || !m_Scene.FindCamera(m_View.SceneCameraId ? m_View.SceneCameraId : m_Scene.ActiveCameraId()))
+        m_CameraController->Update(deltaTime);
+    m_View.EditorCamera.Update();
     if (m_SmokeFrameLimit >= 60 && m_CompletedFrames == 22)
         SetWindowPos(GameCore::g_hWnd, nullptr, 0, 0, 900, 700, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     if (m_SmokeFrameLimit >= 60 && m_CompletedFrames == 30) ShowWindow(GameCore::g_hWnd, SW_SHOWMINNOACTIVE);
@@ -276,6 +299,8 @@ void PbrApplication::RenderScene()
 
     // Geometry, compute passes and main UI share one ordered direct command list.
     GraphicsContext& graphics = GraphicsContext::Begin(L"PBR application frame");
+    const auto secondViewFrameBefore = m_SecondView.FrameIndex;
+    if (m_SmokeFrameLimit >= 60) PrepareSceneViewChecks();
     for (const auto& model : m_Scene.Models) m_Frames.Retain(model.GPU);
     m_Renderer.Render(graphics);
     if (m_SecondRenderer)
@@ -286,6 +311,9 @@ void PbrApplication::RenderScene()
             m_SecondView.Camera.GetPosition().GetX() != 7.0f) ++m_ViewErrors;
         if (m_CompletedFrames >= 35 && m_CompletedFrames < 40 && m_View.HistoryValid) ++m_ViewErrors;
     }
+    if (m_SmokeFrameLimit >= 60) PollSceneViewChecks(secondViewFrameBefore);
+    if (m_SmokeFrameLimit >= 60 && (m_CompletedFrames == 6 || m_CompletedFrames == 7))
+        CaptureLightProbe(graphics);
     graphics.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, g_BindlessHeap.GetHeapPointer());
     graphics.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET, true);
     graphics.ClearColor(g_DisplayPlane[g_CurrentBuffer]);
@@ -306,7 +334,8 @@ void PbrApplication::RenderScene()
 void PbrApplication::OnFramePresented()
 {
     // Covers the main list, font uploads, detached ImGui viewports and Present.
-    m_Frames.EndFrame();
+    const auto fence = m_Frames.EndFrame();
+    if (m_LightProbe && m_LightProbeFrame + 1 == m_CompletedFrames) FinishLightProbe(fence);
 }
 
 void PbrApplication::CheckViewIsolation()
@@ -326,9 +355,10 @@ void PbrApplication::CheckViewIsolation()
         ++m_ViewErrors;
     other.Destroy();
     m_SecondView.Resize(320, 180);
-    m_SecondView.Camera.SetEyeAtUp(Math::Vector3(7, 3, -20), Math::Vector3(Math::kZero), Math::Vector3(Math::kYUnitVector));
-    m_SecondView.Camera.SetZRange(m_SecondView.NearClip, m_SecondView.FarClip);
-    m_SecondView.Camera.Update();
+    m_SecondView.EditorCamera.SetEyeAtUp(Math::Vector3(7, 3, -20), Math::Vector3(Math::kZero), Math::Vector3(Math::kYUnitVector));
+    m_SecondView.EditorCamera.SetZRange(m_SecondView.NearClip, m_SecondView.FarClip);
+    m_SecondView.EditorCamera.Update();
+    m_SecondView.Camera = m_SecondView.EditorCamera;
     m_SecondRenderer = std::make_unique<PbrRenderer>(m_Scene, m_SecondView, m_RenderResources);
     m_SecondRenderer->Initialize();
     m_SecondRenderer->PostSettings().useTAA = true;
@@ -681,6 +711,207 @@ void PbrApplication::CheckAssetCache()
     {
         ++m_CacheErrors;
         std::cerr << "CACHE_CHECK_FAILED " << error.what() << '\n';
+    }
+}
+
+void PbrApplication::CaptureLightProbe(GraphicsContext& graphics)
+{
+    m_LightProbe = std::make_shared<ReadbackBuffer>();
+    m_LightProbeFrame = m_CompletedFrames;
+    m_LightProbePitch = graphics.ReadbackTexture(*m_LightProbe, m_View.SceneColor);
+    graphics.TransitionResource(m_View.SceneColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    m_Frames.Retain(m_LightProbe);
+}
+
+void PbrApplication::FinishLightProbe(uint64_t fence)
+{
+    g_CommandManager.WaitForFence(fence); // Only these explicit smoke readbacks wait.
+    const auto* bytes = static_cast<const uint8_t*>(m_LightProbe->Map());
+    std::vector<float> pixels;
+    pixels.reserve(size_t(m_View.Width()) * m_View.Height() * 3);
+    bool finite = true;
+    for (uint32_t y = 0; y < m_View.Height(); ++y)
+    {
+        const auto* row = reinterpret_cast<const uint16_t*>(bytes + size_t(y) * m_LightProbePitch);
+        for (uint32_t x = 0; x < m_View.Width(); ++x)
+            for (uint32_t component = 0; component < 3; ++component)
+            {
+                const float value = DirectX::PackedVector::XMConvertHalfToFloat(row[x * 4 + component]);
+                finite &= std::isfinite(value);
+                pixels.push_back(value);
+            }
+    }
+    const auto root = PathFromUtf8(FileSystem::GetFullPath("bin-int/smoke-light-probe"));
+    std::filesystem::create_directories(root);
+#if defined(DEBUG) || defined(_DEBUG)
+    const std::string configuration = "Debug";
+#else
+    const std::string configuration = "Release";
+#endif
+    const std::string app = m_Ui->Validation().Expected ? "Editor" : "PBR";
+    std::ofstream file(root / (app + "-" + configuration + (m_LightProbeFrame == 6 ? "-enabled.rgba16f" : "-disabled.rgba16f")),
+        std::ios::binary | std::ios::trunc);
+    const uint32_t header[] = { m_View.Width(), m_View.Height(), m_LightProbePitch };
+    file.write(reinterpret_cast<const char*>(header), sizeof(header));
+    file.write(reinterpret_cast<const char*>(bytes), size_t(m_LightProbePitch) * m_View.Height());
+    file.close();
+    m_LightProbe->Unmap();
+    m_LightProbe.reset();
+    if (m_LightProbeFrame == 6)
+    {
+        m_LightPixels = std::move(pixels);
+        m_LightPixelsValid = finite && bool(file);
+    }
+    else
+    {
+        double difference = 0;
+        if (pixels.size() == m_LightPixels.size())
+            for (size_t i = 0; i < pixels.size(); ++i) difference += std::abs(double(pixels[i]) - m_LightPixels[i]);
+        SceneCheck(finite && m_LightPixelsValid && bool(file) && difference > 0.0001,
+            "GPU HDR pixel output changes when the scene light is disabled");
+        std::cout << "LIGHT_PROBE rgbDifference=" << difference << " finite=" << (finite && m_LightPixelsValid) << '\n';
+        m_LightPixels.clear();
+    }
+}
+
+void PbrApplication::SceneCheck(bool passed, const char* label)
+{
+    ++m_SceneChecks;
+    if (!passed) { ++m_SceneErrors; std::cerr << "SCENE_CHECK_FAILED " << label << '\n'; }
+}
+
+void PbrApplication::CheckSceneEntities()
+{
+    static_assert(offsetof(GlobalConstants, SunDirection) == 304, "PBR light constant layout");
+    static_assert(offsetof(GlobalConstants, SunRadiance) == 320, "PBR radiance constant layout");
+    Scene scene;
+    const auto modelId = scene.AddModel(Model{}).Id;
+    CameraEntity camera;
+    camera.Id = modelId;
+    const auto cameraId = scene.AddCamera(camera).Id;
+    auto light = Scene::DefaultSun(); light.Id = cameraId;
+    const auto lightId = scene.AddLight(light).Id;
+    scene.SetActiveCamera(cameraId); scene.SetActiveLight(lightId);
+    SceneCheck(modelId && cameraId != modelId && lightId != cameraId && lightId != modelId &&
+        scene.EntityCount() == 3 && scene.Contains(lightId) && scene.FirstEntityId() == modelId,
+        "all entity types allocate globally unique stable IDs");
+    auto duplicate = std::make_shared<CameraEntity>(camera); duplicate->Id = modelId;
+    const auto revision = scene.Revision();
+    SceneCheck(!scene.InsertEntity(0, duplicate) && scene.Revision() == revision && scene.EntityCount() == 3,
+        "cross-type duplicate insertion is rejected without changing the scene");
+    auto extracted = scene.ExtractEntity(cameraId);
+    const bool detached = extracted && !scene.FindCamera(cameraId) && !scene.ActiveCameraId();
+    const bool inserted = extracted && scene.InsertEntity(0, std::move(*extracted));
+    scene.SetActiveCamera(cameraId);
+    SceneCheck(detached && inserted && scene.FindCamera(cameraId) && scene.ActiveCameraId() == cameraId,
+        "generic extraction/insertion preserves component identity and clears dangling references");
+    auto cameras = scene.Cameras;
+    cameras.front().Id = modelId;
+    bool rejected = false, referenceRejected = false;
+    const auto before = scene.Revision();
+    try { scene.ReplaceContent(scene.Models, cameras, scene.Lights, cameraId, lightId, 7); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    try { scene.ReplaceContent(scene.Models, scene.Cameras, scene.Lights, lightId, lightId, 7); }
+    catch (const std::invalid_argument&) { referenceRejected = true; }
+    SceneCheck(rejected && referenceRejected && scene.Revision() == before && scene.EntityCount() == 3 &&
+        scene.ActiveCameraId() == cameraId, "content replacement validates all IDs/references before commit");
+    std::vector<Model> models(1); models.front().Id = cameraId;
+    scene.ReplaceModels(std::move(models));
+    SceneCheck(scene.Models.front().Id != cameraId && scene.Models.front().Id != lightId &&
+        scene.ActiveCameraId() == cameraId && scene.ActiveLightId() == lightId && scene.EntityCount() == 3,
+        "model replacement preserves component IDs and active references");
+    scene.ReplaceContent({}, {}, {}, InvalidEntityId, InvalidEntityId, 1);
+    const bool cleared = scene.EntityCount() == 0 && !scene.ActiveCameraId() && !scene.ActiveLightId();
+    scene.SetNextEntityId(UINT64_MAX - 1);
+    const auto wrapped = scene.AddCamera(CameraEntity{}).Id;
+    scene.SetNextEntityId(UINT64_MAX);
+    SceneCheck(cleared && wrapped == 1 && scene.GetNextEntityId() == 2 && !scene.SetActiveLight(wrapped),
+        "empty replacement clears components and allocation safely skips reserved IDs");
+}
+
+void PbrApplication::PrepareSceneViewChecks()
+{
+    if (!m_CheckCamera || !m_CheckLight) return;
+    auto* camera = m_Scene.FindCamera(m_CheckCamera->Id);
+    auto* light = m_Scene.FindLight(m_CheckLight->Id);
+    switch (m_CompletedFrames)
+    {
+    case 6:
+        camera->Transform.transform.SetTranslation(Vector3(3, 4, -25));
+        camera->Camera = { 60, 0.2f, 4000 };
+        light->Transform.transform.SetRotation(Quaternion(0.1f, 0.7f, 0) * m_CheckLight->Transform.transform.GetRotation());
+        light->Light.Color = { 0.25f, 0.5f, 1 }; light->Light.Intensity = 2;
+        light->Light.ShadowBounds = { 80, 80, 80 };
+        m_Renderer.ShadingSettings().UseShadow = true;
+        m_Renderer.UseSceneCamera(true);
+        m_Scene.MarkModified();
+        break;
+    case 7: light->Light.Enabled = false; m_Scene.MarkModified(); break;
+    case 8: light->Light.Enabled = true; light->Light.CastsShadows = false; m_Scene.MarkModified(); break;
+    case 9: m_Scene.SetActiveLight(InvalidEntityId); break;
+    case 10: m_Scene.SetActiveCamera(InvalidEntityId); break;
+    case 11:
+        m_Scene.SetActiveCamera(camera->Id); m_Renderer.UseSceneCamera(false);
+        m_SecondRenderer->SetSceneCameraSource(m_SecondSceneCamera); m_SecondRenderer->UseSceneCamera(true);
+        break;
+    case 12: m_Renderer.UseSceneCamera(true); break; // Only this view changes, without a scene revision.
+    case 13:
+        *camera = *m_CheckCamera; *light = *m_CheckLight;
+        m_Scene.SetActiveCamera(camera->Id); m_Scene.SetActiveLight(light->Id);
+        m_Scene.MarkModified();
+        m_Renderer.UseSceneCamera(false);
+        break;
+    }
+}
+
+void PbrApplication::PollSceneViewChecks(uint64_t secondViewFrameBefore)
+{
+    if (!m_CheckCamera || !m_CheckLight) return;
+    const auto& constants = m_Renderer.SceneConstants();
+    switch (m_CompletedFrames)
+    {
+    case 6:
+    {
+        const auto center = m_Scene.FindLight(m_CheckLight->Id)->Light.ShadowCenter;
+        const auto shadowCenter = constants.SunShadowMatrix * Vector4(center.x, center.y, center.z, 1);
+        const auto direction = Normalize(m_Scene.FindLight(m_CheckLight->Id)->Transform.transform.GetRotation() * -Vector3(kZUnitVector));
+        SceneCheck(m_Renderer.ResolvedCameraId() == m_CheckCamera->Id && float(m_View.Camera.GetPosition().GetX()) == 3 &&
+            std::abs(m_View.Camera.GetFOV() - XMConvertToRadians(60)) < 0.0001f && m_View.Camera.GetNearClip() == 0.2f &&
+            m_View.Camera.GetFarClip() == 4000 && constants.SunRadiance.x == 0.5f && constants.SunRadiance.y == 1 &&
+            constants.SunRadiance.z == 2 && std::abs(constants.SunDirection.x - float(direction.GetX())) < 0.0001f &&
+            std::abs(float(shadowCenter.GetX()) - 0.5f) < 0.002f && std::abs(float(shadowCenter.GetY()) - 0.5f) < 0.002f &&
+            std::abs(float(shadowCenter.GetZ()) - 0.5f) < 0.002f && m_Renderer.UsesSceneShadows() &&
+            m_SecondRenderer->ResolvedCameraId() == InvalidEntityId && m_SecondView.Camera.GetPosition().GetX() == 7.0f,
+            "scene camera, colored directional radiance and centered shadow volume drive real view passes");
+        break;
+    }
+    case 7:
+        SceneCheck(!m_Renderer.ResolvedLightId() && constants.SunRadiance.x == 0 && constants.SunRadiance.z == 0 &&
+            !m_Renderer.UsesSceneShadows(), "disabled light removes direct radiance and shadows"); break;
+    case 8:
+        SceneCheck(m_Renderer.ResolvedLightId() == m_CheckLight->Id && constants.SunRadiance.z == 2 &&
+            !m_Renderer.UsesSceneShadows(), "light shadow toggle preserves direct radiance"); break;
+    case 9:
+        SceneCheck(!m_Renderer.ResolvedLightId() && constants.SunRadiance.z == 0,
+            "absent active light leaves only environment illumination"); break;
+    case 10:
+        SceneCheck(m_Renderer.UsesSceneCamera() && !m_Renderer.ResolvedCameraId() &&
+            float(m_View.Camera.GetPosition().GetX()) == float(m_View.EditorCamera.GetPosition().GetX()) &&
+            m_View.Camera.GetNearClip() == m_View.NearClip, "absent scene camera safely restores editor navigation/projection"); break;
+    case 11:
+        SceneCheck(!m_Renderer.UsesSceneCamera() && !m_Renderer.ResolvedCameraId() &&
+            float(m_View.Camera.GetPosition().GetX()) == float(m_View.EditorCamera.GetPosition().GetX()) &&
+            m_View.Camera.GetFOV() == m_View.EditorCamera.GetFOV() &&
+            m_SecondRenderer->ResolvedCameraId() == m_SecondSceneCamera && m_SecondView.Camera.GetNearClip() == 0.4f,
+            "free view and a second scene camera render with independent sources and projections"); break;
+    case 12:
+        SceneCheck(m_Renderer.ResolvedCameraId() == m_CheckCamera->Id && m_View.FrameIndex == 1 &&
+            m_SecondView.FrameIndex == secondViewFrameBefore + 1 && m_SecondRenderer->ResolvedCameraId() == m_SecondSceneCamera,
+            "camera source switch resets only its view temporal history"); break;
+    case 13:
+        SceneCheck(!m_Renderer.ResolvedCameraId() && m_Renderer.ResolvedLightId() == m_CheckLight->Id &&
+            constants.SunRadiance.x == 1 && constants.SunRadiance.y == 1 && constants.SunRadiance.z == 1 &&
+            m_Renderer.UsesSceneShadows(), "restored scene components continue rendering on subsequent frames"); break;
     }
 }
 

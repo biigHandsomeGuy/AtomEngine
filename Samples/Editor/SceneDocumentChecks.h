@@ -25,8 +25,8 @@ namespace AtomEditor
         CommandHistory m_History;
         UiState m_State;
         SceneDocumentLoader m_Loader;
-        ApplicationValidation m_Result{ 0, 0, 13 };
-        std::filesystem::path m_Files[9];
+        ApplicationValidation m_Result{ 0, 0, 22 };
+        std::filesystem::path m_Files[15];
         std::filesystem::path m_BadFile;
         std::shared_ptr<const ModelAsset> m_Asset;
         std::shared_ptr<const ModelGPU> m_GPU;

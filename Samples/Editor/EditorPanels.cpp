@@ -24,6 +24,7 @@
 #include "GameCore.h"
 #include "Model.h"
 #include "PathUtils.h"
+#include "PbrRenderer.h"
 
 #pragma comment(lib, "Comdlg32.lib")
 
@@ -56,24 +57,24 @@ namespace
         float Scale = 1.0f;
     };
 
-    TransformSnapshot CaptureTransform(const Model& model)
+    TransformSnapshot CaptureTransform(const TransformComponent& transform)
     {
-        const auto translation = model.Transform.transform.GetTranslation();
+        const auto translation = transform.transform.GetTranslation();
         TransformSnapshot snapshot;
         snapshot.Translation = { translation.GetX(), translation.GetY(), translation.GetZ() };
-        DirectX::XMStoreFloat4(&snapshot.Rotation, static_cast<DirectX::XMVECTOR>(model.Transform.transform.GetRotation()));
-        snapshot.Scale = model.Transform.scale;
+        DirectX::XMStoreFloat4(&snapshot.Rotation, static_cast<DirectX::XMVECTOR>(transform.transform.GetRotation()));
+        snapshot.Scale = transform.scale;
         return snapshot;
     }
 
     void ApplyTransform(Scene& scene, EntityId id, const TransformSnapshot& snapshot)
     {
-        if (Model* model = scene.FindModel(id))
+        if (auto* transform = scene.EntityTransform(id))
         {
-            model->Transform.transform.SetTranslation(Math::Vector3(snapshot.Translation.x, snapshot.Translation.y, snapshot.Translation.z));
-            model->Transform.transform.SetRotation(Math::Quaternion(DirectX::XMVectorSet(
+            transform->transform.SetTranslation(Math::Vector3(snapshot.Translation.x, snapshot.Translation.y, snapshot.Translation.z));
+            transform->transform.SetRotation(Math::Quaternion(DirectX::XMVectorSet(
                 snapshot.Rotation.x, snapshot.Rotation.y, snapshot.Rotation.z, snapshot.Rotation.w)));
-            model->Transform.scale = snapshot.Scale;
+            transform->scale = snapshot.Scale;
         }
     }
 
@@ -144,158 +145,300 @@ namespace AtomEditor
         RefreshEntries(state);
     }
 
-    void DrawSceneHierarchy(Scene& scene, UiState& state, CommandHistory& history)
+
+    namespace
+    {
+        void RecordCreation(Scene& scene, UiState& state, CommandHistory& history, EntityId id,
+            const char* label, EntityId oldCamera, EntityId oldLight)
+        {
+            const auto index = scene.EntityIndex(id);
+            const auto newCamera = scene.ActiveCameraId();
+            const auto newLight = scene.ActiveLightId();
+            auto payload = std::make_shared<std::optional<Scene::EntityData>>();
+            history.RecordApplied(label,
+                [payload, id, oldCamera, oldLight](Scene& target)
+                {
+                    *payload = target.ExtractEntity(id);
+                    target.SetActiveCamera(oldCamera); target.SetActiveLight(oldLight);
+                },
+                [payload, index, newCamera, newLight](Scene& target)
+                {
+                    if (*payload)
+                    {
+                        target.InsertEntity(index, std::move(payload->value())); payload->reset();
+                        target.SetActiveCamera(newCamera); target.SetActiveLight(newLight);
+                    }
+                });
+            state.SelectedEntity = id;
+        }
+    }
+
+    void CreateCamera(Scene& scene, UiState& state, CommandHistory& history, const Math::Camera& view)
+    {
+        const auto oldCamera = scene.ActiveCameraId(), oldLight = scene.ActiveLightId();
+        CameraEntity camera;
+        camera.Transform.transform.SetTranslation(view.GetPosition());
+        camera.Transform.transform.SetRotation(view.GetRotation());
+        camera.Camera = { DirectX::XMConvertToDegrees(view.GetFOV()), view.GetNearClip(), view.GetFarClip() };
+        const auto id = scene.AddCamera(std::move(camera)).Id;
+        if (!oldCamera) scene.SetActiveCamera(id);
+        RecordCreation(scene, state, history, id, "Create camera", oldCamera, oldLight);
+    }
+
+    void CreateDirectionalLight(Scene& scene, UiState& state, CommandHistory& history)
+    {
+        const auto oldCamera = scene.ActiveCameraId(), oldLight = scene.ActiveLightId();
+        const auto id = scene.AddLight(Scene::DefaultSun()).Id;
+        if (!oldLight) scene.SetActiveLight(id);
+        RecordCreation(scene, state, history, id, "Create directional light", oldCamera, oldLight);
+    }
+
+    void DeleteSelectedEntity(Scene& scene, UiState& state, CommandHistory& history)
+    {
+        const auto id = state.SelectedEntity;
+        if (!scene.Contains(id)) return;
+        const auto index = scene.EntityIndex(id);
+        const auto camera = scene.ActiveCameraId(), light = scene.ActiveLightId();
+        auto payload = std::make_shared<std::optional<Scene::EntityData>>(scene.ExtractEntity(id));
+        history.RecordApplied("Delete entity",
+            [payload, index, camera, light](Scene& target)
+            {
+                if (*payload)
+                {
+                    target.InsertEntity(index, std::move(payload->value())); payload->reset();
+                    target.SetActiveCamera(camera); target.SetActiveLight(light);
+                }
+            },
+            [payload, id](Scene& target) { *payload = target.ExtractEntity(id); });
+        state.SelectedEntity = scene.FirstEntityId();
+    }
+
+    void DrawSceneHierarchy(Scene& scene, UiState& state, CommandHistory& history, PbrRenderer& renderer)
     {
         ImGui::Begin("Scene Hierarchy");
-        for (size_t i = 0; i < scene.Models.size(); ++i)
+        if (ImGui::Button("Add camera")) CreateCamera(scene, state, history, renderer.EditorCamera());
+        ImGui::SameLine();
+        if (ImGui::Button("Add directional light")) CreateDirectionalLight(scene, state, history);
+        auto drawList = [&](const auto& list, const char* type)
         {
-            auto& model = scene.Models[i];
-            const std::string label = model.InstanceName.empty() ? "Model " + std::to_string(i + 1) : model.InstanceName;
-            if (ImGui::Selectable((label + "##entity" + std::to_string(model.Id)).c_str(), state.SelectedEntity == model.Id))
-                state.SelectedEntity = model.Id;
-        }
-        if (scene.FindModel(state.SelectedEntity) == nullptr)
-            state.SelectedEntity = InvalidEntityId;
-        if (state.SelectedEntity != InvalidEntityId && ImGui::Button("Delete selected"))
-        {
-            const EntityId removedId = state.SelectedEntity;
-            const auto selected = std::find_if(scene.Models.begin(), scene.Models.end(), [removedId](const Model& model) { return model.Id == removedId; });
-            const size_t selectedIndex = static_cast<size_t>(std::distance(scene.Models.begin(), selected));
-            auto removedModel = std::make_shared<std::optional<Model>>(scene.ExtractModel(removedId));
-            if (removedModel->has_value())
+            for (const auto& item : list)
             {
-                history.RecordApplied("Delete model",
-                    [removedModel, selectedIndex](Scene& target)
-                    {
-                        if (removedModel->has_value())
-                        {
-                            target.InsertModel(selectedIndex, std::move(removedModel->value()));
-                            removedModel->reset();
-                        }
-                    },
-                    [removedModel, removedId](Scene& target)
-                    {
-                        *removedModel = target.ExtractModel(removedId);
-                    });
+                const auto label = std::string(type) + " " + (item.InstanceName.empty() ? std::to_string(item.Id) : item.InstanceName);
+                if (ImGui::Selectable((label + "##entity" + std::to_string(item.Id)).c_str(), state.SelectedEntity == item.Id))
+                    state.SelectedEntity = item.Id;
             }
-            state.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models[std::min(selectedIndex, scene.Models.size() - 1)].Id;
-        }
+        };
+        drawList(scene.Models, "[Model]"); drawList(scene.Cameras, "[Camera]"); drawList(scene.Lights, "[Light]");
+        if (!scene.Contains(state.SelectedEntity)) state.SelectedEntity = InvalidEntityId;
+        if (state.SelectedEntity && ImGui::Button("Delete selected")) DeleteSelectedEntity(scene, state, history);
         ImGui::End();
     }
 
-    void DrawInspector(Scene& scene, UiState& state, CommandHistory& history)
+    template<class T, class Apply> void TrackComponentEdit(Scene& scene, CommandHistory& history, EntityId id,
+        const T& before, const T& after, bool changed, const char* label, Apply apply, bool instant = false)
+    {
+        static EntityId pending = InvalidEntityId;
+        static T initial;
+        if (ImGui::IsItemActivated()) { pending = id; initial = before; }
+        if (changed) scene.MarkModified();
+        if ((instant && changed) || (ImGui::IsItemDeactivatedAfterEdit() && pending == id))
+        {
+            const auto first = instant ? before : initial;
+            const auto last = after;
+            history.RecordApplied(label,
+                [id, first, apply](Scene& target) { apply(target, id, first); },
+                [id, last, apply](Scene& target) { apply(target, id, last); });
+            pending = InvalidEntityId;
+        }
+    }
+
+    void DrawInspector(Scene& scene, UiState& state, CommandHistory& history, PbrRenderer& renderer)
     {
         ImGui::Begin("Inspector");
-        Model* selectedModel = scene.FindModel(state.SelectedEntity);
-        if (selectedModel == nullptr)
+        const auto id = state.SelectedEntity;
+        auto* entityName = scene.EntityName(id);
+        auto* entityTransform = scene.EntityTransform(id);
+        if (!entityName || !entityTransform)
         {
-            ImGui::TextDisabled("Select a model in the Scene Hierarchy.");
+            ImGui::TextDisabled("Select an entity in the Scene Hierarchy.");
             ImGui::End();
             return;
         }
-
-        auto& model = *selectedModel;
+        auto& transform = *entityTransform;
         static EntityId pendingNameEntity = InvalidEntityId;
         static std::string initialName;
         static EntityId pendingTransformEntity = InvalidEntityId;
         static TransformSnapshot initialTransform;
 
         char name[256]{};
-        strncpy_s(name, model.InstanceName.c_str(), _TRUNCATE);
+        strncpy_s(name, entityName->c_str(), _TRUNCATE);
         const bool nameChanged = ImGui::InputText("Name", name, sizeof(name));
         if (ImGui::IsItemActivated())
         {
-            pendingNameEntity = model.Id;
-            initialName = model.InstanceName;
+            pendingNameEntity = state.SelectedEntity;
+            initialName = *entityName;
         }
         if (nameChanged)
         {
-            model.InstanceName = name;
+            *entityName = name;
             scene.MarkModified();
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && pendingNameEntity == model.Id)
+        if (ImGui::IsItemDeactivatedAfterEdit() && pendingNameEntity == state.SelectedEntity)
         {
-            const EntityId id = model.Id;
-            const std::string finalName = model.InstanceName;
+            const EntityId id = state.SelectedEntity;
+            const std::string finalName = *entityName;
             const std::string originalName = initialName;
-            history.RecordApplied("Rename model",
-                [id, originalName](Scene& target) { if (Model* item = target.FindModel(id)) item->InstanceName = originalName; },
-                [id, finalName](Scene& target) { if (Model* item = target.FindModel(id)) item->InstanceName = finalName; });
+            history.RecordApplied("Rename entity",
+                [id, originalName](Scene& target) { if (auto* name = target.EntityName(id)) *name = originalName; },
+                [id, finalName](Scene& target) { if (auto* name = target.EntityName(id)) *name = finalName; });
             pendingNameEntity = InvalidEntityId;
         }
         ImGui::SeparatorText("Transform");
-        auto translation = model.Transform.transform.GetTranslation();
+        auto translation = transform.transform.GetTranslation();
         float position[3] = { translation.GetX(), translation.GetY(), translation.GetZ() };
         const bool positionChanged = ImGui::DragFloat3("Position", position, 0.05f);
         if (ImGui::IsItemActivated())
         {
-            pendingTransformEntity = model.Id;
-            initialTransform = CaptureTransform(model);
+            pendingTransformEntity = state.SelectedEntity;
+            initialTransform = CaptureTransform(transform);
         }
         if (positionChanged)
         {
-            model.Transform.transform.SetTranslation(Vector3(position[0], position[1], position[2]));
+            transform.transform.SetTranslation(Vector3(position[0], position[1], position[2]));
             scene.MarkModified();
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
+        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == state.SelectedEntity)
         {
-            const EntityId id = model.Id;
-            const TransformSnapshot finalTransform = CaptureTransform(model);
+            const EntityId id = state.SelectedEntity;
+            const TransformSnapshot finalTransform = CaptureTransform(transform);
             const TransformSnapshot originalTransform = initialTransform;
-            history.RecordApplied("Move model",
+            history.RecordApplied("Move entity",
                 [id, originalTransform](Scene& target) { ApplyTransform(target, id, originalTransform); },
                 [id, finalTransform](Scene& target) { ApplyTransform(target, id, finalTransform); });
             pendingTransformEntity = InvalidEntityId;
         }
 
-        auto rotation = RotationToEulerDegrees(model.Transform.transform.GetRotation());
+        auto rotation = RotationToEulerDegrees(transform.transform.GetRotation());
         float euler[3] = { rotation.x, rotation.y, rotation.z };
         const bool rotationChanged = ImGui::DragFloat3("Rotation", euler, 0.5f);
         if (ImGui::IsItemActivated())
         {
-            pendingTransformEntity = model.Id;
-            initialTransform = CaptureTransform(model);
+            pendingTransformEntity = state.SelectedEntity;
+            initialTransform = CaptureTransform(transform);
         }
         if (rotationChanged)
         {
-            model.Transform.transform.SetRotation(Quaternion(DirectX::XMConvertToRadians(euler[0]), DirectX::XMConvertToRadians(euler[1]), DirectX::XMConvertToRadians(euler[2])));
+            transform.transform.SetRotation(Quaternion(DirectX::XMConvertToRadians(euler[0]), DirectX::XMConvertToRadians(euler[1]), DirectX::XMConvertToRadians(euler[2])));
             scene.MarkModified();
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
+        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == state.SelectedEntity)
         {
-            const EntityId id = model.Id;
-            const TransformSnapshot finalTransform = CaptureTransform(model);
+            const EntityId id = state.SelectedEntity;
+            const TransformSnapshot finalTransform = CaptureTransform(transform);
             const TransformSnapshot originalTransform = initialTransform;
-            history.RecordApplied("Rotate model",
+            history.RecordApplied("Rotate entity",
                 [id, originalTransform](Scene& target) { ApplyTransform(target, id, originalTransform); },
                 [id, finalTransform](Scene& target) { ApplyTransform(target, id, finalTransform); });
             pendingTransformEntity = InvalidEntityId;
         }
 
-        const auto beforeScale = CaptureTransform(model);
-        const bool scaleChanged = ImGui::DragFloat("Uniform Scale", &model.Transform.scale, 0.01f, 0.001f, 10000.0f, "%.3f",
-            ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
-        if (scaleChanged) scene.MarkModified();
-        if (ImGui::IsItemActivated())
+        if (scene.FindModel(id))
         {
-            pendingTransformEntity = model.Id;
-            initialTransform = beforeScale;
+            const auto beforeScale = CaptureTransform(transform);
+            const bool scaleChanged = ImGui::DragFloat("Uniform Scale", &transform.scale, 0.01f, 0.001f, 10000.0f, "%.3f",
+                ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+            if (scaleChanged) scene.MarkModified();
+            if (ImGui::IsItemActivated())
+            {
+                pendingTransformEntity = state.SelectedEntity;
+                initialTransform = beforeScale;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == state.SelectedEntity)
+            {
+                const EntityId id = state.SelectedEntity;
+                const TransformSnapshot finalTransform = CaptureTransform(transform);
+                const TransformSnapshot originalTransform = initialTransform;
+                history.RecordApplied("Scale model",
+                    [id, originalTransform](Scene& target) { ApplyTransform(target, id, originalTransform); },
+                    [id, finalTransform](Scene& target) { ApplyTransform(target, id, finalTransform); });
+                pendingTransformEntity = InvalidEntityId;
+            }
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
+        if (const auto* model = scene.FindModel(id))
         {
-            const EntityId id = model.Id;
-            const TransformSnapshot finalTransform = CaptureTransform(model);
-            const TransformSnapshot originalTransform = initialTransform;
-            history.RecordApplied("Scale model",
-                [id, originalTransform](Scene& target) { ApplyTransform(target, id, originalTransform); },
-                [id, finalTransform](Scene& target) { ApplyTransform(target, id, finalTransform); });
-            pendingTransformEntity = InvalidEntityId;
+            ImGui::SeparatorText("Model Asset");
+            ImGui::Text("Meshes: %u", model->Asset ? static_cast<unsigned>(model->Asset->Meshes.size()) : 0u);
+            ImGui::Text("Materials: %u", model->Asset ? static_cast<unsigned>(model->Asset->Materials.size()) : 0u);
+            if (model->Asset) ImGui::TextWrapped("%s", model->Asset->SourcePath.c_str());
         }
-        ImGui::SeparatorText("Model Asset");
-        ImGui::Text("Meshes: %u", model.Asset ? static_cast<unsigned>(model.Asset->Meshes.size()) : 0u);
-        ImGui::Text("Materials: %u", model.Asset ? static_cast<unsigned>(model.Asset->Materials.size()) : 0u);
-        if (model.Asset)
-            ImGui::TextWrapped("%s", model.Asset->SourcePath.c_str());
+        if (auto* camera = scene.FindCamera(id))
+        {
+            ImGui::SeparatorText("Perspective Camera");
+            const auto apply = [](Scene& target, EntityId entity, const CameraComponent& value)
+                { if (auto* item = target.FindCamera(entity)) item->Camera = value; };
+            auto before = camera->Camera;
+            bool changed = ImGui::DragFloat("Vertical FOV (degrees)", &camera->Camera.VerticalFovDegrees, 0.1f, 1, 179, "%.1f", ImGuiSliderFlags_AlwaysClamp);
+            TrackComponentEdit(scene, history, id, before, camera->Camera, changed, "Camera field of view", apply);
+            before = camera->Camera;
+            changed = ImGui::DragFloat("Near clip", &camera->Camera.NearClip, 0.01f, 0.001f,
+                std::min(100000.0f, camera->Camera.FarClip - 0.001f), "%.3f", ImGuiSliderFlags_AlwaysClamp);
+            TrackComponentEdit(scene, history, id, before, camera->Camera, changed, "Camera near clip", apply);
+            before = camera->Camera;
+            changed = ImGui::DragFloat("Far clip", &camera->Camera.FarClip, 1.0f, camera->Camera.NearClip + 0.01f, 10000000, "%.1f", ImGuiSliderFlags_AlwaysClamp);
+            TrackComponentEdit(scene, history, id, before, camera->Camera, changed, "Camera far clip", apply);
+            if (ImGui::Button("Copy editor view"))
+            {
+                const auto original = *camera;
+                camera->Transform.transform.SetTranslation(renderer.EditorCamera().GetPosition());
+                camera->Transform.transform.SetRotation(renderer.EditorCamera().GetRotation());
+                camera->Camera = { DirectX::XMConvertToDegrees(renderer.EditorCamera().GetFOV()),
+                    renderer.EditorCamera().GetNearClip(), renderer.EditorCamera().GetFarClip() };
+                const auto final = *camera;
+                history.RecordApplied("Copy editor view to camera",
+                    [id, original](Scene& target) { if (auto* item = target.FindCamera(id)) *item = original; },
+                    [id, final](Scene& target) { if (auto* item = target.FindCamera(id)) *item = final; });
+                scene.MarkModified();
+            }
+            if (scene.ActiveCameraId() == id) ImGui::TextDisabled("Active scene camera");
+            else if (ImGui::Button("Set as scene camera"))
+            {
+                const auto old = scene.ActiveCameraId(); scene.SetActiveCamera(id);
+                history.RecordApplied("Set scene camera", [old](Scene& target) { target.SetActiveCamera(old); },
+                    [id](Scene& target) { target.SetActiveCamera(id); });
+            }
+        }
+        if (auto* light = scene.FindLight(id))
+        {
+            ImGui::SeparatorText("Directional Light");
+            ImGui::TextWrapped("Rotation controls the emitted ray direction (local -Z). Color uses linear RGB.");
+            const auto apply = [](Scene& target, EntityId entity, const DirectionalLightComponent& value)
+                { if (auto* item = target.FindLight(entity)) item->Light = value; };
+            auto before = light->Light;
+            bool changed = ImGui::ColorEdit3("Color", &light->Light.Color.x);
+            TrackComponentEdit(scene, history, id, before, light->Light, changed, "Light color", apply);
+            before = light->Light;
+            changed = ImGui::DragFloat("Intensity", &light->Light.Intensity, 0.05f, 0, 10000, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            TrackComponentEdit(scene, history, id, before, light->Light, changed, "Light intensity", apply);
+            before = light->Light;
+            changed = ImGui::Checkbox("Enabled", &light->Light.Enabled);
+            TrackComponentEdit(scene, history, id, before, light->Light, changed, "Light enabled", apply, true);
+            before = light->Light;
+            changed = ImGui::Checkbox("Cast shadows", &light->Light.CastsShadows);
+            TrackComponentEdit(scene, history, id, before, light->Light, changed, "Light shadows", apply, true);
+            before = light->Light;
+            changed = ImGui::DragFloat3("Shadow center", &light->Light.ShadowCenter.x, 0.1f);
+            TrackComponentEdit(scene, history, id, before, light->Light, changed, "Shadow center", apply);
+            before = light->Light;
+            changed = ImGui::DragFloat3("Shadow bounds", &light->Light.ShadowBounds.x, 1, 0.001f, 10000000, "%.1f", ImGuiSliderFlags_AlwaysClamp);
+            TrackComponentEdit(scene, history, id, before, light->Light, changed, "Shadow bounds", apply);
+            if (scene.ActiveLightId() == id) ImGui::TextDisabled("Active scene light");
+            else if (ImGui::Button("Use for direct lighting"))
+            {
+                const auto old = scene.ActiveLightId(); scene.SetActiveLight(id);
+                history.RecordApplied("Set scene light", [old](Scene& target) { target.SetActiveLight(old); },
+                    [id](Scene& target) { target.SetActiveLight(id); });
+            }
+        }
         ImGui::End();
     }
 

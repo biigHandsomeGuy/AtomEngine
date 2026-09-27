@@ -65,6 +65,12 @@ private:
     void PollAssetChecks();
     void CheckFrameScheduler();
     void CheckAssetCache();
+    void CheckSceneEntities();
+    void PrepareSceneViewChecks();
+    void PollSceneViewChecks(uint64_t secondViewFrameBefore);
+    void CaptureLightProbe(GraphicsContext& graphics);
+    void FinishLightProbe(uint64_t fence);
+    void SceneCheck(bool passed, const char* label);
 
     Scene m_Scene;
     ModelAssetManager m_Assets;
@@ -96,4 +102,14 @@ private:
     uint64_t m_SecondViewFrames = 0;
     uint32_t m_CacheErrors = 0;
     uint32_t m_CacheChecks = 0;
+    uint32_t m_SceneErrors = 0;
+    uint32_t m_SceneChecks = 0;
+    std::optional<CameraEntity> m_CheckCamera;
+    std::optional<DirectionalLightEntity> m_CheckLight;
+    EntityId m_SecondSceneCamera = InvalidEntityId;
+    std::shared_ptr<ReadbackBuffer> m_LightProbe;
+    uint64_t m_LightProbeFrame = 0;
+    uint32_t m_LightProbePitch = 0;
+    bool m_LightPixelsValid = false;
+    std::vector<float> m_LightPixels;
 };

@@ -20,6 +20,9 @@ public:
     uint32_t Height() const { return SceneColor.GetResource() ? SceneColor.GetHeight() : 0; }
 
     Math::Camera Camera;
+    Math::Camera EditorCamera; // Navigation survives switching to a scene camera.
+    bool UseSceneCamera = false;
+    uint64_t SceneCameraId = 0; // Zero follows the scene's active camera.
     float NearClip = 0.1f;
     float FarClip = 10000.0f;
     D3D12_VIEWPORT Viewport{};

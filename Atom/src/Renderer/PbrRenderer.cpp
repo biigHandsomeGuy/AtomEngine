@@ -93,8 +93,12 @@ void PbrRenderer::SetupGeometryGraph()
 			m_View.LastUseTAA = m_ppAttribs.useTAA;
 		}
 
-		m_SunShadowCamera.UpdateMatrix(
-			Vector3({ 15.0f, 15.5f, -15.0f }), Vector3({ 10, 10, -10 }), Vector3(5000, 3000, 3000),
+        const Vector3 rayDirection(m_LightPassGlobalConstants.SunDirection.x,
+            m_LightPassGlobalConstants.SunDirection.y, m_LightPassGlobalConstants.SunDirection.z);
+        // ShadowCamera uses positive view-Z depth and looks toward the light.
+        // Place its near plane half a depth span before the volume center.
+        m_SunShadowCamera.UpdateMatrix(-rayDirection,
+            m_ShadowCenter - rayDirection * m_ShadowBounds.GetZ() * 0.5f, m_ShadowBounds,
 			static_cast<uint32_t>(m_View.Shadow.GetWidth()), static_cast<uint32_t>(m_View.Shadow.GetHeight()), 16);
 
 		if (m_ppAttribs.useTAA)
@@ -112,7 +116,7 @@ void PbrRenderer::SetupGeometryGraph()
 		m_LightPassGlobalConstants.ViewProjMatrix = m_View.Camera.GetViewProjMatrix();
 		m_LightPassGlobalConstants.SunShadowMatrix = m_SunShadowCamera.GetShadowMatrix();
 		m_LightPassGlobalConstants.CameraPos = m_View.Camera.GetPosition();
-		m_LightPassGlobalConstants.SunPos = { 15, 15, -15 };
+
 		m_LightPassGlobalConstants.Jitter = m_View.Jitter;
 		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 
@@ -132,6 +136,7 @@ void PbrRenderer::SetupGeometryGraph()
 		context.SetViewportAndScissor(0, 0, m_View.Shadow.GetWidth(), m_View.Shadow.GetHeight());
 		context.ClearDepthAndStencil(m_View.Shadow);
 		context.SetDepthStencilTarget(m_View.Shadow.GetDSV());
+        if (!m_LightCastsShadows || !m_ShaderAttribs.UseShadow) return;
 
 		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetViewProjMatrix();
 		m_ShadowPassGlobalConstants.Jitter = { 0.0f, 0.0f };
@@ -170,7 +175,9 @@ void PbrRenderer::SetupLightingGraph()
 		context.ClearColor(m_View.SceneColor);
 		context.SetRenderTarget(m_View.SceneColor.GetRTV(), m_View.SceneDepth.GetDSV());
 		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
-		context.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &m_ShaderAttribs);
+		auto shading = m_ShaderAttribs;
+        shading.UseShadow = shading.UseShadow && m_LightCastsShadows;
+        context.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &shading);
 
 		for (auto& model : m_Scene.Models)
 		{
@@ -265,9 +272,45 @@ void PbrRenderer::UpdateViewDescriptors()
                 post[index], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
 }
+void PbrRenderer::ExtractSceneView()
+{
+    const auto source = m_View.SceneCameraId ? m_View.SceneCameraId : m_Scene.ActiveCameraId();
+    const auto* camera = m_View.UseSceneCamera ? m_Scene.FindCamera(source) : nullptr;
+    const EntityId cameraId = camera ? camera->Id : InvalidEntityId;
+    if (camera)
+    {
+        m_View.Camera.SetTransform(camera->Transform.transform);
+        m_View.Camera.SetPerspectiveMatrix(DirectX::XMConvertToRadians(camera->Camera.VerticalFovDegrees),
+            float(m_View.Height()) / std::max(1.0f, float(m_View.Width())), camera->Camera.NearClip, camera->Camera.FarClip);
+        m_View.Camera.Update();
+    }
+    else m_View.Camera = m_View.EditorCamera;
+    if (cameraId != m_ResolvedCamera) m_View.InvalidateHistory();
+    m_ResolvedCamera = cameraId;
+    m_ResolvedLight = InvalidEntityId;
+    m_LightCastsShadows = false;
+    m_LightPassGlobalConstants.SunDirection = { 0, 0, -1, 0 };
+    m_LightPassGlobalConstants.SunRadiance = { 0, 0, 0, 0 };
+    m_ShadowCenter = Vector3(0, 0, 0);
+    m_ShadowBounds = Vector3(1, 1, 1);
+    if (const auto* light = m_Scene.FindLight(m_Scene.ActiveLightId()); light && light->Light.Enabled)
+    {
+        const auto direction = Normalize(light->Transform.transform.GetRotation() * -Vector3(kZUnitVector));
+        m_LightPassGlobalConstants.SunDirection = { direction.GetX(), direction.GetY(), direction.GetZ(), 0 };
+        const auto& data = light->Light;
+        m_LightPassGlobalConstants.SunRadiance = { data.Color.x * data.Intensity, data.Color.y * data.Intensity,
+            data.Color.z * data.Intensity, 0 };
+        m_ShadowCenter = Vector3(data.ShadowCenter.x, data.ShadowCenter.y, data.ShadowCenter.z);
+        m_ShadowBounds = Vector3(data.ShadowBounds.x, data.ShadowBounds.y, data.ShadowBounds.z);
+        m_ResolvedLight = light->Id;
+        m_LightCastsShadows = data.CastsShadows;
+    }
+}
+
 void PbrRenderer::Render(GraphicsContext& graphics)
 {
     if (!m_Initialized || !m_Resources.Initialized()) throw std::logic_error("PBR view is not initialized.");
+    ExtractSceneView();
     if (m_Scene.Revision() != m_LastSceneRevision)
     {
         m_View.InvalidateHistory();

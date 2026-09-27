@@ -56,6 +56,21 @@ public:
     EnvMapRenderer::RenderAttribs& EnvironmentSettings() { return m_EnvMapAttribs; }
     PostProcess::RenderAttribs& PostSettings() { return m_ppAttribs; }
     const PbrResources& SharedResources() const { return m_Resources; }
+    const Math::Camera& EditorCamera() const { return m_View.EditorCamera; }
+    bool UsesSceneCamera() const { return m_View.UseSceneCamera; }
+    EntityId SceneCameraSource() const { return m_View.SceneCameraId; }
+    void SetSceneCameraSource(EntityId id)
+    {
+        if (m_View.SceneCameraId != id) { m_View.SceneCameraId = id; m_View.InvalidateHistory(); }
+    }
+    void UseSceneCamera(bool enabled)
+    {
+        if (m_View.UseSceneCamera != enabled) { m_View.UseSceneCamera = enabled; m_View.InvalidateHistory(); }
+    }
+    EntityId ResolvedCameraId() const { return m_ResolvedCamera; }
+    EntityId ResolvedLightId() const { return m_ResolvedLight; }
+    bool UsesSceneShadows() const { return m_ShaderAttribs.UseShadow && m_LightCastsShadows; }
+    const GlobalConstants& SceneConstants() const { return m_LightPassGlobalConstants; }
 
 private:
 	void SetupGeometryGraph();
@@ -63,6 +78,7 @@ private:
 	void SetupPostProcessGraphs();
 
     void UpdateViewDescriptors();
+    void ExtractSceneView();
 
 
 private:
@@ -80,6 +96,11 @@ private:
     PbrResources& m_Resources;
     bool m_Initialized = false;
     uint64_t m_LastSceneRevision = UINT64_MAX;
+    EntityId m_ResolvedCamera = InvalidEntityId;
+    EntityId m_ResolvedLight = InvalidEntityId;
+    bool m_LightCastsShadows = false;
+    Math::Vector3 m_ShadowCenter{ 0, 0, 0 };
+    Math::Vector3 m_ShadowBounds{ 1, 1, 1 };
     std::unique_ptr<SSAO::ViewPasses> m_SsaoPasses;
     DescriptorHandle m_CommonTextures;
     DescriptorHandle m_PostProcessTextures[2];

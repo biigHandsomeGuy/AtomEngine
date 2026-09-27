@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <cmath>
 #include <stdexcept>
 #include "PathUtils.h"
 #include "../../Dependencies/tinygltf/json.hpp"
@@ -81,11 +82,35 @@ namespace AtomEditor
             const bool importRedo = m_History.Redo(m_Scene) && m_Scene.FindModel(importedId) &&
                 m_Scene.FindModel(importedId)->GPU == m_GPU;
             Check(imported && importUndo && importRedo, "asynchronous import undo/redo");
+            Math::Camera view;
+            view.SetEyeAtUp(Math::Vector3(2, 3, -24), Math::Vector3(Math::kZero), Math::Vector3(Math::kYUnitVector));
+            view.SetPerspectiveMatrix(DirectX::XMConvertToRadians(73), 9.0f / 16.0f, 0.3f, 777);
+            view.Update();
+            CreateCamera(m_Scene, m_State, m_History, view);
+            const auto cameraId = m_State.SelectedEntity;
+            const bool cameraUndo = m_History.Undo(m_Scene) && !m_Scene.Contains(cameraId) && !m_Scene.ActiveCameraId();
+            Check(cameraUndo && m_History.Redo(m_Scene) && m_Scene.FindCamera(cameraId) &&
+                m_Scene.ActiveCameraId() == cameraId && m_Scene.FindCamera(cameraId)->Camera.VerticalFovDegrees > 72.999f && m_Scene.FindCamera(cameraId)->Camera.VerticalFovDegrees < 73.001f &&
+                m_Scene.FindCamera(cameraId)->Transform.transform.GetTranslation().GetX() == 2.0f,
+                "camera creation from editor view undo/redo");
+            CreateDirectionalLight(m_Scene, m_State, m_History);
+            const auto lightId = m_State.SelectedEntity;
+            const bool lightUndo = m_History.Undo(m_Scene) && !m_Scene.Contains(lightId) && !m_Scene.ActiveLightId();
+            Check(lightUndo && m_History.Redo(m_Scene) && m_Scene.FindLight(lightId) &&
+                m_Scene.ActiveLightId() == lightId && lightId != cameraId && lightId != id,
+                "directional light creation and global entity IDs undo/redo");
+            m_State.SelectedEntity = lightId;
+            DeleteSelectedEntity(m_Scene, m_State, m_History);
+            const bool lightRemoved = !m_Scene.FindLight(lightId) && !m_Scene.ActiveLightId();
+            const bool lightRestored = m_History.Undo(m_Scene) && m_Scene.FindLight(lightId) && m_Scene.ActiveLightId() == lightId;
+            const bool lightDeleted = m_History.Redo(m_Scene) && !m_Scene.FindLight(lightId) && !m_Scene.ActiveLightId();
+            Check(lightRemoved && lightRestored && lightDeleted && m_History.Undo(m_Scene),
+                "active light deletion undo/redo restores its scene reference");
             m_Scene.SetNextEntityId(123);
 
             const auto folder = root / "bin-int" / "smoke-documents";
             std::filesystem::create_directories(folder);
-            for (size_t i = 0; i < 9; ++i) m_Files[i] = folder / ("scene-" + std::to_string(i) + ".atomscene");
+            for (size_t i = 0; i < 15; ++i) m_Files[i] = folder / ("scene-" + std::to_string(i) + ".atomscene");
             m_BadFile = folder / "superseded.atomscene";
             std::string error;
             if (!SaveSceneDocument(m_Scene, m_Files[0], root, error)) throw std::runtime_error(error);
@@ -114,6 +139,8 @@ namespace AtomEditor
             Write(m_BadFile, duplicate);
             auto empty = valid;
             empty["models"] = Json::array();
+            empty["cameras"] = Json::array(); empty["lights"] = Json::array();
+            empty["activeCamera"] = 0; empty["activeLight"] = 0;
             Write(m_Files[7], empty);
             auto leaseScene = valid;
             const char* names[] = { "lease-a.glb", "lease-b.glb" };
@@ -124,12 +151,32 @@ namespace AtomEditor
                 leaseScene["models"][i]["asset"] = PathToUtf8(folder / names[i]);
             }
             Write(m_Files[8], leaseScene);
+            auto version2 = valid;
+            version2["version"] = 2;
+            version2.erase("cameras"); version2.erase("lights"); version2.erase("activeCamera"); version2.erase("activeLight");
+            Write(m_Files[9], version2);
+            auto crossType = valid;
+            crossType["cameras"][0]["id"] = valid["models"][0]["id"];
+            Write(m_Files[10], crossType);
+            auto badReference = valid;
+            badReference["activeCamera"] = valid["lights"][0]["id"];
+            Write(m_Files[11], badReference);
+            auto badCamera = valid;
+            badCamera["cameras"][0]["farClip"] = badCamera["cameras"][0]["nearClip"];
+            Write(m_Files[12], badCamera);
+            auto badLight = valid;
+            badLight["lights"][0]["color"] = {-1, 1, 1};
+            Write(m_Files[13], badLight);
+            auto components = valid;
+            components["models"] = Json::array();
+            Write(m_Files[14], components);
+
         }
         catch (const std::exception& error)
         {
             ++m_Result.Errors;
             std::cerr << "EDITOR_CHECK_FAILED fixture: " << error.what() << '\n';
-            m_Case = 9;
+            m_Case = 15;
             assets.SetBudget(m_OriginalBudget);
         }
     }
@@ -164,14 +211,14 @@ namespace AtomEditor
 
     void SceneDocumentChecks::Update(ModelAssetManager& assets)
     {
-        if (m_Case >= 9) return;
+        if (m_Case >= 15) return;
         if (!m_Pending) BeginCase();
         m_Loader.Update(assets);
         m_Unchanged = m_Unchanged && SceneUnchanged();
         const auto status = m_Loader.Status();
         if (m_Loader.Busy() && status.State != SceneLoadState::Ready) return;
         bool passed = m_Unchanged && status.File == m_Files[m_Case];
-        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7 || m_Case == 8;
+        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7 || m_Case == 8 || m_Case == 9 || m_Case == 14;
         if (success)
         {
             passed = passed && status.State == SceneLoadState::Ready &&
@@ -179,7 +226,10 @@ namespace AtomEditor
             passed = passed && m_Scene.Revision() > m_Revision && !m_History.CanUndo() && !m_History.CanRedo() &&
                 m_Loader.Status().State == SceneLoadState::Applied;
             if (m_Case == 7)
-                passed = passed && m_Scene.Models.empty() && m_State.SelectedEntity == InvalidEntityId;
+                passed = passed && m_Scene.EntityCount() == 0 && m_State.SelectedEntity == InvalidEntityId;
+            else if (m_Case == 14)
+                passed = passed && m_Scene.Models.empty() && m_Scene.Cameras.size() == 1 && m_Scene.Lights.size() == 1 &&
+                    m_State.SelectedEntity == m_Scene.ActiveCameraId() && std::abs(m_Scene.FindCamera(m_Scene.ActiveCameraId())->Camera.VerticalFovDegrees - 73) < 0.001f;
             else if (m_Case == 8)
                 passed = passed && m_Scene.Models.size() == 2 && assets.CacheStats().OverBudget() &&
                     m_Scene.Models[0].GPU && m_Scene.Models[1].GPU &&
@@ -198,10 +248,21 @@ namespace AtomEditor
                         first.InstanceName == "Roundtrip model" && first.Transform.scale == 2.5f &&
                         position.GetX() == 1.0f && position.GetY() == 2.0f && position.GetZ() == 3.0f &&
                         m_State.SelectedEntity == first.Id && first.Id != second.Id;
-                    if (m_Case != 1) passed = passed && first.Id == 41 && second.Id == 42 && m_Scene.GetNextEntityId() == 123;
+                    if (m_Case != 1) passed = passed && first.Id == 41 && second.Id == 42 && m_Scene.GetNextEntityId() == (m_Case == 9 ? 125 : 123);
                     else passed = passed && first.Id != InvalidEntityId && second.Id != InvalidEntityId;
                 }
             }
+            if (m_Case != 7)
+            {
+                passed = passed && m_Scene.Cameras.size() == 1 && m_Scene.Lights.size() == 1 &&
+                    m_Scene.FindCamera(m_Scene.ActiveCameraId()) && m_Scene.FindLight(m_Scene.ActiveLightId());
+                if (m_Case != 1 && m_Case != 9 && passed)
+                    passed = std::abs(m_Scene.Cameras.front().Camera.VerticalFovDegrees - 73) < 0.001f &&
+                        m_Scene.Cameras.front().Camera.NearClip == 0.3f && m_Scene.Cameras.front().Camera.FarClip == 777 &&
+                        m_Scene.Cameras.front().Transform.transform.GetTranslation().GetX() == 2.0f &&
+                        m_Scene.Lights.front().Light.Enabled && m_Scene.Lights.front().Light.CastsShadows;
+            }
+
         }
         else
         {
@@ -209,12 +270,13 @@ namespace AtomEditor
             passed = passed && status.State == expected && (m_Case == 5 || !status.Error.empty()) &&
                 !m_Loader.Apply(m_Scene, m_History, m_State.SelectedEntity, assets) && SceneUnchanged();
         }
-        const char* labels[] = { "version 2 roundtrip", "version 1 migration", "duplicate IDs",
+        const char* labels[] = { "version 3 component roundtrip", "version 1 migration", "duplicate IDs",
             "invalid transform", "partial asset failure", "cancel", "superseded load", "empty scene",
-            "new multi-asset scene transaction survives zero cache budgets" };
+            "new multi-asset scene transaction survives zero cache budgets", "version 2 migration", "cross-type duplicate IDs",
+            "wrong-type active camera reference", "invalid camera clipping", "invalid light color", "component-only scene" };
         Check(passed, labels[m_Case]);
         ++m_Case;
-        if (m_Case == 9) assets.SetBudget(m_OriginalBudget);
+        if (m_Case == 15) assets.SetBudget(m_OriginalBudget);
         m_Pending = false;
     }
 }

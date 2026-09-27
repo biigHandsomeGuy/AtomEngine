@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <stdexcept>
 #include "CommandContext.h"
 #include "ColorBuffer.h"
 #include "DepthBuffer.h"
@@ -7,7 +8,7 @@
 #include "UploadBuffer.h"
 //#include "EngineProfiling.h"
 
-//#include "ReadbackBuffer.h"
+#include "ReadbackBuffer.h"
 
 #pragma warning(push)
 #pragma warning(disable:4100) // unreferenced formal parameters in PIXCopyEventArguments() (WinPixEventRuntime.1.0.200127001)
@@ -557,25 +558,23 @@ void CommandContext::InitializeTextureArraySlice(GpuResource& Dest, UINT SliceIn
     Context.Finish(true);
 }
 
-//uint32_t CommandContext::ReadbackTexture(ReadbackBuffer& DstBuffer, PixelBuffer& SrcBuffer)
-//{
-//    uint64_t CopySize = 0;
-//
-//    // The footprint may depend on the device of the resource, but we assume there is only one device.
-//    D3D12_PLACED_SUBRESOURCE_FOOTPRINT PlacedFootprint;
-//    g_Device->GetCopyableFootprints(&SrcBuffer.GetResource()->GetDesc(), 0, 1, 0,
-//        &PlacedFootprint, nullptr, nullptr, &CopySize);
-//
-//    DstBuffer.Create(L"Readback", (uint32_t)CopySize, 1);
-//
-//    TransitionResource(SrcBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE, true);
-//
-//    m_CommandList->CopyTextureRegion(
-//        &CD3DX12_TEXTURE_COPY_LOCATION(DstBuffer.GetResource(), PlacedFootprint), 0, 0, 0,
-//        &CD3DX12_TEXTURE_COPY_LOCATION(SrcBuffer.GetResource(), 0), nullptr);
-//
-//    return PlacedFootprint.Footprint.RowPitch;
-//}
+uint32_t CommandContext::ReadbackTexture(ReadbackBuffer& destination, PixelBuffer& source)
+{
+    const auto description = source.GetResource()->GetDesc();
+    if (description.SampleDesc.Count != 1)
+        throw std::invalid_argument("Resolve a multisampled texture before reading it back.");
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    uint64_t bytes = 0;
+    g_Device->GetCopyableFootprints(&description, 0, 1, 0, &footprint, nullptr, nullptr, &bytes);
+    if (bytes == 0 || bytes > UINT32_MAX)
+        throw std::runtime_error("Texture readback exceeds the supported buffer size.");
+    destination.Create(L"Texture readback", static_cast<uint32_t>(bytes), 1);
+    TransitionResource(source, D3D12_RESOURCE_STATE_COPY_SOURCE, true);
+    const CD3DX12_TEXTURE_COPY_LOCATION target(destination.GetResource(), footprint);
+    const CD3DX12_TEXTURE_COPY_LOCATION origin(source.GetResource(), 0);
+    m_CommandList->CopyTextureRegion(&target, 0, 0, 0, &origin, nullptr);
+    return footprint.Footprint.RowPitch;
+}
 
 void CommandContext::InitializeBuffer(GpuBuffer& Dest, const void* BufferData, size_t NumBytes, size_t DestOffset)
 {

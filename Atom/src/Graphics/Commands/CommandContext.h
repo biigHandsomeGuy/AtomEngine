@@ -128,7 +128,8 @@ public:
     void ResetCounter(StructuredBuffer& Buf, uint32_t Value = 0);
 
     // Creates a readback buffer of sufficient size, copies the texture into it,
-    // and returns row pitch in bytes.
+    // and returns row pitch in bytes. Reads subresource 0; source ends in
+    // COPY_SOURCE. Retain destination until submission fence completion before Map.
     uint32_t ReadbackTexture(ReadbackBuffer& DstBuffer, PixelBuffer& SrcBuffer);
 
     DynAlloc ReserveUploadMemory(size_t SizeInBytes, size_t alignment = 256)

@@ -55,13 +55,14 @@ namespace AtomEditor
         }
     }
 
-    void EditorLayer::UpdateDocument(Scene& scene)
+    void EditorLayer::UpdateDocument(Scene& scene, PbrRenderer& renderer)
     {
         m_DocumentLoader->Update(*m_Assets);
         if (m_DocumentLoader->Apply(scene, m_History, m_State.SelectedEntity, *m_Assets))
         {
             const auto status = m_DocumentLoader->Status();
             m_DocumentPath = status.File;
+            renderer.SetSceneCameraSource(InvalidEntityId);
             m_State.StatusMessage = "Opened " + PathToUtf8(status.File.filename());
             if (!status.Warnings.empty()) m_State.StatusMessage += "\n" + status.Warnings;
             m_State.StatusIsError = false;
@@ -112,14 +113,14 @@ namespace AtomEditor
             if (!m_DocumentLoader->Busy() && ImGui::IsKeyPressed(ImGuiKey_Y, false))
                 m_History.Redo(scene);
         }
-        if (!scene.FindModel(m_State.SelectedEntity))
-            m_State.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models.front().Id;
+        if (!scene.Contains(m_State.SelectedEntity))
+            m_State.SelectedEntity = scene.FirstEntityId();
     }
 
     ViewportRequest EditorLayer::Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image)
     {
         if (m_Checks) m_Checks->Update(*m_Assets);
-        UpdateDocument(scene);
+        UpdateDocument(scene, renderer);
         if (!m_DocumentLoader->Busy()) ProcessImports(scene, m_State, m_History, *m_Assets);
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -138,11 +139,27 @@ namespace AtomEditor
         ImGui::End();
 
         DrawRendererSettings(renderer);
+        ImGui::Begin("Scene View");
+        bool preview = renderer.UsesSceneCamera();
+        if (ImGui::Checkbox("Preview scene camera", &preview)) renderer.UseSceneCamera(preview);
+        const auto source = renderer.SceneCameraSource();
+        const auto* camera = scene.FindCamera(source ? source : scene.ActiveCameraId());
+        const auto label = source && camera ? camera->InstanceName.c_str() : "Active scene camera";
+        if (ImGui::BeginCombo("Camera source", label))
+        {
+            if (ImGui::Selectable("Active scene camera", source == InvalidEntityId)) renderer.SetSceneCameraSource(InvalidEntityId);
+            for (const auto& item : scene.Cameras)
+                if (ImGui::Selectable((item.InstanceName + "##camera" + std::to_string(item.Id)).c_str(), source == item.Id))
+                    renderer.SetSceneCameraSource(item.Id);
+            ImGui::EndCombo();
+        }
+        if (preview && !camera) ImGui::TextWrapped("Camera source is unavailable; showing the editor view.");
+        ImGui::End();
         const bool disabled = GameCore::g_ViewportCapturingMouse || m_DocumentLoader->Busy();
         if (disabled)
             ImGui::BeginDisabled();
-        DrawSceneHierarchy(scene, m_State, m_History);
-        DrawInspector(scene, m_State, m_History);
+        DrawSceneHierarchy(scene, m_State, m_History, renderer);
+        DrawInspector(scene, m_State, m_History, renderer);
         DrawContentBrowser(m_State, *m_Assets);
         if (disabled)
             ImGui::EndDisabled();
