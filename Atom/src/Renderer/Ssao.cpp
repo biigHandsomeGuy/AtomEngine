@@ -69,7 +69,7 @@ namespace
         }
     }
 
-    void BuildRandomVectorTexture(ID3D12GraphicsCommandList* CmdList)
+    void BuildRandomVectorTexture(CommandContext& context)
     {
         g_RandomVectorBuffer.Create(L"Random Vector Buffer", 256, 256, 1, DXGI_FORMAT_R8G8B8A8_UNORM);
 
@@ -100,22 +100,16 @@ namespace
         subResourceData.RowPitch = 256 * sizeof(XMCOLOR);
         subResourceData.SlicePitch = subResourceData.RowPitch * 256;
 
-        CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            g_RandomVectorBuffer.GetResource(),
-            D3D12_RESOURCE_STATE_COMMON,
-            D3D12_RESOURCE_STATE_COPY_DEST));
+        context.TransitionResource(g_RandomVectorBuffer, D3D12_RESOURCE_STATE_COPY_DEST, true);
         UpdateSubresources(
-            CmdList,
+            context.GetCommandList(),
             g_RandomVectorBuffer.GetResource(),
             s_RandomVectorMapUploadBuffer.Get(),
             0,
             0,
             num2DSubresources,
             &subResourceData);
-        CmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-            g_RandomVectorBuffer.GetResource(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_GENERIC_READ));
+        context.TransitionResource(g_RandomVectorBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
     }
 }
 
@@ -147,9 +141,9 @@ void SSAO::Initialize()
     s_AoBlurUpsamplePso.Finalize();
 
     CommandContext& initContext = CommandContext::Begin(L"SSAO Initialize");
-    BuildRandomVectorTexture(initContext.GetCommandList());
+    BuildRandomVectorTexture(initContext);
     BuildSampleKernel();
-    initContext.Finish();
+    initContext.Finish(true);
 }
 
 void SSAO::Render(GraphicsContext& GfxContext, const Camera& camera)

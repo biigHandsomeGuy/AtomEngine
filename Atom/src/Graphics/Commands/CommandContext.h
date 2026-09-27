@@ -321,12 +321,16 @@ inline void CommandContext::FlushResourceBarriers(void)
 
 inline void GraphicsContext::SetRootSignature(const RootSignature& RootSig)
 {
-    if (RootSig.GetSignature() == m_CurGraphicsRootSignature)
+    const bool heapChanged = RootSig.UsesDirectlyIndexedResourceHeap() &&
+        m_CurrentDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] != Graphics::g_BindlessHeap.GetHeapPointer();
+    if (RootSig.GetSignature() == m_CurGraphicsRootSignature && !heapChanged)
         return;
 
+    // Directly indexed heaps must be bound before the root signature, including
+    // when returning from a pass that temporarily used a dynamic descriptor heap.
+    BindDirectlyIndexedDescriptorHeaps(RootSig);
     m_CommandList->SetGraphicsRootSignature(m_CurGraphicsRootSignature = RootSig.GetSignature());
     m_GraphicsDirectlyIndexedResourceHeap = RootSig.UsesDirectlyIndexedResourceHeap();
-    BindDirectlyIndexedDescriptorHeaps(RootSig);
 
     m_DynamicViewDescriptorHeap.ParseGraphicsRootSignature(RootSig);
     m_DynamicSamplerDescriptorHeap.ParseGraphicsRootSignature(RootSig);
@@ -334,12 +338,14 @@ inline void GraphicsContext::SetRootSignature(const RootSignature& RootSig)
 
 inline void ComputeContext::SetRootSignature(const RootSignature& RootSig)
 {
-    if (RootSig.GetSignature() == m_CurComputeRootSignature)
+    const bool heapChanged = RootSig.UsesDirectlyIndexedResourceHeap() &&
+        m_CurrentDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] != Graphics::g_BindlessHeap.GetHeapPointer();
+    if (RootSig.GetSignature() == m_CurComputeRootSignature && !heapChanged)
         return;
 
+    BindDirectlyIndexedDescriptorHeaps(RootSig);
     m_CommandList->SetComputeRootSignature(m_CurComputeRootSignature = RootSig.GetSignature());
     m_ComputeDirectlyIndexedResourceHeap = RootSig.UsesDirectlyIndexedResourceHeap();
-    BindDirectlyIndexedDescriptorHeaps(RootSig);
 
     m_DynamicViewDescriptorHeap.ParseComputeRootSignature(RootSig);
     m_DynamicSamplerDescriptorHeap.ParseComputeRootSignature(RootSig);

@@ -1,6 +1,6 @@
 #pragma once
 
-struct Texture;
+class Texture;
 
 struct PbrMaterial
 {

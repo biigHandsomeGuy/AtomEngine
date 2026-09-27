@@ -163,6 +163,7 @@ TextureID TextureManager::CreateTextureInternal(const TextureCreationDesc& desc,
 
     tex.m_Width = desc.width;
     tex.m_Height = desc.height;
+    tex.m_UsageState = D3D12_RESOURCE_STATE_COPY_DEST;
 
     if (data)
     {
@@ -171,8 +172,7 @@ TextureID TextureManager::CreateTextureInternal(const TextureCreationDesc& desc,
         subresource.RowPitch = static_cast<LONG_PTR>(desc.width) * desc.bytesPerPixel;
         subresource.SlicePitch = static_cast<LONG_PTR>(desc.width) * desc.height * desc.bytesPerPixel;
 
-        GpuResource dest(tex.m_pResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
-        CommandContext::InitializeTexture(dest, 1, &subresource);
+        CommandContext::InitializeTexture(tex, 1, &subresource);
     }
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -182,9 +182,13 @@ TextureID TextureManager::CreateTextureInternal(const TextureCreationDesc& desc,
     srvDesc.Texture2D.MipLevels = 1;
 
     auto handle = Graphics::g_BindlessHeap.AllocBindless();
-    Graphics::g_Device->CreateShaderResourceView(tex.m_pResource.Get(), &srvDesc, handle.Handle);
+    const auto cpuDescriptor = Graphics::AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    Graphics::g_Device->CreateShaderResourceView(tex.m_pResource.Get(), &srvDesc, cpuDescriptor);
+    Graphics::g_Device->CopyDescriptorsSimple(1, handle.Handle, cpuDescriptor, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    tex.m_SRVCpuDescriptorHandle = handle.Handle;
+    // CPU mirrors can be copied into dynamic tables; shader-visible descriptors
+    // are write-only from the CPU and cannot be used as CopyDescriptors sources.
+    tex.m_SRVCpuDescriptorHandle = cpuDescriptor;
     tex.m_SRVIndex = handle.Index;
 
     TextureID id = static_cast<TextureID>(m_Textures.size());
