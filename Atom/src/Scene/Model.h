@@ -152,6 +152,9 @@ struct ModelAsset
 {
     std::string Name;
 
+    // Original source file used to build this reusable model asset.
+    std::string SourcePath;
+
     std::vector<MeshAsset> Meshes;
 
     std::vector<MaterialAsset> Materials;
@@ -173,6 +176,8 @@ struct ModelGPU
 class Model
 {
 public:
+
+    std::string InstanceName;
 
     std::shared_ptr<ModelAsset> Asset;
 
@@ -200,7 +205,7 @@ struct LoadedModelData
 
 namespace ModelUtility
 {
-    LoadedModelData LoadGltfAsset(const std::string& path);
+    LoadedModelData LoadGltfAsset(const std::string& path, std::string* error = nullptr);
     Model CreateModel(LoadedModelData&& data);
 
 }

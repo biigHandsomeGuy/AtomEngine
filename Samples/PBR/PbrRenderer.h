@@ -8,6 +8,7 @@
 
 #include "Scene.h"
 #include "SkyBox.h"
+#include "..\Editor\EditorPanels.h"
 #include <DirectXCollision.h>
 #include "GameCore.h"
 #include <iostream>
@@ -83,6 +84,7 @@ private:
     GlobalConstants m_LightPassGlobalConstants = {};
 
     Scene m_Scene;
+    AtomEditor::UiState m_EditorUi;
     SkyBox m_SkyBox;
     DescriptorHandle m_BackBufferHandle[3];
 };

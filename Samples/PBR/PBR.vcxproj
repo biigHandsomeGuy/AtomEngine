@@ -94,9 +94,11 @@
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="..\Editor\EditorPanels.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PbrRenderer.h" />
+    <ClInclude Include="..\Editor\EditorPanels.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Atom\Atom.vcxproj">

@@ -63,7 +63,11 @@ using namespace DirectX::PackedVector;
 float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) 
 {
+#ifdef ATOM_EDITOR_APP
+	return GameCore::RunApplication(PbrRenderer(hInstance), L"Atom Editor", hInstance, nCmdShow);
+#else
 	return GameCore::RunApplication(PbrRenderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
+#endif
 }
 
 
@@ -158,6 +162,8 @@ void PbrRenderer::Startup()
 	//pbrModel.
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
+	AtomEditor::Initialize(m_EditorUi);
+	m_EditorUi.SelectedModel = m_Scene.Models.empty() ? -1 : 0;
 
 	s_IBL_PSOCache.clear();
 
@@ -249,6 +255,11 @@ void PbrRenderer::RenderScene()
 	{
 		if (ImGui::BeginMenu("File"))
 		{
+			if (ImGui::MenuItem("Open Scene..."))
+				AtomEditor::OpenSceneDialog(m_Scene, m_EditorUi);
+			if (ImGui::MenuItem("Save Scene As..."))
+				AtomEditor::SaveSceneDialog(m_Scene, m_EditorUi);
+			ImGui::Separator();
 
 			if (ImGui::MenuItem("Close", NULL, false, dockspaceOpen != NULL))
 				dockspaceOpen = false;
@@ -264,7 +275,7 @@ void PbrRenderer::RenderScene()
 
     if (blockEditorUi)
         ImGui::BeginDisabled();
-	ImGui::Begin("Inspector");
+	ImGui::Begin("Renderer Settings");
 	XMVECTOR pos = m_Camera.GetPosition();
 	XMFLOAT4 temp;
 	XMStoreFloat4(&temp, pos);
@@ -299,27 +310,6 @@ void PbrRenderer::RenderScene()
 	ImGui::Checkbox("UseEmu", &m_ShaderAttribs.UseEmu);
 	ImGui::Checkbox("UseSSS", &m_ShaderAttribs.UseSSS);
 
-	static struct
-	{
-		Vector3 Translate{ kIdentity };
-		Vector3 Rotate{ kIdentity };
-		float Scale = 1.0f;
-	} ModelMatrix;
-
-	ImGui::DragFloat3("Translate", (float*)&ModelMatrix.Translate, 1.0f);
-	ImGui::DragFloat3("Rotate", (float*)&ModelMatrix.Rotate, 1.0f);
-	ImGui::DragFloat("Scale", (float*)&ModelMatrix.Scale, 1.0f);
-    ModelMatrix.Scale = std::max(0.001f, ModelMatrix.Scale);
-
-	m_Scene.Models[0].Transform.transform.SetTranslation(ModelMatrix.Translate);
-
-	Quaternion q(
-		XMConvertToRadians(ModelMatrix.Rotate.GetX()),
-		XMConvertToRadians(ModelMatrix.Rotate.GetY()),
-		XMConvertToRadians(ModelMatrix.Rotate.GetZ())
-	);
-	m_Scene.Models[0].Transform.transform.SetRotation(q);
-	m_Scene.Models[0].Transform.scale = ModelMatrix.Scale;
 	if (m_ShaderAttribs.UseSSS)
 	{
 		ImGui::SliderFloat("CurveFactor", &m_ShaderAttribs.CurveFactor, 0, 10);
@@ -332,6 +322,9 @@ void PbrRenderer::RenderScene()
 		ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);
 		ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);
 	}
+	AtomEditor::DrawSceneHierarchy(m_Scene, m_EditorUi);
+	AtomEditor::DrawInspector(m_Scene, m_EditorUi);
+	AtomEditor::DrawContentBrowser(m_Scene, m_EditorUi);
 
 
 	UINT PrevBufferIndex = (g_CurrentBuffer + 3 - 1) % 3;

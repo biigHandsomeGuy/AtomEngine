@@ -377,7 +377,7 @@ static TextureID LoadTinyGltfImage(const tinygltf::Image& img, TextureManager& t
         rgba.data());
 }
 
-static void LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelGPU& gpu, TextureManager& textureManager)
+static bool LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelGPU& gpu, TextureManager& textureManager, std::string& error)
 {
     tinygltf::TinyGLTF loader;
     tinygltf::Model model;
@@ -389,7 +389,19 @@ static void LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
         ? loader.LoadBinaryFromFile(&model, &err, &warn, path)
         : loader.LoadASCIIFromFile(&model, &err, &warn, path);
 
-    assert(ret);
+    if (!ret)
+    {
+        error = err.empty() ? "The glTF loader rejected the file." : err;
+        if (!warn.empty())
+            error += "\n" + warn;
+        return false;
+    }
+
+    if (model.meshes.empty())
+    {
+        error = "The glTF file does not contain any meshes.";
+        return false;
+    }
 
     std::string baseDir = path.substr(0, path.find_last_of("\\/") + 1);
 
@@ -459,10 +471,15 @@ static void LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
         g.RoughnessMetallicIndex = ToSceneHeapIndex(m.RoughnessMetallic, textureManager);
         g.EmissiveIndex = ToSceneHeapIndex(m.Emissive, textureManager);
     }
+
+    return true;
 }
 
 void Model::Draw(GraphicsContext& context, bool bindMaterialData)
 {
+    if (!Asset)
+        return;
+
     for (size_t i = 0; i < GPU.Meshes.size(); i++)
     {
         const auto& mesh = GPU.Meshes[i];
@@ -493,11 +510,29 @@ void Model::Draw(GraphicsContext& context, bool bindMaterialData)
 }
 namespace ModelUtility
 {
-    LoadedModelData LoadGltfAsset(const std::string& path)
+    LoadedModelData LoadGltfAsset(const std::string& path, std::string* error)
     {
         LoadedModelData data;
         data.Asset = std::make_shared<ModelAsset>();
-        LoadModelFromGLTF(path, *data.Asset, data.GPU, Graphics::g_TextureManager);
+        data.Asset->Name = std::filesystem::path(path).stem().string();
+        data.Asset->SourcePath = std::filesystem::path(path).lexically_normal().string();
+
+        std::string loadError;
+        try
+        {
+            if (!LoadModelFromGLTF(path, *data.Asset, data.GPU, Graphics::g_TextureManager, loadError))
+            {
+                data.Asset.reset();
+                if (error)
+                    *error = std::move(loadError);
+            }
+        }
+        catch (const std::exception& exception)
+        {
+            data.Asset.reset();
+            if (error)
+                *error = exception.what();
+        }
         return data;
     }
 
@@ -506,6 +541,8 @@ namespace ModelUtility
         Model model;
         model.Asset = std::move(data.Asset);
         model.GPU = std::move(data.GPU);
+        if (model.Asset)
+            model.InstanceName = model.Asset->Name;
         model.UpdateConstants();
         return model;
     }
