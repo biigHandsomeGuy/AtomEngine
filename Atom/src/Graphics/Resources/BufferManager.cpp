@@ -51,6 +51,10 @@ void Graphics::InitializeRenderingBuffers(uint32_t bufferWidth, uint32_t bufferH
 	g_SSAOBlurTemp.Create(L"SSAO Blur Temp", bufferWidth / 2, bufferHeight / 2, 1, DXGI_FORMAT_R8_UNORM);
 	g_SSAOFullScreen.Create(L"SSAO Full Res", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R8_UNORM);
 
+}
+
+void Graphics::InitializeSharedRenderingBuffers()
+{
 	g_EnvirMap.CreateArray(L"Environment Map", 2048, 2048, 6, 10, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	g_RadianceMap.CreateArray(L"Radiance Map", 1024, 1024, 6, 9, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	g_IrradianceMap.CreateArray(L"Irradiance Map", 64, 64, 6, 1, DXGI_FORMAT_R8G8B8A8_UNORM);
@@ -102,4 +106,6 @@ void Graphics::DestroyRenderingBuffers()
 	g_LUT.Destroy();
 	g_Emu.Destroy();
 	g_Eavg.Destroy();
+	g_SSSDiffuseLut.Destroy();
+	g_SSSSpecularLut.Destroy();
 }

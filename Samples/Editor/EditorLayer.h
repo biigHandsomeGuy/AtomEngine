@@ -9,7 +9,7 @@ namespace AtomEditor
     {
     public:
         void Initialize(Scene& scene) override;
-        void Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) override;
+        ViewportRequest Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) override;
         void Shutdown() override;
 
     private:

@@ -35,6 +35,7 @@ namespace GameCore
 
 		virtual bool IsDone(void) { return false; };
 		virtual int ExitCode() const { return 0; }
+		virtual bool UsesLegacySceneBuffers() const { return true; }
 
 		virtual void Update(float deltaT) = 0;
 		virtual void OnResize() = 0;

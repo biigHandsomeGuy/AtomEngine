@@ -48,7 +48,7 @@ namespace AtomEditor
             m_State.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models.front().Id;
     }
 
-    void EditorLayer::Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image)
+    ViewportRequest EditorLayer::Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image)
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -75,7 +75,7 @@ namespace AtomEditor
         DrawContentBrowser(scene, m_State, m_History);
         if (disabled)
             ImGui::EndDisabled();
-        DrawRenderViewport(image);
+        return DrawRenderViewport(image);
     }
 
     void EditorLayer::Shutdown()

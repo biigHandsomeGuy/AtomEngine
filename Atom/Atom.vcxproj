@@ -151,6 +151,7 @@
     <ClInclude Include="src\Graphics\Resources\PixelBuffer.h" />
     <ClInclude Include="src\Renderer\Renderer.h" />
     <ClInclude Include="src\Renderer\RenderGraph.h" />
+    <ClInclude Include="src\Renderer\RenderView.h" />
     <ClInclude Include="src\Graphics\Pipeline\RootSignature.h" />
     <ClInclude Include="src\Graphics\Pipeline\SamplerManager.h" />
     <ClInclude Include="src\Scene\SceneGraph.h" />
@@ -180,6 +181,7 @@
     <ClCompile Include="src\Graphics\Resources\ReadbackBuffer.cpp" />
     <ClCompile Include="src\Renderer\Renderer.cpp" />
     <ClCompile Include="src\Renderer\RenderGraph.cpp" />
+    <ClCompile Include="src\Renderer\RenderView.cpp" />
     <ClCompile Include="src\Graphics\Resources\BufferManager.cpp" />
     <ClCompile Include="src\Graphics\Commands\CommandContext.cpp" />
     <ClCompile Include="src\Graphics\Resources\DescriptorHeap.cpp" />

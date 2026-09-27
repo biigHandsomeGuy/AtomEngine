@@ -76,6 +76,9 @@ foreach ($item in $targets) {
             throw "D3D12 validation was unavailable for the Debug smoke test: $item (log: $smokeLog)"
         }
         $validation = if ($smoke.Output -match 'validation=1') { 'D3D12 validation enabled, zero errors' } else { 'D3D12 validation unavailable' }
+        if ($smoke.Output -notmatch 'viewErrors=0 resizeChecks=4 windowResizes=1') {
+            throw "Render-view resize and isolation checks failed: $item (log: $smokeLog)"
+        }
         Write-Output "$item rendered 60 frames and exited normally ($validation; log: $smokeLog)"
     }
 }

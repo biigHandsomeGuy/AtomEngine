@@ -6,10 +6,10 @@ namespace
 {
     class SampleUi final : public PbrApplicationUi
     {
-        void Draw(Scene&, PbrRenderer& renderer, const ViewportImage& image) override
+        ViewportRequest Draw(Scene&, PbrRenderer& renderer, const ViewportImage& image) override
         {
             DrawRendererSettings(renderer);
-            DrawRenderViewport(image);
+            return DrawRenderViewport(image);
         }
     };
 }

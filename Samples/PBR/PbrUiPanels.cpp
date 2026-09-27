@@ -2,6 +2,7 @@
 #include "PbrUiPanels.h"
 
 #include <algorithm>
+#include <cmath>
 #include <Imgui/imgui.h>
 #include "GameInput.h"
 
@@ -58,21 +59,20 @@ void DrawRendererSettings(PbrRenderer& renderer)
         ImGui::EndDisabled();
 }
 
-void DrawRenderViewport(const ViewportImage& image)
+ViewportRequest DrawRenderViewport(const ViewportImage& image)
 {
-    ImGui::Begin("ViewPort");
+    const bool visible = ImGui::Begin("ViewPort");
     const ImVec2 available = ImGui::GetContentRegionAvail();
+    ViewportRequest request;
     GameCore::g_ViewportHovered = false;
-    if (image.TextureId != 0 && image.Width > 0 && image.Height > 0 && available.x > 0.0f && available.y > 0.0f)
+    if (visible && image.TextureId != 0 && available.x > 0.0f && available.y > 0.0f)
     {
-        const float aspect = float(image.Width) / float(image.Height);
-        const float width = std::min(available.x, available.y * aspect);
-        const ImVec2 size(width, width / aspect);
-        const ImVec2 cursor = ImGui::GetCursorPos();
-        ImGui::SetCursorPos(ImVec2(cursor.x + (available.x - size.x) * 0.5f, cursor.y + (available.y - size.y) * 0.5f));
-        ImGui::Image(static_cast<ImTextureID>(image.TextureId), size);
+        request.Width = static_cast<uint32_t>(std::max(8.0f, std::floor(available.x)));
+        request.Height = static_cast<uint32_t>(std::max(8.0f, std::floor(available.y)));
+        ImGui::Image(static_cast<ImTextureID>(image.TextureId), available);
         GameCore::g_ViewportHovered = ImGui::IsItemHovered();
     }
     GameCore::g_ViewportCapturingMouse = GameInput::IsMouseLookActive();
     ImGui::End();
+    return request;
 }

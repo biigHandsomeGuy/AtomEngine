@@ -8,7 +8,7 @@ class TextureManager;
 namespace Graphics
 {
 
-    void Initialize(bool RequireDXRSupport = false);
+    void Initialize(bool RequireDXRSupport = false, bool useLegacySceneBuffers = true);
     void Shutdown(void);
     
 

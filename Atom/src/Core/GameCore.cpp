@@ -54,7 +54,7 @@ namespace GameCore
 	HWND g_hWnd = nullptr;
 	void InitializeApplication(IGameApp& game)
 	{
-		Graphics::Initialize();
+		Graphics::Initialize(false, game.UsesLegacySceneBuffers());
 		SystemTime::Initialize();
 		GameInput::Initialize();
 		FileSystem::Initialize();

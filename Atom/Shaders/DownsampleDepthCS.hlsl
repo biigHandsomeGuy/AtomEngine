@@ -25,11 +25,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
+    uint fullW, fullH;
+    gLinearDepthFull.GetDimensions(fullW, fullH);
+    int2 edge = int2(fullW, fullH) - 1;
     int2 basePixel = int2(DTid.xy) * 2;
-    float z0 = gLinearDepthFull.Load(int3(basePixel + int2(0, 0), 0));
-    float z1 = gLinearDepthFull.Load(int3(basePixel + int2(1, 0), 0));
-    float z2 = gLinearDepthFull.Load(int3(basePixel + int2(0, 1), 0));
-    float z3 = gLinearDepthFull.Load(int3(basePixel + int2(1, 1), 0));
+    float z0 = gLinearDepthFull.Load(int3(min(basePixel, edge), 0));
+    float z1 = gLinearDepthFull.Load(int3(min(basePixel + int2(1, 0), edge), 0));
+    float z2 = gLinearDepthFull.Load(int3(min(basePixel + int2(0, 1), edge), 0));
+    float z3 = gLinearDepthFull.Load(int3(min(basePixel + int2(1, 1), edge), 0));
 
     gLinearDepthHalf[DTid.xy] = min(min(z0, z1), min(z2, z3));
 }

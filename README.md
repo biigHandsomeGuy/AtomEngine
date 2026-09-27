@@ -11,7 +11,7 @@ git submodule update --init --recursive
 pwsh -File scripts/Build-Pbr.ps1 -Target All -Configuration Debug -SmokeTest
 ```
 
-The script builds only PBR and AtomEditor and runs each for 60 frames. Debug smoke tests require D3D12 validation and fail on validation errors, device removal, premature exit, or timeout. Logs are saved under `bin-int/build-logs`. Smoke runs do not save ImGui layout preferences. Windows Graphics Tools must be available for Debug validation.
+The script builds only PBR and AtomEditor and runs each for 60 frames, including four view sizes, odd-size SSAO, TAA toggling/history reset, a real main-window resize, and resource-isolation checks. Debug smoke tests require D3D12 validation and fail on validation errors, device removal, failed view checks, premature exit, or timeout. Logs are saved under `bin-int/build-logs`. Smoke runs do not save ImGui layout preferences. Windows Graphics Tools must be available for Debug validation.
 
 ```powershell
 # Interactive editor
@@ -22,7 +22,7 @@ The script builds only PBR and AtomEditor and runs each for 60 frames. Debug smo
 pwsh -File scripts/Build-Pbr.ps1 -Target All -Configuration Release -SmokeTest
 ```
 
-The editor provides scene hierarchy, transforms, model import, scene save/load, and undo/redo. See [architecture and migration stages](docs/architecture/editor-and-renderer.md) for the implemented boundaries and remaining work.
+The editor provides scene hierarchy, transforms, model import, scene save/load, and undo/redo. Its view owns its render targets, camera, and temporal history and renders at the panel's pixel dimensions. See [architecture and migration stages](docs/architecture/editor-and-renderer.md) for the implemented boundaries and remaining work.
 
 #### Some features of AtomEngine
 

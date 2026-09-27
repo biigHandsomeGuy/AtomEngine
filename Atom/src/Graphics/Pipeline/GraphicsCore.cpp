@@ -7,6 +7,7 @@
 #include "GraphicsCommon.h"
 #include "Renderer.h"
 #include "TextureManager.h"
+#include "BufferManager.h"
 
 namespace Graphics
 {
@@ -33,7 +34,7 @@ namespace Graphics
 	Microsoft::WRL::ComPtr<ID3D12Debug1> debugController;
 	Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
 	UINT g_CurrentFence = 0;
-    void Initialize(bool RequireDXRSupport)
+    void Initialize(bool RequireDXRSupport, bool useLegacySceneBuffers)
     {
 		Microsoft::WRL::ComPtr<ID3D12Device5> pDevice;
 #if defined(DEBUG) || defined(_DEBUG) 
@@ -77,7 +78,7 @@ namespace Graphics
 		Graphics::DsvDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		Graphics::CbvSrvUavDescriptorSize = g_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-		Display::Initialize();
+		Display::Initialize(useLegacySceneBuffers);
 
 
 		SSAO::Initialize();
@@ -91,6 +92,7 @@ namespace Graphics
 		g_CommandManager.Shutdown();
 		SSAO::Shutdown();
 		Display::Shutdown();
+		DestroyRenderingBuffers();
     }
 
 	

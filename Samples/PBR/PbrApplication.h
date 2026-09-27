@@ -5,10 +5,17 @@
 
 #include "GameCore.h"
 #include "PbrRenderer.h"
+#include "CameraController.h"
 
 struct ViewportImage
 {
     uint64_t TextureId = 0;
+    uint32_t Width = 0;
+    uint32_t Height = 0;
+};
+
+struct ViewportRequest
+{
     uint32_t Width = 0;
     uint32_t Height = 0;
 };
@@ -19,7 +26,7 @@ class PbrApplicationUi
 public:
     virtual ~PbrApplicationUi() = default;
     virtual void Initialize(Scene& scene) {}
-    virtual void Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) = 0;
+    virtual ViewportRequest Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) = 0;
     virtual void Shutdown() {}
 };
 
@@ -35,18 +42,25 @@ public:
     void RenderScene() override;
     bool IsDone() override;
     int ExitCode() const override { return m_ExitCode; }
+    bool UsesLegacySceneBuffers() const override { return false; }
 
     static uint32_t ParseSmokeFrameLimit(const wchar_t* commandLine);
 
 private:
     void InitializeUi();
+    void CheckViewIsolation();
 
     Scene m_Scene;
+    RenderView m_View;
     PbrRenderer m_Renderer;
+    std::unique_ptr<CameraController> m_CameraController;
     std::unique_ptr<PbrApplicationUi> m_Ui;
     DescriptorHandle m_ViewportDescriptors[3];
     bool m_UiInitialized = false;
     uint32_t m_SmokeFrameLimit = 0;
     uint64_t m_CompletedFrames = 0;
     int m_ExitCode = 0;
+    uint32_t m_ViewErrors = 0;
+    uint32_t m_ResizeChecks = 0;
+    uint32_t m_WindowResizes = 0;
 };

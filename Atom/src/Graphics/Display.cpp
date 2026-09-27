@@ -9,6 +9,8 @@
 using namespace Graphics;
 using namespace Microsoft::WRL;
 
+namespace { bool s_UseLegacySceneBuffers = true; }
+
 #define SWAP_CHAIN_BUFFER_COUNT 3
 
 namespace GameCore
@@ -40,8 +42,9 @@ namespace Graphics
     ColorBuffer g_DisplayPlane[SWAP_CHAIN_BUFFER_COUNT];   
 }
 
-void Display::Initialize(void)
+void Display::Initialize(bool useLegacySceneBuffers)
 {
+	s_UseLegacySceneBuffers = useLegacySceneBuffers;
 	ASSERT(s_SwapChain1 == nullptr);
     // Update the viewport transform to cover the client area.
     g_ViewPort.TopLeftX = 0;
@@ -93,7 +96,9 @@ void Display::Initialize(void)
         g_DisplayPlane[i].CreateFromSwapChain(L"Primary SwapChain Buffer", displayPlane.Detach());
     }
 
-    InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
+    InitializeSharedRenderingBuffers();
+    if (s_UseLegacySceneBuffers)
+        InitializeRenderingBuffers(g_DisplayWidth, g_DisplayHeight);
 }
 
 void Display::Shutdown(void)
@@ -153,7 +158,8 @@ void Display::Resize(uint32_t width, uint32_t height)
 
     }
 
-    ResizeDisplayDependentBuffers(g_DisplayWidth, g_DisplayHeight);
+    if (s_UseLegacySceneBuffers)
+        ResizeDisplayDependentBuffers(g_DisplayWidth, g_DisplayHeight);
     g_CommandManager.IdleGPU();
     
     

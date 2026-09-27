@@ -90,7 +90,7 @@ namespace Renderer
             D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED);
     }
 
-    static void CreatePSOs()
+    static void CreatePSOs(const PipelineFormats& formats)
     {
         static const D3D12_INPUT_ELEMENT_DESC kInputLayout[] =
         {
@@ -110,7 +110,7 @@ namespace Renderer
         opaque.SetDepthStencilState(DepthStateReadWrite);
         opaque.SetInputLayout(_countof(kInputLayout), kInputLayout);
         opaque.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-        opaque.SetRenderTargetFormat(g_SceneColorBuffer.GetFormat(), g_SceneDepthBuffer.GetFormat());
+        opaque.SetRenderTargetFormat(formats.Color, formats.Depth);
         opaque.SetVertexShader(g_pPBRShadingVS, sizeof(g_pPBRShadingVS));
         opaque.SetPixelShader(g_pPBRShadingPS, sizeof(g_pPBRShadingPS));
         opaque.Finalize();
@@ -123,7 +123,7 @@ namespace Renderer
         drawNormals.SetDepthStencilState(DepthStateReadWrite);
         drawNormals.SetInputLayout(_countof(kInputLayout), kInputLayout);
         drawNormals.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-        drawNormals.SetRenderTargetFormat(g_SceneNormalBuffer.GetFormat(), g_SceneDepthBuffer.GetFormat());
+        drawNormals.SetRenderTargetFormat(formats.Normal, formats.Depth);
         drawNormals.SetVertexShader(g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS));
         drawNormals.SetPixelShader(g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS));
         drawNormals.Finalize();
@@ -139,7 +139,7 @@ namespace Renderer
         shadow.SetDepthStencilState(shadowDepthState);
         shadow.SetInputLayout(_countof(kInputLayout), kInputLayout);
         shadow.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-        shadow.SetRenderTargetFormats(0, nullptr, g_ShadowBuffer.GetFormat());
+        shadow.SetRenderTargetFormats(0, nullptr, formats.Shadow);
         shadow.SetVertexShader(g_pShadowVS, sizeof(g_pShadowVS));
         shadow.SetPixelShader(g_pShadowPS, sizeof(g_pShadowPS));
         shadow.Finalize();
@@ -151,7 +151,7 @@ namespace Renderer
         s_SkyboxPSO.SetDepthStencilState(DepthStateReadOnly);
         s_SkyboxPSO.SetInputLayout(_countof(kInputLayout), kInputLayout);
         s_SkyboxPSO.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-        s_SkyboxPSO.SetRenderTargetFormat(g_SceneColorBuffer.GetFormat(), g_SceneDepthBuffer.GetFormat());
+        s_SkyboxPSO.SetRenderTargetFormat(formats.Color, formats.Depth);
         s_SkyboxPSO.SetVertexShader(g_pSkyBoxVS, sizeof(g_pSkyBoxVS));
         s_SkyboxPSO.SetPixelShader(g_pSkyBoxPS, sizeof(g_pSkyBoxPS));
         s_SkyboxPSO.Finalize();
@@ -161,7 +161,7 @@ namespace Renderer
         s_PostProcessPSO.Finalize();
     }
 
-    void Initialize(void)
+    void Initialize(bool useLegacyDescriptors, PipelineFormats formats)
     {
         m_CommonTextures = Graphics::g_BindlessHeap.Alloc(10);
         g_PostProcessTexture = Graphics::g_BindlessHeap.Alloc(4);
@@ -179,8 +179,9 @@ namespace Renderer
         CreateGraphicsRootSignature();
         CreateComputeRootSignature();
         CreateBindlessRootSignature();
-        CreatePSOs();
-        UpdateGlobalDescriptors();
+        CreatePSOs(formats);
+        if (useLegacyDescriptors)
+            UpdateGlobalDescriptors();
     }
 
     void Shutdown(void)

@@ -30,6 +30,7 @@ namespace Graphics
     extern ColorBuffer g_SSSSpecularLut;
 
     void InitializeRenderingBuffers(uint32_t NativeWidth, uint32_t NativeHeight);
+    void InitializeSharedRenderingBuffers();
     void ResizeDisplayDependentBuffers(uint32_t NativeWidth, uint32_t NativeHeight);
     void DestroyRenderingBuffers();
 }

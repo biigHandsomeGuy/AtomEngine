@@ -144,6 +144,9 @@
     <ClInclude Include="src\Renderer\RenderGraph.h">
       <Filter>Renderer</Filter>
     </ClInclude>
+    <ClInclude Include="src\Renderer\RenderView.h">
+      <Filter>Renderer</Filter>
+    </ClInclude>
     <ClInclude Include="src\Graphics\Resources\TextureManager.h">
       <Filter>Graphics\Resources</Filter>
     </ClInclude>
@@ -303,6 +306,9 @@
       <Filter>Renderer</Filter>
     </ClCompile>
     <ClCompile Include="src\Renderer\RenderGraph.cpp">
+      <Filter>Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Renderer\RenderView.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
     <ClCompile Include="src\Graphics\Resources\TextureManager.cpp">
