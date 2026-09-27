@@ -22,9 +22,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Assets", "Assets", "{2E940B
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "stb_image", "Dependencies\stb_image\stb_image\stb_image.vcxproj", "{60ED286F-45CC-4F89-80A3-9406B0EE1487}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tinygltf", "Dependencies\tinygltf\tinygltf.vcxproj", "{A95BBE5D-4C2C-489E-8F02-28CEBE5B7EB2}"
-EndProject
-
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,10 +48,6 @@ Global
 		{60ED286F-45CC-4F89-80A3-9406B0EE1487}.Debug|x64.Build.0 = Debug|x64
 		{60ED286F-45CC-4F89-80A3-9406B0EE1487}.Release|x64.ActiveCfg = Release|x64
 		{60ED286F-45CC-4F89-80A3-9406B0EE1487}.Release|x64.Build.0 = Release|x64
-		{A95BBE5D-4C2C-489E-8F02-28CEBE5B7EB2}.Debug|x64.ActiveCfg = Debug|x64
-		{A95BBE5D-4C2C-489E-8F02-28CEBE5B7EB2}.Debug|x64.Build.0 = Debug|x64
-		{A95BBE5D-4C2C-489E-8F02-28CEBE5B7EB2}.Release|x64.ActiveCfg = Release|x64
-		{A95BBE5D-4C2C-489E-8F02-28CEBE5B7EB2}.Release|x64.Build.0 = Release|x64
 		{4E7C7051-F21F-48E2-B97A-A6399BDB1454}.Debug|x64.ActiveCfg = Debug|x64
 		{4E7C7051-F21F-48E2-B97A-A6399BDB1454}.Debug|x64.Build.0 = Debug|x64
 		{4E7C7051-F21F-48E2-B97A-A6399BDB1454}.Release|x64.ActiveCfg = Release|x64
