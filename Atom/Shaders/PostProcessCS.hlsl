@@ -19,6 +19,10 @@ cbuffer MaterialConstants : register(b0)
     bool UseTAA;
     bool TAAHistoryValid;
     float TAAFeedback;
+    bool UseGama;
+    bool UseBloom;
+    float BloomThreshold;
+    float BloomStrength;
 }
 
 #define FXAA_EDGE_THRESHOLD      (1.0/8.0)
@@ -85,7 +89,7 @@ float4 Filmic(float4 col)
 
 float4 ACESFilm(float4 x)
 {
-    x *= 0.18 * exposure;
+    x *= 0.6 * exposure;
     float a = 2.51f;
     float b = 0.03f;
     float c = 2.43f;
@@ -106,6 +110,31 @@ float3 ApplyToneMapping(float3 inColor)
     return max(color.rgb, 0.0f);
 }
 
+float3 ExtractBright(float3 color)
+{
+    float luminance = GetLuminance(color);
+    float knee = max(BloomThreshold * 0.5f, 1e-4f);
+    float soft = clamp(luminance - BloomThreshold + knee, 0.0f, 2.0f * knee);
+    soft = soft * soft / (4.0f * knee);
+    float contribution = max(luminance - BloomThreshold, soft);
+    return color * (contribution / max(luminance, 1e-4f));
+}
+
+float3 SampleBloom(float2 uv, float2 rcpFrame)
+{
+    // Compact Gaussian-like bright extraction for the first bloom pass.
+    const float2 texel = rcpFrame * 4.0f;
+    float3 bloom = ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv, 0.0f).rgb) * 4.0f;
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2(-1,  0), 0.0f).rgb) * 2.0f;
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2( 1,  0), 0.0f).rgb) * 2.0f;
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2( 0, -1), 0.0f).rgb) * 2.0f;
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2( 0,  1), 0.0f).rgb) * 2.0f;
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2(-1, -1), 0.0f).rgb);
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2( 1, -1), 0.0f).rgb);
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2(-1,  1), 0.0f).rgb);
+    bloom += ExtractBright(ScreenTexture.SampleLevel(gsamLinearClamp, uv + texel * float2( 1,  1), 0.0f).rgb);
+    return bloom * (1.0f / 16.0f);
+}
 float2 ReprojectHistoryUv(float2 uv, float depth)
 {
     float2 ndc;
@@ -149,14 +178,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     float2 uv = (float2(pixel) + 0.5f) / screenSize;
 
     float3 sceneColor = ScreenTexture.Sample(gsamAnisotropicClamp, uv).rgb;
-    float3 colorLinear = sceneColor;
+    float3 currToneMapped = ApplyToneMapping(sceneColor);
+    float3 colorLinear = UseTAA ? currToneMapped : sceneColor;
 
     if (UseTAA && TAAHistoryValid)
     {
         float depth = DepthTexture.Load(int3(pixel, 0));
         float2 prevUv = ReprojectHistoryUv(uv, depth);
         bool validPrevUv = all(prevUv >= 0.0) && all(prevUv <= 1.0) && depth < 0.999999;
-        float3 currToneMapped = ApplyToneMapping(sceneColor);
         float3 historyColor = currToneMapped;
         if (validPrevUv)
         {
@@ -362,8 +391,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     {
         colorLinear = ApplyToneMapping(colorLinear);
     }
-
-    float3 outColor = pow(max(colorLinear, 0.0f), 1.0 / 2.2);
-
+    if (UseBloom)
+    {
+        colorLinear = saturate(colorLinear + SampleBloom(uv, rcpFrame) * BloomStrength);
+    }
+    float3 outColor;
+    if (UseGama)
+        
+        outColor = pow(max(colorLinear, 0.0f), 1.0 / 2.2);
+    else
+    {
+        outColor = colorLinear;
+        
+    }
     OutTexture[pixel] = float4(outColor, 1.0f);
 }

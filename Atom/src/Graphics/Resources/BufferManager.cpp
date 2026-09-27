@@ -17,7 +17,11 @@ namespace Graphics
 	DepthBuffer g_SceneDepthBuffer;
 	ColorBuffer g_SceneNormalBuffer;
 	DepthBuffer g_ShadowBuffer;
+	ColorBuffer g_LinearDepthFull;
+	ColorBuffer g_LinearDepthHalf;
 	ColorBuffer g_SSAOFullScreen;
+	ColorBuffer g_SSAOHalfRes;
+	ColorBuffer g_SSAOBlurTemp;
 	ColorBuffer g_RandomVectorBuffer;
 
 	ColorBuffer g_EnvirMap;
@@ -41,7 +45,11 @@ void Graphics::InitializeRenderingBuffers(uint32_t bufferWidth, uint32_t bufferH
 	g_SceneNormalBuffer.Create(L"Normals Buffer", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	g_ShadowBuffer.Create(L"Shadow Map", 2048, 2048, DXGI_FORMAT_D16_UNORM);
 
-	g_SSAOFullScreen.Create(L"SSAO Full Res", bufferWidth/2, bufferHeight/2, 1, DXGI_FORMAT_R8_UNORM);
+	g_LinearDepthFull.Create(L"Linear Depth Full", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R32_FLOAT);
+	g_LinearDepthHalf.Create(L"Linear Depth Half", bufferWidth / 2, bufferHeight / 2, 1, DXGI_FORMAT_R32_FLOAT);
+	g_SSAOHalfRes.Create(L"SSAO Half Res", bufferWidth / 2, bufferHeight / 2, 1, DXGI_FORMAT_R8_UNORM);
+	g_SSAOBlurTemp.Create(L"SSAO Blur Temp", bufferWidth / 2, bufferHeight / 2, 1, DXGI_FORMAT_R8_UNORM);
+	g_SSAOFullScreen.Create(L"SSAO Full Res", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R8_UNORM);
 
 	g_EnvirMap.CreateArray(L"Environment Map", 2048, 2048, 6, 10, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	g_RadianceMap.CreateArray(L"Radiance Map", 1024, 1024, 6, 9, DXGI_FORMAT_R16G16B16A16_FLOAT);
@@ -64,7 +72,11 @@ void Graphics::ResizeDisplayDependentBuffers(uint32_t bufferWidth, uint32_t buff
 	g_SceneNormalBuffer.Create(L"Normals Buffer", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
 	g_ShadowBuffer.Create(L"Shadow Map", 2048, 2048, DXGI_FORMAT_D16_UNORM);
 
-	g_SSAOFullScreen.Create(L"SSAO Full Res", bufferWidth/2, bufferHeight/2, 1, DXGI_FORMAT_R8_UNORM);
+	g_LinearDepthFull.Create(L"Linear Depth Full", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R32_FLOAT);
+	g_LinearDepthHalf.Create(L"Linear Depth Half", bufferWidth / 2, bufferHeight / 2, 1, DXGI_FORMAT_R32_FLOAT);
+	g_SSAOHalfRes.Create(L"SSAO Half Res", bufferWidth / 2, bufferHeight / 2, 1, DXGI_FORMAT_R8_UNORM);
+	g_SSAOBlurTemp.Create(L"SSAO Blur Temp", bufferWidth / 2, bufferHeight / 2, 1, DXGI_FORMAT_R8_UNORM);
+	g_SSAOFullScreen.Create(L"SSAO Full Res", bufferWidth, bufferHeight, 1, DXGI_FORMAT_R8_UNORM);
 
 }
 
@@ -77,6 +89,10 @@ void Graphics::DestroyRenderingBuffers()
 	g_SceneDepthBuffer.Destroy();
 	g_SceneNormalBuffer.Destroy();
 	g_ShadowBuffer.Destroy();
+	g_LinearDepthFull.Destroy();
+	g_LinearDepthHalf.Destroy();
+	g_SSAOHalfRes.Destroy();
+	g_SSAOBlurTemp.Destroy();
 	g_SSAOFullScreen.Destroy();
 	g_RandomVectorBuffer.Destroy();
 

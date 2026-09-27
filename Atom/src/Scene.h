@@ -1,8 +1,4 @@
 #pragma once
-#include "Model.h"
-#include "Material.h"
-struct Scene
-{
-	std::vector<Model> Models;
-	std::vector<UINT> MaterialIndex;
-};
+
+// Compatibility include while call sites migrate to the Scene module.
+#include "Scene/SceneGraph.h"

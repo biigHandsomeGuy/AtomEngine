@@ -112,7 +112,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Atom\include;$(SolutionDir)Atom\Vendor;$(SolutionDir)Atom\Vendor\stb_image</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Atom\include;$(SolutionDir)Atom\src;$(SolutionDir)Atom\src\Core;$(SolutionDir)Atom\src\Math;$(SolutionDir)Atom\src\Scene;$(SolutionDir)Atom\src\Graphics;$(SolutionDir)Atom\src\Graphics\Commands;$(SolutionDir)Atom\src\Graphics\Resources;$(SolutionDir)Atom\src\Graphics\Pipeline;$(SolutionDir)Atom\src\Renderer;$(SolutionDir)Atom\Vendor;$(SolutionDir)Atom\Vendor\stb_image</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -127,7 +127,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Atom\include;$(SolutionDir)Atom\Vendor;$(SolutionDir)Atom\Vendor\stb_image</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Atom\include;$(SolutionDir)Atom\src;$(SolutionDir)Atom\src\Core;$(SolutionDir)Atom\src\Math;$(SolutionDir)Atom\src\Scene;$(SolutionDir)Atom\src\Graphics;$(SolutionDir)Atom\src\Graphics\Commands;$(SolutionDir)Atom\src\Graphics\Resources;$(SolutionDir)Atom\src\Graphics\Pipeline;$(SolutionDir)Atom\src\Renderer;$(SolutionDir)Atom\Vendor;$(SolutionDir)Atom\Vendor\stb_image</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>

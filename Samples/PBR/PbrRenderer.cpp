@@ -86,7 +86,7 @@ void PbrRenderer::Startup()
 	CommandContext& gfxContext = CommandContext::Begin(L"Scene Startup");
 
 	m_Camera.SetEyeAtUp(Vector3(0.0f, 0.0f, -20.0f), Vector3(kZero), Vector3(kYUnitVector));
-	m_Camera.SetZRange(0.1f, 10000.0f);
+	m_Camera.SetZRange(m_CameraNearClip, m_CameraFarClip);
 	m_Camera.SetAspectRatio(9.0f / 16.0f);
 	m_CameraController.reset(new FlyingFPSCamera(m_Camera, Vector3(kYUnitVector)));
 
@@ -151,8 +151,10 @@ void PbrRenderer::Startup()
 	m_BackBufferHandle[2] = Graphics::g_BindlessHeap.Alloc();
 
 	Model skyBox, pbrModel;
-	skyBox = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/cube.glb")));
-	pbrModel = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf")));
+	skyBox = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/cube.glb")));
+	pbrModel = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf")));
+	//pbrModel = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/silver_sphere.glb")));
+	//pbrModel = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/Sponza/Sponza.glb")));
 	//pbrModel.
 	m_SkyBox.model = std::move(skyBox);
 	m_Scene.Models.push_back(std::move(pbrModel));
@@ -178,6 +180,8 @@ void PbrRenderer::OnResize()
 void PbrRenderer::Update(float gt)
 {
 	Renderer::UpdateGlobalDescriptors();
+	
+    m_Camera.SetZRange(m_CameraNearClip, m_CameraFarClip);
 	
 	m_CameraController->Update(gt);
     m_Camera.Update();
@@ -267,6 +271,8 @@ void PbrRenderer::RenderScene()
 
 
 	ImGui::Text("Camera Position: (%.3f, %.3f, %.3f, %.3f)", temp.x, temp.y, temp.z, temp.w);
+    ImGui::DragFloat("Camera Near", &m_CameraNearClip, 0.05f, 0.01f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    ImGui::DragFloat("Camera Far", &m_CameraFarClip, 10.0f, 10.0f, 200000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
 
 	ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
 	ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
@@ -279,6 +285,13 @@ void PbrRenderer::RenderScene()
 	ImGui::Checkbox("UseReinhard", &m_ppAttribs.reinhard);
 	ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
 	ImGui::Checkbox("UseAces", &m_ppAttribs.aces);
+	ImGui::Checkbox("UseGama", &m_ppAttribs.useGama);
+    ImGui::Checkbox("Use Bloom", &m_ppAttribs.useBloom);
+    if (m_ppAttribs.useBloom)
+    {
+        ImGui::SliderFloat("Bloom Threshold", &m_ppAttribs.bloomThreshold, 0.1f, 5.0f);
+        ImGui::SliderFloat("Bloom Strength", &m_ppAttribs.bloomStrength, 0.0f, 1.0f);
+    }
 
 	ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
 	ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);
@@ -293,9 +306,10 @@ void PbrRenderer::RenderScene()
 		float Scale = 1.0f;
 	} ModelMatrix;
 
-	ImGui::DragFloat4("Translate", (float*)&ModelMatrix.Translate, 1.0f);
-	ImGui::DragFloat4("Rotate", (float*)&ModelMatrix.Rotate, 1.0f);
+	ImGui::DragFloat3("Translate", (float*)&ModelMatrix.Translate, 1.0f);
+	ImGui::DragFloat3("Rotate", (float*)&ModelMatrix.Rotate, 1.0f);
 	ImGui::DragFloat("Scale", (float*)&ModelMatrix.Scale, 1.0f);
+    ModelMatrix.Scale = std::max(0.001f, ModelMatrix.Scale);
 
 	m_Scene.Models[0].Transform.transform.SetTranslation(ModelMatrix.Translate);
 
@@ -420,6 +434,7 @@ void PbrRenderer::RenderScene()
 	
 	
 	// ----------------------------------- Render SSAO --------------------------------
+    GraphicsContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	SSAO::Render(GraphicsContext, m_Camera);
 
 	// ----------------------------------- Render Color ------------------------------
@@ -434,9 +449,9 @@ void PbrRenderer::RenderScene()
 
 
 	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 	GraphicsContext.ClearColor(g_SceneColorBuffer);
-	GraphicsContext.ClearDepthAndStencil(g_SceneDepthBuffer);
 	GraphicsContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
 
 	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
@@ -472,6 +487,7 @@ void PbrRenderer::RenderScene()
 	m_SkyBox.model.Draw(GraphicsContext, false);
 
 	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 
 	// ------------------------- postprocess -----------------------

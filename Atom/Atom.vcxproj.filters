@@ -16,204 +16,352 @@
     <Filter Include="Assets\Shaders\ShadingModel">
       <UniqueIdentifier>{df1c5dd0-cbc1-4bdd-a7ae-dc589bb7e67e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core"><UniqueIdentifier>{E3489B5E-0923-49E8-A108-297166E1050B}</UniqueIdentifier></Filter>
+    <Filter Include="Math"><UniqueIdentifier>{548935DE-B475-4350-8D9C-879012C8162C}</UniqueIdentifier></Filter>
+    <Filter Include="Scene"><UniqueIdentifier>{41A91B66-CCB1-4296-90E4-D404C2E8C629}</UniqueIdentifier></Filter>
+    <Filter Include="Renderer"><UniqueIdentifier>{FD4D4845-50BD-402F-BEEF-913EBEB3F699}</UniqueIdentifier></Filter>
+    <Filter Include="Graphics"><UniqueIdentifier>{0DA367BF-8A10-4907-A91B-CCFCB283F19B}</UniqueIdentifier></Filter>
+    <Filter Include="Graphics\Commands"><UniqueIdentifier>{5CF11A92-72C3-4A64-B7FF-C5A396619083}</UniqueIdentifier></Filter>
+    <Filter Include="Graphics\Resources"><UniqueIdentifier>{2DCBE21A-8F7D-4979-B3ED-AAA059723F33}</UniqueIdentifier></Filter>
+    <Filter Include="Graphics\Pipeline"><UniqueIdentifier>{5B087465-1A82-4A29-B68D-5E1F790CA615}</UniqueIdentifier></Filter>
+    <Filter Include="ThirdParty"><UniqueIdentifier>{2095756B-5DAF-4DB3-B930-DD54C1A146EE}</UniqueIdentifier></Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\GameCore.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Core\GameCore.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\Camera.h">
+      <Filter>Scene</Filter>
     </ClInclude>
     <ClInclude Include="src\Camera.h">
-      <Filter>include</Filter>
+      <Filter>Scene</Filter>
     </ClInclude>
-    <ClInclude Include="src\ConstantBuffers.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Pipeline\ConstantBuffers.h">
+      <Filter>Graphics\Pipeline</Filter>
     </ClInclude>
-    <ClInclude Include="src\Util.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Core\Util.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\d3dx12.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Pipeline\d3dx12.h">
+      <Filter>Graphics\Pipeline</Filter>
     </ClInclude>
-    <ClInclude Include="src\DDSTextureLoader.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Resources\DDSTextureLoader.h">
+      <Filter>Graphics\Pipeline</Filter>
     </ClInclude>
-    <ClInclude Include="src\demo.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Core\demo.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\GameTimer.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Core\GameTimer.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\GraphicsCore.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Pipeline\GraphicsCore.h">
+      <Filter>Graphics\Pipeline</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\Material.h">
+      <Filter>Scene</Filter>
     </ClInclude>
     <ClInclude Include="src\Material.h">
-      <Filter>include</Filter>
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\MathHelper.h">
+      <Filter>Math</Filter>
     </ClInclude>
     <ClInclude Include="src\MathHelper.h">
-      <Filter>include</Filter>
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\Mesh.h">
+      <Filter>Scene</Filter>
     </ClInclude>
     <ClInclude Include="src\Mesh.h">
-      <Filter>include</Filter>
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\Model.h">
+      <Filter>Scene</Filter>
     </ClInclude>
     <ClInclude Include="src\Model.h">
-      <Filter>include</Filter>
+      <Filter>Scene</Filter>
     </ClInclude>
     <ClInclude Include="src\pch.h">
-      <Filter>include</Filter>
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\SceneGraph.h">
+      <Filter>Scene</Filter>
     </ClInclude>
     <ClInclude Include="src\Scene.h">
-      <Filter>include</Filter>
+      <Filter>Scene</Filter>
     </ClInclude>
-    <ClInclude Include="src\SkyBox.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Renderer\SkyBox.h">
+      <Filter>Renderer</Filter>
     </ClInclude>
-    <ClInclude Include="src\Ssao.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Renderer\Ssao.h">
+      <Filter>Renderer</Filter>
     </ClInclude>
-    <ClInclude Include="src\Texture.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Resources\Texture.h">
+      <Filter>Graphics\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\CommandAllocatorPool.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Commands\CommandAllocatorPool.h">
+      <Filter>Graphics\Commands</Filter>
     </ClInclude>
-    <ClInclude Include="src\Log.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Core\Log.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\CommandListManager.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Commands\CommandListManager.h">
+      <Filter>Graphics\Commands</Filter>
     </ClInclude>
-    <ClInclude Include="src\Display.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Display.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\BufferManager.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Resources\BufferManager.h">
+      <Filter>Graphics\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\RootSignature.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Pipeline\RootSignature.h">
+      <Filter>Graphics\Pipeline</Filter>
     </ClInclude>
-    <ClInclude Include="src\Hash.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Pipeline\Hash.h">
+      <Filter>Graphics\Pipeline</Filter>
     </ClInclude>
     <ClInclude Include="src\Math\Common.h">
-      <Filter>include</Filter>
+      <Filter>Math</Filter>
     </ClInclude>
-    <ClInclude Include="src\PipelineState.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Pipeline\PipelineState.h">
+      <Filter>Graphics\Pipeline</Filter>
     </ClInclude>
-    <ClInclude Include="src\d3dApp.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Core\d3dApp.h">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\DescriptorHeap.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Resources\DescriptorHeap.h">
+      <Filter>Graphics\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\GpuResource.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Resources\GpuResource.h">
+      <Filter>Graphics\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\CommandContext.h">
-      <Filter>include</Filter>
+    <ClInclude Include="src\Graphics\Commands\CommandContext.h">
+      <Filter>Graphics\Commands</Filter>
     </ClInclude>
-    <ClInclude Include="src\Renderer.h" />
-    <ClInclude Include="src\TextureManager.h" />
-    <ClInclude Include="src\GraphicsCommon.h" />
-    <ClInclude Include="src\LinearAllocator.h" />
-    <ClInclude Include="src\PixelBuffer.h" />
-    <ClInclude Include="src\ColorBuffer.h" />
-    <ClInclude Include="src\Color.h" />
-    <ClInclude Include="src\DepthBuffer.h" />
-    <ClInclude Include="src\ShadowBuffer.h" />
-    <ClInclude Include="src\SamplerManager.h" />
-    <ClInclude Include="src\DynamicDescriptorHeap.h" />
-    <ClInclude Include="src\Math\Matrix3.h" />
-    <ClInclude Include="src\Math\Matrix4.h" />
-    <ClInclude Include="src\Math\Quaternion.h" />
-    <ClInclude Include="src\Math\Scalar.h" />
-    <ClInclude Include="src\Math\Transform.h" />
-    <ClInclude Include="src\Math\Vector.h" />
-    <ClInclude Include="src\VectorMath.h" />
-    <ClInclude Include="src\Math\BoundingBox.h" />
-    <ClInclude Include="src\Math\BoundingPlane.h" />
-    <ClInclude Include="src\Math\BoundingSphere.h" />
-    <ClInclude Include="src\Math\Frustum.h" />
-    <ClInclude Include="src\Math\Random.h" />
-    <ClInclude Include="src\Scene\Scene.h" />
-    <ClInclude Include="src\GameInput.h" />
-    <ClInclude Include="src\CameraController.h" />
-    <ClInclude Include="src\ShadowCamera.h" />
-    <ClInclude Include="src\SystemTime.h" />
-    <ClInclude Include="src\FileSystem.h" />
+    <ClInclude Include="src\Renderer\Renderer.h">
+      <Filter>Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\TextureManager.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Pipeline\GraphicsCommon.h">
+      <Filter>Graphics\Pipeline</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\LinearAllocator.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\PixelBuffer.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\ColorBuffer.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\Color.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\DepthBuffer.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Renderer\ShadowBuffer.h">
+      <Filter>Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Pipeline\SamplerManager.h">
+      <Filter>Graphics\Pipeline</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Commands\DynamicDescriptorHeap.h">
+      <Filter>Graphics\Commands</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Matrix3.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Matrix4.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Quaternion.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Scalar.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Transform.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Vector.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\VectorMath.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\VectorMath.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\BoundingBox.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\BoundingPlane.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\BoundingSphere.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Frustum.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Math\Random.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\Scene.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\GameInput.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\CameraController.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CameraController.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Renderer\ShadowCamera.h">
+      <Filter>Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\SystemTime.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\FileSystem.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\GpuBuffer.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\UploadBuffer.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Graphics\Resources\ReadbackBuffer.h">
+      <Filter>Graphics\Resources</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Camera.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Scene\Camera.cpp">
+      <Filter>Scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\GameTimer.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Core\GameTimer.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="src\MathHelper.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Math\MathHelper.cpp">
+      <Filter>Math</Filter>
     </ClCompile>
-    <ClCompile Include="src\Ssao.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Renderer\Ssao.cpp">
+      <Filter>Renderer</Filter>
     </ClCompile>
-    <ClCompile Include="src\Util.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Core\Util.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
     <ClCompile Include="src\pch.cpp">
-      <Filter>src</Filter>
+      <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="src\Model.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Scene\Model.cpp">
+      <Filter>Scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\GameCore.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Core\GameCore.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="src\CommandAllocatorPool.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Commands\CommandAllocatorPool.cpp">
+      <Filter>Graphics\Commands</Filter>
     </ClCompile>
-    <ClCompile Include="src\CommandListManager.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Commands\CommandListManager.cpp">
+      <Filter>Graphics\Commands</Filter>
     </ClCompile>
-    <ClCompile Include="src\GraphicsCore.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Pipeline\GraphicsCore.cpp">
+      <Filter>Graphics\Pipeline</Filter>
     </ClCompile>
-    <ClCompile Include="src\Display.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Display.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="src\BufferManager.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Resources\BufferManager.cpp">
+      <Filter>Graphics\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\RootSignature.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Pipeline\RootSignature.cpp">
+      <Filter>Graphics\Pipeline</Filter>
     </ClCompile>
-    <ClCompile Include="src\PipelineState.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Pipeline\PipelineState.cpp">
+      <Filter>Graphics\Pipeline</Filter>
     </ClCompile>
-    <ClCompile Include="src\DescriptorHeap.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Resources\DescriptorHeap.cpp">
+      <Filter>Graphics\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\Texture.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Resources\Texture.cpp">
+      <Filter>Graphics\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\CommandContext.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\Graphics\Commands\CommandContext.cpp">
+      <Filter>Graphics\Commands</Filter>
     </ClCompile>
-    <ClCompile Include="src\Renderer.cpp" />
-    <ClCompile Include="src\TextureManager.cpp" />
-    <ClCompile Include="src\GraphicsCommon.cpp" />
-    <ClCompile Include="src\LinearAllocator.cpp" />
-    <ClCompile Include="src\PixelBuffer.cpp" />
-    <ClCompile Include="src\ColorBuffer.cpp" />
-    <ClCompile Include="src\DepthBuffer.cpp" />
-    <ClCompile Include="src\DynamicDescriptorHeap.cpp" />
-    <ClCompile Include="src\Color.cpp" />
-    <ClCompile Include="src\Math\BoundingSphere.cpp" />
-    <ClCompile Include="src\Math\Frustum.cpp" />
-    <ClCompile Include="src\Math\Random.cpp" />
-    <ClCompile Include="src\Scene\Scene.cpp" />
-    <ClCompile Include="src\GameInput.cpp" />
-    <ClCompile Include="src\CameraController.cpp" />
-    <ClCompile Include="src\ShadowCamera.cpp" />
-    <ClCompile Include="src\SystemTime.cpp" />
-    <ClCompile Include="src\FileSystem.cpp" />
+    <ClCompile Include="src\Renderer\Renderer.cpp">
+      <Filter>Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\TextureManager.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Pipeline\GraphicsCommon.cpp">
+      <Filter>Graphics\Pipeline</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\LinearAllocator.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\PixelBuffer.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\ColorBuffer.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\DepthBuffer.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Commands\DynamicDescriptorHeap.cpp">
+      <Filter>Graphics\Commands</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\Color.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Math\BoundingSphere.cpp">
+      <Filter>Math</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Math\Frustum.cpp">
+      <Filter>Math</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Math\Random.cpp">
+      <Filter>Math</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Scene\Scene.cpp">
+      <Filter>Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Core\GameInput.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Scene\CameraController.cpp">
+      <Filter>Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Renderer\ShadowCamera.cpp">
+      <Filter>Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Core\SystemTime.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Core\FileSystem.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Dependencies\tinygltf\tiny_gltf.cc">
+      <Filter>ThirdParty</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\GpuBuffer.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\UploadBuffer.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Graphics\Resources\ReadbackBuffer.cpp">
+      <Filter>Graphics\Resources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\SsaoVS.hlsl">
@@ -288,7 +436,24 @@
     <FxCompile Include="Shaders\BloomPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\PostProcessCS.hlsl" />
+    <FxCompile Include="Shaders\PostProcessCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\AoBlurUpsampleCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\AoRenderCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\DownsampleDepthCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\LinearizeDepthCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\SsaoUpsampleCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\Functions.inl" />

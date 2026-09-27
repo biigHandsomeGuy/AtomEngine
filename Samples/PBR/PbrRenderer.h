@@ -61,6 +61,8 @@ private:
 
 private:
     Math::Camera m_Camera;
+    float m_CameraNearClip = 0.1f;
+    float m_CameraFarClip = 10000.0f;
     std::unique_ptr<CameraController> m_CameraController;
     ShadowCamera m_SunShadowCamera;
     float mLightRotationAngle = 0.0f;

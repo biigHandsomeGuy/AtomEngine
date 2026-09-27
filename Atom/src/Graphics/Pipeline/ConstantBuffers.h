@@ -76,5 +76,10 @@ namespace PostProcess
         bool taaHistoryValid = false;
         char pad5[3] = { 0,0,0 };
         float taaFeedback = 0.94f;
+        bool useGama = true;
+        bool useBloom = false;
+        char pad6[3] = { 0,0,0 };
+        float bloomThreshold = 1.0f;
+        float bloomStrength = 0.15f;
     };
 }

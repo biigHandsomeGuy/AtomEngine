@@ -491,20 +491,23 @@ void Model::Draw(GraphicsContext& context, bool bindMaterialData)
         }
     }
 }
-
-LoadedModelData LoadGltfAsset(const std::string& path)
+namespace ModelUtility
 {
-    LoadedModelData data;
-    data.Asset = std::make_shared<ModelAsset>();
-    LoadModelFromGLTF(path, *data.Asset, data.GPU, Graphics::g_TextureManager);
-    return data;
-}
+    LoadedModelData LoadGltfAsset(const std::string& path)
+    {
+        LoadedModelData data;
+        data.Asset = std::make_shared<ModelAsset>();
+        LoadModelFromGLTF(path, *data.Asset, data.GPU, Graphics::g_TextureManager);
+        return data;
+    }
 
-Model CreateModel(LoadedModelData&& data)
-{
-    Model model;
-    model.Asset = std::move(data.Asset);
-    model.GPU = std::move(data.GPU);
-    model.UpdateConstants();
-    return model;
+    Model CreateModel(LoadedModelData&& data)
+    {
+        Model model;
+        model.Asset = std::move(data.Asset);
+        model.GPU = std::move(data.GPU);
+        model.UpdateConstants();
+        return model;
+    }
+
 }

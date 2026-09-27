@@ -17,7 +17,7 @@
 - [x] Async Compute 
 - [ ] Editor
 - [ ] Deffer Rendering
-- [ ] Bloom
+- [x] Bloom (screen-space bright extraction and blur)
 - [ ] Depth of Field
 - [ ] Motion Blur
 - [ ] MultiThread

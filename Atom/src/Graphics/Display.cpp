@@ -30,8 +30,8 @@ namespace Graphics
 	IDXGISwapChain1* s_SwapChain1 = nullptr;
     UINT g_CurrentBuffer = 0;
 
-	uint32_t g_DisplayWidth = 1080;
-	uint32_t g_DisplayHeight = 720;
+	uint32_t g_DisplayWidth = 2160;
+	uint32_t g_DisplayHeight = 1600;
 
     XMFLOAT2 g_RendererSize = { (float)g_DisplayWidth , (float)g_DisplayHeight };
     D3D12_VIEWPORT g_ViewPort;

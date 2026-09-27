@@ -106,6 +106,7 @@ namespace Renderer
         opaque.SetRootSignature(s_RootSig);
         opaque.SetRasterizerState(RasterizerDefault);
         opaque.SetBlendState(CD3DX12_BLEND_DESC(D3D12_DEFAULT));
+
         opaque.SetDepthStencilState(DepthStateReadWrite);
         opaque.SetInputLayout(_countof(kInputLayout), kInputLayout);
         opaque.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
@@ -132,7 +133,10 @@ namespace Renderer
         shadow.SetRootSignature(s_RootSig);
         shadow.SetRasterizerState(RasterizerShadow);
         shadow.SetBlendState(CD3DX12_BLEND_DESC(D3D12_DEFAULT));
-        shadow.SetDepthStencilState(DepthStateReadWrite);
+        D3D12_DEPTH_STENCIL_DESC shadowDepthState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+        shadowDepthState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        shadowDepthState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        shadow.SetDepthStencilState(shadowDepthState);
         shadow.SetInputLayout(_countof(kInputLayout), kInputLayout);
         shadow.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
         shadow.SetRenderTargetFormats(0, nullptr, g_ShadowBuffer.GetFormat());

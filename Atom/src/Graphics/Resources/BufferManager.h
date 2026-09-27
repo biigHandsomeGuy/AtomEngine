@@ -12,7 +12,11 @@ namespace Graphics
     extern DepthBuffer g_SceneDepthBuffer;
     extern ColorBuffer g_SceneNormalBuffer;
     extern DepthBuffer g_ShadowBuffer;
+    extern ColorBuffer g_LinearDepthFull;
+    extern ColorBuffer g_LinearDepthHalf;
     extern ColorBuffer g_SSAOFullScreen;
+    extern ColorBuffer g_SSAOHalfRes;
+    extern ColorBuffer g_SSAOBlurTemp;
     extern ColorBuffer g_RandomVectorBuffer;
 
     extern ColorBuffer g_RadianceMap;

@@ -22,7 +22,7 @@ namespace Graphics
 	D3D12_DEPTH_STENCIL_DESC DepthStateDisabled;
 	D3D12_DEPTH_STENCIL_DESC DepthStateReadWrite;
 	D3D12_DEPTH_STENCIL_DESC DepthStateReadOnly;
-	// UNDONE:(Ã»×ù!)
+
 
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDefaultTexture(eDefaultTexture texID)

@@ -1,11 +1,4 @@
 #pragma once
 
-struct Texture;
-
-struct PbrMaterial
-{
-	Texture* Albedo;
-	Texture* Normal;
-	Texture* Metallic;
-	Texture* Roughness;
-};
+// Compatibility include while call sites migrate to the Scene module.
+#include "Scene/Material.h"
