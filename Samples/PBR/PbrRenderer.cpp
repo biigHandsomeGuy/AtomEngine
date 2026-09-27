@@ -164,11 +164,95 @@ void PbrRenderer::Startup()
 	m_Scene.AddModel(std::move(pbrModel));
 	AtomEditor::Initialize(m_EditorUi);
 	m_EditorUi.SelectedEntity = m_Scene.Models.empty() ? InvalidEntityId : m_Scene.Models.front().Id;
+	SetupGeometryGraph();
 
 	s_IBL_PSOCache.clear();
 
 	gfxContext.Finish(true);
 
+}
+
+
+void PbrRenderer::SetupGeometryGraph()
+{
+	m_GeometryGraph.Clear();
+	m_GeometryGraph.AddPass(L"Geometry / Depth and normals", {
+		{ &g_SceneNormalBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
+		{ &g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE, RenderGraph::Access::Write }
+	}, [this](CommandContext& commandContext)
+	{
+		auto& context = commandContext.GetGraphicsContext();
+		context.ClearColor(g_SceneNormalBuffer);
+		context.ClearDepthAndStencil(g_SceneDepthBuffer);
+		context.SetRenderTarget(g_SceneNormalBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
+		context.SetRootSignature(s_RootSig);
+		context.SetPipelineState(s_PSOs["drawNormals"]);
+
+		m_FrameJitter = { 0.0f, 0.0f };
+		if (m_ppAttribs.useTAA != m_LastUseTAA)
+		{
+			m_TaaHistoryValid = false;
+			m_FrameIndex = 0;
+			m_LastUseTAA = m_ppAttribs.useTAA;
+		}
+
+		m_SunShadowCamera.UpdateMatrix(
+			Vector3({ 15.0f, 15.5f, -15.0f }), Vector3({ 10, 10, -10 }), Vector3(5000, 3000, 3000),
+			static_cast<uint32_t>(g_ShadowBuffer.GetWidth()), static_cast<uint32_t>(g_ShadowBuffer.GetHeight()), 16);
+
+		if (m_ppAttribs.useTAA)
+		{
+			const float jitterX = Halton(static_cast<uint32_t>(m_FrameIndex & 1023u) + 1u, 2u) - 0.5f;
+			const float jitterY = Halton(static_cast<uint32_t>(m_FrameIndex & 1023u) + 1u, 3u) - 0.5f;
+			const float invW = 1.0f / std::max(1.0f, g_ViewPort.Width);
+			const float invH = 1.0f / std::max(1.0f, g_ViewPort.Height);
+			m_FrameJitter.x = jitterX * invW;
+			m_FrameJitter.y = jitterY * invH;
+		}
+
+		m_LightPassGlobalConstants.ViewMatrix = m_Camera.GetViewMatrix();
+		m_LightPassGlobalConstants.ProjMatrix = m_Camera.GetProjMatrix();
+		m_LightPassGlobalConstants.ViewProjMatrix = m_Camera.GetViewProjMatrix();
+		m_LightPassGlobalConstants.SunShadowMatrix = m_SunShadowCamera.GetShadowMatrix();
+		m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition();
+		m_LightPassGlobalConstants.SunPos = { 15, 15, -15 };
+		m_LightPassGlobalConstants.Jitter = m_FrameJitter;
+		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
+
+		for (auto& model : m_Scene.Models)
+		{
+			model.UpdateConstants();
+			context.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &model.Constants);
+			model.Draw(context);
+		}
+	});
+
+	m_GeometryGraph.AddPass(L"Shadow / Depth", {
+		{ &g_ShadowBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE, RenderGraph::Access::Write }
+	}, [this](CommandContext& commandContext)
+	{
+		auto& context = commandContext.GetGraphicsContext();
+		context.SetViewportAndScissor(0, 0, g_ShadowBuffer.GetWidth(), g_ShadowBuffer.GetHeight());
+		context.ClearDepthAndStencil(g_ShadowBuffer);
+		context.SetDepthStencilTarget(g_ShadowBuffer.GetDSV());
+
+		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetViewProjMatrix();
+		m_ShadowPassGlobalConstants.Jitter = { 0.0f, 0.0f };
+		context.SetRootSignature(s_RootSig);
+		context.SetPipelineState(s_PSOs["shadow"]);
+		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_ShadowPassGlobalConstants);
+
+		for (auto& model : m_Scene.Models)
+		{
+			model.UpdateConstants();
+			context.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &model.Constants);
+			model.Draw(context);
+		}
+	});
+
+	m_GeometryGraph.AddPass(L"Shadow / Publish for lighting", {
+		{ &g_ShadowBuffer, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read }
+	}, {});
 }
 
 
@@ -335,99 +419,10 @@ void PbrRenderer::RenderScene()
 
 	GraphicsContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	// ------------------------------------------ Z PrePass -------------------------------------------------
+	// Geometry and shadow pass declarations own their output transitions.
+	m_GeometryGraph.Execute(GraphicsContext);
 
-	GraphicsContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
-	GraphicsContext.ClearColor(g_SceneNormalBuffer);
-	GraphicsContext.ClearDepthAndStencil(g_SceneDepthBuffer);
-
-	GraphicsContext.SetRenderTarget(g_SceneNormalBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
-	GraphicsContext.SetRootSignature(s_RootSig);
-	GraphicsContext.SetPipelineState(s_PSOs["drawNormals"]);
-
-
-    XMFLOAT2 frameJitter = { 0.0f, 0.0f };
-	{
-        if (m_ppAttribs.useTAA != m_LastUseTAA)
-        {
-            m_TaaHistoryValid = false;
-            m_FrameIndex = 0;
-            m_LastUseTAA = m_ppAttribs.useTAA;
-        }
-
-		m_SunShadowCamera.UpdateMatrix(Vector3({ 15.0f, 15.5f, -15.0f }), Vector3({10, 10, -10}), Vector3(5000, 3000, 3000),
-			(uint32_t)g_ShadowBuffer.GetWidth(), (uint32_t)g_ShadowBuffer.GetHeight(), 16);
-
-        if (m_ppAttribs.useTAA)
-        {
-            const float jitterX = Halton(static_cast<uint32_t>(m_FrameIndex & 1023u) + 1u, 2u) - 0.5f;
-            const float jitterY = Halton(static_cast<uint32_t>(m_FrameIndex & 1023u) + 1u, 3u) - 0.5f;
-            const float invW = 1.0f / std::max(1.0f, g_ViewPort.Width);
-            const float invH = 1.0f / std::max(1.0f, g_ViewPort.Height);
-            // Reduce jitter amplitude to improve static stability (quarter-pixel class).
-            frameJitter.x = jitterX * invW;
-            frameJitter.y = jitterY * invH;
-        }
-
-		m_LightPassGlobalConstants.ViewMatrix = m_Camera.GetViewMatrix();
-		m_LightPassGlobalConstants.ProjMatrix = m_Camera.GetProjMatrix();
-		m_LightPassGlobalConstants.ViewProjMatrix = m_Camera.GetViewProjMatrix();
-		m_LightPassGlobalConstants.SunShadowMatrix = m_SunShadowCamera.GetShadowMatrix();
-		m_LightPassGlobalConstants.CameraPos = m_Camera.GetPosition();
-		m_LightPassGlobalConstants.SunPos = {15,15,-15};
-        m_LightPassGlobalConstants.Jitter = frameJitter;
-
-	}
-	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
-
-
-	for (int i = 0; i < m_Scene.Models.size(); i++)
-	{
-		m_Scene.Models[i].UpdateConstants();
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].Constants);
-
-		m_Scene.Models[i].Draw(GraphicsContext);
-	}
-
-	// --------------------------------- Shadow Map ----------------------------------
-	
-
-	GraphicsContext.TransitionResource(g_ShadowBuffer,D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
-	GraphicsContext.ClearDepthAndStencil(g_ShadowBuffer);
-
-	GraphicsContext.SetDepthStencilTarget(g_ShadowBuffer.GetDSV());
-
-	{
-		
-		m_ShadowPassGlobalConstants.ViewProjMatrix = m_SunShadowCamera.GetViewProjMatrix();
-        m_ShadowPassGlobalConstants.Jitter = { 0.0f, 0.0f };
-	}
-
-	GraphicsContext.SetRootSignature(s_RootSig);
-	GraphicsContext.SetPipelineState(s_PSOs["shadow"]);
-
-	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_ShadowPassGlobalConstants);
-
-	for (int i = 0; i < m_Scene.Models.size(); i++)
-	{
-		
-		m_Scene.Models[i].UpdateConstants();
-
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].Constants);
-
-		m_Scene.Models[i].Draw(GraphicsContext);
-
-	}
-
-	GraphicsContext.TransitionResource(g_ShadowBuffer, D3D12_RESOURCE_STATE_COMMON);
-
-	
-	
 	// ----------------------------------- Render SSAO --------------------------------
-    GraphicsContext.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	SSAO::Render(GraphicsContext, m_Camera);
 
 	// ----------------------------------- Render Color ------------------------------
@@ -437,8 +432,7 @@ void PbrRenderer::RenderScene()
 
 	GraphicsContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
 	
-	GraphicsContext.GetCommandList()->RSSetViewports(1, &g_ViewPort);
-	GraphicsContext.GetCommandList()->RSSetScissorRects(1, &g_Rect);
+	GraphicsContext.SetViewportAndScissor(g_ViewPort, g_Rect);
 
 
 	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -489,8 +483,8 @@ void PbrRenderer::RenderScene()
     m_ppAttribs.taaHistoryValid = m_ppAttribs.useTAA && m_TaaHistoryValid;
     m_ppAttribs.InvViewProj = Math::Invert(m_LightPassGlobalConstants.ViewProjMatrix);
     m_ppAttribs.PrevViewProj = m_TaaHistoryValid ? m_PrevViewProj : m_LightPassGlobalConstants.ViewProjMatrix;
-    m_ppAttribs.CurrJitter = frameJitter;
-    m_ppAttribs.PrevJitter = m_TaaHistoryValid ? m_PrevJitter : frameJitter;
+    m_ppAttribs.CurrJitter = m_FrameJitter;
+    m_ppAttribs.PrevJitter = m_TaaHistoryValid ? m_PrevJitter : m_FrameJitter;
 
 	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     ComputeContext.TransitionResource(g_TAAHistoryBuffer[taaReadIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
@@ -522,7 +516,7 @@ void PbrRenderer::RenderScene()
         m_TaaHistoryReadIndex = taaWriteIndex;
         m_TaaHistoryValid = true;
         m_PrevViewProj = m_LightPassGlobalConstants.ViewProjMatrix;
-        m_PrevJitter = frameJitter;
+        m_PrevJitter = m_FrameJitter;
         ++m_FrameIndex;
     }
     else

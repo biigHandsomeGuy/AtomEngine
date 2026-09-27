@@ -8,6 +8,7 @@
 
 #include "Scene.h"
 #include "SkyBox.h"
+#include "RenderGraph.h"
 #include "..\Editor\EditorPanels.h"
 #include <DirectXCollision.h>
 #include "GameCore.h"
@@ -56,6 +57,7 @@ private:
     virtual void RenderScene()override;
 
     void UpdateUI();
+	void SetupGeometryGraph();
 
     void PrecomputeCubemaps(CommandContext& gfxContext);
 
@@ -85,6 +87,8 @@ private:
 
     Scene m_Scene;
     AtomEditor::UiState m_EditorUi;
+    RenderGraph m_GeometryGraph;
+    DirectX::XMFLOAT2 m_FrameJitter = { 0.0f, 0.0f };
     SkyBox m_SkyBox;
     DescriptorHandle m_BackBufferHandle[3];
 };

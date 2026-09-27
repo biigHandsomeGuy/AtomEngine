@@ -29,7 +29,7 @@ Editor application
 1. Add a standalone editor target and usable scene hierarchy, inspector, content browser, and scene files while sharing the stable PBR renderer.
 2. Move editor UI orchestration and document commands fully out of `PbrRenderer`; add an undoable command boundary. Stable IDs and ID-based selection are in place.
 3. Introduce an explicit engine/application lifetime and a per-viewport render-view API. Remove renderer lifecycle from process-wide globals.
-4. Add a small render graph for the current forward PBR path: depth/normal, shadow, AO, opaque+sky, temporal/post, editor composition. Compare output against the current path after each pass moves. The initial graph now owns SSAO pass dependencies and resource-state setup; other passes remain on the legacy path until individually migrated.
+4. Add a small render graph for the current forward PBR path: depth/normal, shadow, AO, opaque+sky, temporal/post, editor composition. Compare output against the current path after each pass moves. The current graph owns depth/normal, shadow depth and shadow publication, plus SSAO pass dependencies and resource-state setup; opaque shading, sky, temporal/post, and editor composition remain on the legacy path until individually migrated.
 5. Separate CPU assets from GPU residency and make import/upload asynchronous with cancellation and diagnostics.
 6. Add broader renderer features (deferred/clustered lighting, multithreaded recording, richer post) only on top of the graph and frame-resource ownership.
 
