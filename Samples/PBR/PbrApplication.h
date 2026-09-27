@@ -37,6 +37,7 @@ public:
     virtual void Initialize(Scene& scene, ModelAssetManager& assets) {}
     virtual void StartValidation(const Scene& scene, ModelAssetManager& assets) {}
     virtual ApplicationValidation Validation() const { return {}; }
+    virtual bool OwnsCameraNavigation() const { return false; }
     virtual ViewportRequest Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) = 0;
     virtual void Shutdown() {}
 };

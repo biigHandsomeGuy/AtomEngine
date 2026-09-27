@@ -94,6 +94,10 @@
     <ClCompile Include="EditorMain.cpp" />
     <ClCompile Include="EditorLayer.cpp" />
     <ClCompile Include="EditorPanels.cpp" />
+    <ClCompile Include="EditorViewport.cpp" />
+    <ClCompile Include="ViewportInteraction.cpp" />
+    <ClCompile Include="ViewportChecks.cpp" />
+    <ClCompile Include="..\..\Dependencies\ImGuizmo\ImGuizmo.cpp" />
     <ClCompile Include="SceneDocument.cpp" />
     <ClCompile Include="SceneDocumentChecks.cpp" />
     <ClCompile Include="..\PBR\PbrApplication.cpp" />
@@ -102,6 +106,9 @@
   <ItemGroup>
     <ClInclude Include="EditorLayer.h" />
     <ClInclude Include="EditorPanels.h" />
+    <ClInclude Include="EditorViewport.h" />
+    <ClInclude Include="ViewportInteraction.h" />
+    <ClInclude Include="ViewportChecks.h" />
     <ClInclude Include="SceneDocument.h" />
     <ClInclude Include="SceneDocumentChecks.h" />
     <ClInclude Include="EditorCommandHistory.h" />

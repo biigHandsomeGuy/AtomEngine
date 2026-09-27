@@ -5,6 +5,7 @@
 #include "..\PBR\PbrUiPanels.h"
 #include "PathUtils.h"
 #include "FileSystem.h"
+#include "ViewportChecks.h"
 
 namespace AtomEditor
 {
@@ -31,11 +32,16 @@ namespace AtomEditor
     void EditorLayer::StartValidation(const Scene& scene, ModelAssetManager& assets)
     {
         m_Checks = std::make_unique<SceneDocumentChecks>(scene, assets, m_ProjectRoot);
+        m_ViewportChecks = CheckViewport(scene, m_ProjectRoot);
     }
 
     ApplicationValidation EditorLayer::Validation() const
     {
-        return m_Checks ? m_Checks->Result() : ApplicationValidation{};
+        auto result = m_Checks ? m_Checks->Result() : ApplicationValidation{};
+        result.Errors += m_ViewportChecks.Errors;
+        result.Completed += m_ViewportChecks.Completed;
+        result.Expected += m_ViewportChecks.Expected;
+        return result;
     }
 
     void EditorLayer::SaveDocument(const Scene& scene, bool saveAs)
@@ -90,7 +96,7 @@ namespace AtomEditor
         {
             if (ImGui::BeginMenu("File"))
             {
-                if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) OpenDocument();
+                if (ImGui::MenuItem("Open Scene...", "Ctrl+O", false, editing)) OpenDocument();
                 if (ImGui::MenuItem("Open Material Lab", nullptr, false, editing))
                 {
                     CancelPendingImports(m_State, *m_Assets);
@@ -125,13 +131,14 @@ namespace AtomEditor
             if (!m_DocumentLoader->Busy() && ImGui::IsKeyPressed(ImGuiKey_Y, false))
                 m_History.Redo(scene);
         }
-        if (!scene.Contains(m_State.SelectedEntity))
-            m_State.SelectedEntity = scene.FirstEntityId();
+        if (m_State.SelectedEntity && !scene.Contains(m_State.SelectedEntity))
+            m_State.SelectedEntity = InvalidEntityId;
     }
 
     ViewportRequest EditorLayer::Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image)
     {
         if (m_Checks) m_Checks->Update(*m_Assets);
+        m_Viewport.BeginFrame(scene, m_History, m_DocumentLoader->Busy());
         UpdateDocument(scene, renderer);
         if (!m_DocumentLoader->Busy()) ProcessImports(scene, m_State, m_History, *m_Assets);
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -152,6 +159,7 @@ namespace AtomEditor
 
         DrawRendererSettings(renderer);
         ImGui::Begin("Scene View");
+        ImGui::BeginDisabled(GameCore::g_ViewportCapturingMouse || m_DocumentLoader->Busy());
         bool preview = renderer.UsesSceneCamera();
         if (ImGui::Checkbox("Preview scene camera", &preview)) renderer.UseSceneCamera(preview);
         const auto source = renderer.SceneCameraSource();
@@ -166,6 +174,7 @@ namespace AtomEditor
             ImGui::EndCombo();
         }
         if (preview && !camera) ImGui::TextWrapped("Camera source is unavailable; showing the editor view.");
+        ImGui::EndDisabled();
         ImGui::End();
         const bool disabled = GameCore::g_ViewportCapturingMouse || m_DocumentLoader->Busy();
         if (disabled)
@@ -187,7 +196,7 @@ namespace AtomEditor
             if (ImGui::Button("Cancel")) m_DocumentLoader->Cancel();
             ImGui::End();
         }
-        return DrawRenderViewport(image);
+        return m_Viewport.Draw(scene, m_State, m_History, renderer, image, m_DocumentLoader->Busy());
     }
 
     void EditorLayer::Shutdown()

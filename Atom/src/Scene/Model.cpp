@@ -235,6 +235,8 @@ static void LoadPrimitive(
         if ((i & 4095) == 0 && cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
         Vertex v{};
         v.Position = ReadVec3(model, posAcc, i);
+        if (!std::isfinite(float(v.Position.GetX())) || !std::isfinite(float(v.Position.GetY())) || !std::isfinite(float(v.Position.GetZ())))
+            throw std::runtime_error("glTF vertex position must be finite.");
         v.Normal = normAcc ? ReadVec3(model, *normAcc, i) : Vector3(kZero);
         v.UV = uvAcc ? ReadVec2(model, *uvAcc, i) : XMFLOAT2(0, 0);
 
@@ -306,6 +308,12 @@ static void LoadPrimitive(
     sub.IndexOffset = indexBase;
     sub.IndexCount = primitiveIndexCount;
     sub.MaterialIndex = primitive.material >= 0 ? static_cast<uint32_t>(primitive.material) : INVALID_INDEX;
+    for (size_t i = indexBase; i < mesh.Indices.size(); ++i)
+    {
+        if ((i & 4095) == 0 && cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
+        sub.Bounds.AddPoint(mesh.Vertices[mesh.Indices[i]].Position);
+    }
+    mesh.Bounds.AddBoundingBox(sub.Bounds);
     mesh.SubMeshes.push_back(sub);
 }
 
@@ -489,6 +497,7 @@ static bool DecodeModelFromGLTF(const std::string& path, ModelAsset& asset, std:
 
         // Rebuild once after all primitives are merged into one mesh.
         RebuildVertexNormalsAndTangents(meshAsset, needsNormalRebuild, needsTangentRebuild, cancelled);
+        asset.Bounds.AddBoundingBox(meshAsset.Bounds);
         asset.Meshes.push_back(std::move(meshAsset));
     }
 

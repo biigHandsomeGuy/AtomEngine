@@ -53,6 +53,9 @@ function Invoke-ChildProcess([string]$Program, [string[]]$Arguments, [int]$Timeo
 
 $targets = if ($Target -eq 'All') { @('PBR', 'Editor') } else { @($Target) }
 foreach ($item in $targets) {
+    if ($item -eq 'Editor' -and !(Test-Path -LiteralPath (Join-Path $repository 'Dependencies\ImGuizmo\ImGuizmo.cpp'))) {
+        throw 'ImGuizmo is missing. Run git submodule update --init --recursive from the repository root.'
+    }
     $project = if ($item -eq 'PBR') { 'Samples\PBR\PBR.vcxproj' } else { 'Samples\Editor\Editor.vcxproj' }
     $arguments = @((Join-Path $repository $project), '/m:1', "/p:Configuration=$Configuration", '/p:Platform=x64', "/p:SolutionDir=$repository\", '/v:minimal')
     $build = Invoke-ChildProcess $MSBuildPath $arguments
@@ -82,7 +85,7 @@ foreach ($item in $targets) {
         if ($smoke.Output -notmatch 'assetErrors=0 assetChecks=6') {
             throw "Asset import, sharing, diagnostics or cancellation checks failed: $item (log: $smokeLog)"
         }
-        $expectedUiChecks = if ($item -eq 'Editor') { 29 } else { 0 }
+        $expectedUiChecks = if ($item -eq 'Editor') { 70 } else { 0 }
         if ($smoke.Output -notmatch "uiErrors=0 uiChecks=$expectedUiChecks uiExpected=$expectedUiChecks") {
             Write-Output $smoke.Output
             throw "Scene document and command checks failed: $item (log: $smokeLog)"

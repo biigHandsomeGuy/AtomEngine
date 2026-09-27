@@ -216,7 +216,7 @@ void PbrApplication::Update(float deltaTime)
         PollAssetChecks();
     m_View.FarClip = std::max(m_View.FarClip, m_View.NearClip + 0.01f);
     m_View.EditorCamera.SetZRange(m_View.NearClip, m_View.FarClip);
-    if (!m_View.UseSceneCamera || !m_Scene.FindCamera(m_View.SceneCameraId ? m_View.SceneCameraId : m_Scene.ActiveCameraId()))
+    if (!m_Ui->OwnsCameraNavigation() && (!m_View.UseSceneCamera || !m_Scene.FindCamera(m_View.SceneCameraId ? m_View.SceneCameraId : m_Scene.ActiveCameraId())))
         m_CameraController->Update(deltaTime);
     m_View.EditorCamera.Update();
     if (m_SmokeFrameLimit >= 60 && m_CompletedFrames == 22)

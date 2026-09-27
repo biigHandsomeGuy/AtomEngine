@@ -4,6 +4,7 @@
 #include "..\PBR\PbrApplication.h"
 #include "SceneDocument.h"
 #include "SceneDocumentChecks.h"
+#include "EditorViewport.h"
 
 namespace AtomEditor
 {
@@ -13,6 +14,7 @@ namespace AtomEditor
         void Initialize(Scene& scene, ModelAssetManager& assets) override;
         void StartValidation(const Scene& scene, ModelAssetManager& assets) override;
         ApplicationValidation Validation() const override;
+        bool OwnsCameraNavigation() const override { return true; }
         ViewportRequest Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) override;
         void Shutdown() override;
 
@@ -24,6 +26,8 @@ namespace AtomEditor
 
         UiState m_State;
         CommandHistory m_History;
+        EditorViewport m_Viewport;
+        ApplicationValidation m_ViewportChecks;
         ModelAssetManager* m_Assets = nullptr;
         std::unique_ptr<SceneDocumentLoader> m_DocumentLoader;
         std::unique_ptr<SceneDocumentChecks> m_Checks;

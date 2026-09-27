@@ -160,6 +160,7 @@
     <ClInclude Include="src\Graphics\Pipeline\RootSignature.h" />
     <ClInclude Include="src\Graphics\Pipeline\SamplerManager.h" />
     <ClInclude Include="src\Scene\SceneGraph.h" />
+    <ClInclude Include="src\Scene\SceneQueries.h" />
     <ClInclude Include="src\Scene.h" />
     <ClInclude Include="src\Scene\Scene.h" />
     <ClInclude Include="src\Renderer\ShadowBuffer.h" />
@@ -206,6 +207,7 @@
     </ClCompile>
     <ClCompile Include="src\Graphics\Pipeline\GraphicsCore.cpp" />
     <ClCompile Include="src\Scene\Model.cpp" />
+    <ClCompile Include="src\Scene\SceneQueries.cpp" />
     <ClCompile Include="src\Scene\ModelAssetManager.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

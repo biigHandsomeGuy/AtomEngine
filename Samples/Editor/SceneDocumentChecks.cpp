@@ -199,13 +199,14 @@ namespace AtomEditor
             for (auto& item : version3["models"]) item.erase("materialOverrides");
             Write(m_Files[18], version3);
             m_Files[19] = root / "Samples/Editor/Scenes/MaterialLab.atomscene";
+            m_Files[20] = folder / "viewport.atomscene";
 
         }
         catch (const std::exception& error)
         {
             ++m_Result.Errors;
             std::cerr << "EDITOR_CHECK_FAILED fixture: " << error.what() << '\n';
-            m_Case = 20;
+            m_Case = 21;
             assets.SetBudget(m_OriginalBudget);
         }
     }
@@ -240,14 +241,14 @@ namespace AtomEditor
 
     void SceneDocumentChecks::Update(ModelAssetManager& assets)
     {
-        if (m_Case >= 20) return;
+        if (m_Case >= 21) return;
         if (!m_Pending) BeginCase();
         m_Loader.Update(assets);
         m_Unchanged = m_Unchanged && SceneUnchanged();
         const auto status = m_Loader.Status();
         if (m_Loader.Busy() && status.State != SceneLoadState::Ready) return;
         bool passed = m_Unchanged && status.File == m_Files[m_Case];
-        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7 || m_Case == 8 || m_Case == 9 || m_Case == 14 || m_Case == 18 || m_Case == 19;
+        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7 || m_Case == 8 || m_Case == 9 || m_Case == 14 || m_Case == 18 || m_Case == 19 || m_Case == 20;
         if (success)
         {
             passed = passed && status.State == SceneLoadState::Ready &&
@@ -256,6 +257,19 @@ namespace AtomEditor
                 m_Loader.Status().State == SceneLoadState::Applied;
             if (m_Case == 7)
                 passed = passed && m_Scene.EntityCount() == 0 && m_State.SelectedEntity == InvalidEntityId;
+            else if (m_Case == 20)
+            {
+                passed = passed && m_Scene.Models.size() == 1 && m_Scene.Cameras.empty() && m_Scene.Lights.empty();
+                if (passed)
+                {
+                    const auto& model = m_Scene.Models.front();
+                    const auto p = model.Transform.transform.GetTranslation();
+                    const auto expected = Math::Quaternion(0.2f, 0.7f, 0.1f);
+                    const float dot = std::abs(DirectX::XMVectorGetX(DirectX::XMVector4Dot(expected, model.Transform.transform.GetRotation())));
+                    passed = model.GPU == m_GPU && model.Asset == m_Asset && std::abs(model.Transform.scale - 2.5f) < 0.001f &&
+                        p.GetX() == 2.0f && p.GetY() == 3.0f && p.GetZ() == 4.0f && dot > 0.9999f && m_State.SelectedEntity == model.Id;
+                }
+            }
             else if (m_Case == 19)
             {
                 passed = passed && m_Scene.Models.size() == 30 && m_Scene.Cameras.size() == 1 && m_Scene.Lights.size() == 1;
@@ -296,7 +310,7 @@ namespace AtomEditor
                     else passed = passed && first.Id != InvalidEntityId && second.Id != InvalidEntityId;
                 }
             }
-            if (m_Case != 7 && m_Case != 19)
+            if (m_Case != 7 && m_Case != 19 && m_Case != 20)
             {
                 passed = passed && m_Scene.Cameras.size() == 1 && m_Scene.Lights.size() == 1 &&
                     m_Scene.FindCamera(m_Scene.ActiveCameraId()) && m_Scene.FindLight(m_Scene.ActiveLightId());
@@ -318,10 +332,10 @@ namespace AtomEditor
             "invalid transform", "partial asset failure", "cancel", "superseded load", "empty scene",
             "new multi-asset scene transaction survives zero cache budgets", "version 2 migration", "cross-type duplicate IDs",
             "wrong-type active camera reference", "invalid camera clipping", "invalid light color", "component-only scene",
-            "invalid material factor", "duplicate material override", "missing source material", "version 3 migration", "Material Lab shared-assets scene" };
+            "invalid material factor", "duplicate material override", "missing source material", "version 3 migration", "Material Lab shared-assets scene", "viewport transform reload" };
         Check(passed, labels[m_Case]);
         ++m_Case;
-        if (m_Case == 20) assets.SetBudget(m_OriginalBudget);
+        if (m_Case == 21) assets.SetBudget(m_OriginalBudget);
         m_Pending = false;
     }
 }

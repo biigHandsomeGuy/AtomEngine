@@ -57,6 +57,7 @@ public:
     PostProcess::RenderAttribs& PostSettings() { return m_ppAttribs; }
     const PbrResources& SharedResources() const { return m_Resources; }
     const Math::Camera& EditorCamera() const { return m_View.EditorCamera; }
+    Math::Camera& NavigationCamera() { return m_View.EditorCamera; }
     bool UsesSceneCamera() const { return m_View.UseSceneCamera; }
     EntityId SceneCameraSource() const { return m_View.SceneCameraId; }
     void SetSceneCameraSource(EntityId id)
