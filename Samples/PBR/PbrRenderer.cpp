@@ -165,6 +165,8 @@ void PbrRenderer::Startup()
 	AtomEditor::Initialize(m_EditorUi);
 	m_EditorUi.SelectedEntity = m_Scene.Models.empty() ? InvalidEntityId : m_Scene.Models.front().Id;
 	SetupGeometryGraph();
+	SetupLightingGraph();
+	SetupPostProcessGraphs();
 
 	s_IBL_PSOCache.clear();
 
@@ -253,6 +255,91 @@ void PbrRenderer::SetupGeometryGraph()
 	m_GeometryGraph.AddPass(L"Shadow / Publish for lighting", {
 		{ &g_ShadowBuffer, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read }
 	}, {});
+}
+
+
+void PbrRenderer::SetupLightingGraph()
+{
+	m_LightingGraph.Clear();
+	m_LightingGraph.AddPass(L"Lighting / Opaque and sky", {
+		{ &g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
+		{ &g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE, RenderGraph::Access::Write },
+		{ &g_ShadowBuffer, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+		{ &g_SSAOFullScreen, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read }
+	}, [this](CommandContext& commandContext)
+	{
+		auto& context = commandContext.GetGraphicsContext();
+		context.SetViewportAndScissor(g_ViewPort, g_Rect);
+		context.SetRootSignature(s_RootSig);
+		context.SetPipelineState(s_PSOs["opaque"]);
+		context.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
+		context.ClearColor(g_SceneColorBuffer);
+		context.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
+		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
+		context.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &m_ShaderAttribs);
+
+		for (auto& model : m_Scene.Models)
+		{
+			model.UpdateConstants();
+			context.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &model.Constants);
+			model.Draw(context);
+		}
+
+		context.SetDynamicConstantBufferView(
+			kMaterialConstants,
+			sizeof(EnvMapRenderer::RenderAttribs),
+			&m_EnvMapAttribs);
+		context.SetRootSignature(s_RootSig);
+		context.SetPipelineState(s_SkyboxPSO);
+		m_SkyBox.model.Draw(context, false);
+	});
+}
+
+
+void PbrRenderer::SetupPostProcessGraphs()
+{
+	for (uint32_t historyReadIndex = 0; historyReadIndex < 2; ++historyReadIndex)
+	{
+		const uint32_t historyWriteIndex = (historyReadIndex + 1u) & 1u;
+		RenderGraph& graph = m_PostProcessGraphs[historyReadIndex];
+		graph.Clear();
+		graph.AddPass(L"Post / Temporal resolve", {
+			{ &g_SceneColorBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &g_TAAHistoryBuffer[historyReadIndex], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &g_SceneDepthBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &g_PostProcessBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
+		}, [this, historyReadIndex](CommandContext& commandContext)
+		{
+			auto& compute = commandContext.GetComputeContext();
+			compute.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
+			compute.SetRootSignature(s_ComputeRootSig);
+			compute.SetPipelineState(s_PostProcessPSO);
+			g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize, g_TAAHistoryBuffer[historyReadIndex].GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 2, g_SceneDepthBuffer.GetDepthSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 3, g_PostProcessBuffer.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			compute.SetDescriptorTable(0, g_PostProcessTexture);
+			compute.SetDescriptorTable(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 3);
+			compute.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
+			compute.Dispatch((g_PostProcessBuffer.GetWidth() + 7) / 8, (g_PostProcessBuffer.GetHeight() + 7) / 8);
+		});
+
+		graph.AddPass(L"Post / Store temporal history", {
+			{ &g_PostProcessBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE, RenderGraph::Access::Read },
+			{ &g_TAAHistoryBuffer[historyWriteIndex], D3D12_RESOURCE_STATE_COPY_DEST, RenderGraph::Access::Write }
+		}, [historyWriteIndex](CommandContext& commandContext)
+		{
+			auto& compute = commandContext.GetComputeContext();
+			compute.GetCommandList()->CopyResource(
+				g_TAAHistoryBuffer[historyWriteIndex].GetResource(),
+				g_PostProcessBuffer.GetResource());
+		});
+
+		graph.AddPass(L"Post / Publish output and history", {
+			{ &g_PostProcessBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &g_TAAHistoryBuffer[historyWriteIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, RenderGraph::Access::Read }
+		}, {});
+	}
 }
 
 
@@ -425,56 +512,10 @@ void PbrRenderer::RenderScene()
 	// ----------------------------------- Render SSAO --------------------------------
 	SSAO::Render(GraphicsContext, m_Camera);
 
-	// ----------------------------------- Render Color ------------------------------
-
-	GraphicsContext.SetRootSignature(s_RootSig);
-	GraphicsContext.SetPipelineState(s_PSOs["opaque"]);
-
-	GraphicsContext.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, Renderer::m_CommonTextures);
-	
-	GraphicsContext.SetViewportAndScissor(g_ViewPort, g_Rect);
-
-
-	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
-	GraphicsContext.ClearColor(g_SceneColorBuffer);
-	GraphicsContext.SetRenderTarget(g_SceneColorBuffer.GetRTV(), g_SceneDepthBuffer.GetDSV());
-
-	GraphicsContext.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
-
-	GraphicsContext.SetDynamicConstantBufferView(kShaderParams, sizeof(ShaderParams), &m_ShaderAttribs);
-
-	for (int i = 0; i < m_Scene.Models.size(); i++)
-	{
-		{
-			m_Scene.Models[i].UpdateConstants();
-			Matrix4 T(
-				{ 0.5f, 0.0f, 0.0f, 0.0f },
-				{ 0.0f, -0.5f, 0.0f, 0.0f },
-				{ 0.0f, 0.0f, 1.0f, 0.0f },
-				{ 0.5f, 0.5f, 0.0f, 1.0f });
-			Matrix4 viewProjTex = m_Camera.GetViewProjMatrix() * T;
-			//m_MeshConstants[i].ViewProjTex = viewProjTex;
-
-		}
-		GraphicsContext.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &m_Scene.Models[i].Constants);
-
-		m_Scene.Models[i].Draw(GraphicsContext);
-	}   
-
-
-	GraphicsContext.SetDynamicConstantBufferView(
-		kMaterialConstants,
-		sizeof(EnvMapRenderer::RenderAttribs),
-		&m_EnvMapAttribs);
-
-	GraphicsContext.SetRootSignature(s_RootSig);
-	GraphicsContext.SetPipelineState(s_SkyboxPSO);
-	m_SkyBox.model.Draw(GraphicsContext, false);
-
+	// ------------------------------- Opaque and sky -------------------------------
+	m_LightingGraph.Execute(GraphicsContext);
 	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-    GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 
 	// ------------------------- postprocess -----------------------
@@ -486,30 +527,7 @@ void PbrRenderer::RenderScene()
     m_ppAttribs.CurrJitter = m_FrameJitter;
     m_ppAttribs.PrevJitter = m_TaaHistoryValid ? m_PrevJitter : m_FrameJitter;
 
-	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    ComputeContext.TransitionResource(g_TAAHistoryBuffer[taaReadIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-	ComputeContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
-	ComputeContext.SetRootSignature(s_ComputeRootSig);
-	ComputeContext.SetPipelineState(s_PostProcessPSO);
-	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture, g_SceneColorBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize, g_TAAHistoryBuffer[taaReadIndex].GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 2, g_SceneDepthBuffer.GetDepthSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	g_Device->CopyDescriptorsSimple(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 3, g_PostProcessBuffer.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	ComputeContext.SetDescriptorTable(0, g_PostProcessTexture);
-	ComputeContext.SetDescriptorTable(1, g_PostProcessTexture + Graphics::CbvSrvUavDescriptorSize * 3);
-	ComputeContext.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
-	int width = (g_PostProcessBuffer.GetWidth() + 7) / 8;
-	int height = (g_PostProcessBuffer.GetHeight() + 7) / 8;
-	ComputeContext.Dispatch(width, height);
-
-    ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE);
-    ComputeContext.TransitionResource(g_TAAHistoryBuffer[taaWriteIndex], D3D12_RESOURCE_STATE_COPY_DEST);
-    ComputeContext.GetCommandList()->CopyResource(
-        g_TAAHistoryBuffer[taaWriteIndex].GetResource(),
-        g_PostProcessBuffer.GetResource());
-
-	ComputeContext.TransitionResource(g_PostProcessBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-    ComputeContext.TransitionResource(g_TAAHistoryBuffer[taaWriteIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	m_PostProcessGraphs[taaReadIndex].Execute(ComputeContext);
 
     if (m_ppAttribs.useTAA)
     {

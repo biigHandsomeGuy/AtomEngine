@@ -56,8 +56,10 @@ private:
     virtual void Update(float gt)override;
     virtual void RenderScene()override;
 
-    void UpdateUI();
+	void UpdateUI();
 	void SetupGeometryGraph();
+	void SetupLightingGraph();
+	void SetupPostProcessGraphs();
 
     void PrecomputeCubemaps(CommandContext& gfxContext);
 
@@ -88,6 +90,8 @@ private:
     Scene m_Scene;
     AtomEditor::UiState m_EditorUi;
     RenderGraph m_GeometryGraph;
+    RenderGraph m_LightingGraph;
+    RenderGraph m_PostProcessGraphs[2];
     DirectX::XMFLOAT2 m_FrameJitter = { 0.0f, 0.0f };
     SkyBox m_SkyBox;
     DescriptorHandle m_BackBufferHandle[3];
