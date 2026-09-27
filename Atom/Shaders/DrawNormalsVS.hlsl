@@ -45,5 +45,3 @@ VertexOut main(VertexIn vin)
 	
     return vout;
 }
-
-

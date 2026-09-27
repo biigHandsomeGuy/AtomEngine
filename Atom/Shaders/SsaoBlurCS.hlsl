@@ -36,14 +36,25 @@ cbuffer cbRootConstants : register(b1)
 };
 
 
-float NdcDepthToViewDepth(float z_ndc)
+float ViewDepthFromUv(float2 uv)
 {
-	return gProj[3][2] / (z_ndc - gProj[2][2]);
+	float depth = gDepthMap.SampleLevel(gsamDepthMap, uv, 0.0f).r;
+	float2 ndc = float2(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f);
+	float4 clip = float4(ndc, depth, 1.0f);
+	float4 view = mul(gInvProj, clip);
+	return view.z / max(view.w, 1e-6f);
 }
 
-[numthreads(32, 32, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {  
+	uint outW, outH;
+	gOutputMap.GetDimensions(outW, outH);
+	if (DTid.x >= outW || DTid.y >= outH)
+	{
+		return;
+	}
+
 	float2 texC = (DTid.xy + 0.5f) * gInvRenderTargetSize;
 
 	// unpack into float array.
@@ -58,7 +69,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	float totalWeight = blurWeights[gBlurRadius];
 
 	float3 centerNormal = gNormalMap.SampleLevel(gsamPointClamp, texC, 0).xyz;
-	float centerDepth = NdcDepthToViewDepth(gDepthMap.SampleLevel(gsamDepthMap, texC, 0).r);
+	float centerDepth = ViewDepthFromUv(texC);
 
 	float2 texOffset;
 	if (gHorizontalBlur)
@@ -79,8 +90,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 		float2 tex = texC + i * texOffset;
 
 		float3 neighborNormal = gNormalMap.SampleLevel(gsamPointClamp, tex, 0.0f).xyz;
-		float neighborDepth = NdcDepthToViewDepth(
-			gDepthMap.SampleLevel(gsamDepthMap, tex, 0.0f).r);
+		float neighborDepth = ViewDepthFromUv(tex);
 
 		//
 		// If the center value and neighbor values differ too much (either in 

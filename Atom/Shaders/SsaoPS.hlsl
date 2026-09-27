@@ -77,12 +77,12 @@ float OcclusionFunction(float distZ)
 }
 
 
-float NdcDepthToViewDepth(float z_ndc)
+float3 ReconstructViewPos(float2 uv, float depth)
 {
-    // z_ndc = C + D/viewZ, where gProj[2][2]=C and gProj[3][2]=D.
-    float viewZ = gProj[2][3] / (z_ndc - gProj[2][2]);
-
-    return viewZ;
+    float2 ndc = float2(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f);
+    float4 clip = float4(ndc, depth, 1.0f);
+    float4 view = mul(gInvProj, clip);
+    return view.xyz / max(view.w, 1e-6f);
 }
 
 float4 main(VertexOut pin) : SV_Target
@@ -95,15 +95,7 @@ float4 main(VertexOut pin) : SV_Target
 	// Get viewspace normal and z-coord of this pixel.  
     float3 n = normalize(gNormalMap.SampleLevel(gsamPointClamp, pin.TexC, 0.0f).xyz);
     float pz = gDepthMap.SampleLevel(gsamDepthMap, pin.TexC, 0.0f).r;
-    pz = NdcDepthToViewDepth(pz);
-    //return float4(n, 1);
-	//
-	// Reconstruct full view space position (x,y,z).
-	// Find t such that p = t*pin.PosV.
-	// p.z = t*pin.PosV.z
-	// t = p.z / pin.PosV.z
-	//
-    float3 p = (pz / pin.PosV.z) * pin.PosV;
+    float3 p = ReconstructViewPos(pin.TexC, pz);
 	
 	// Extract random vector and map from [0,1] --> [-1, +1].
     float3 randVec = 2.0f * gRandomMap.SampleLevel(gsamLinearWrap, 4.0f * pin.TexC, 0.0f).rgb - 1.0f;
@@ -133,13 +125,7 @@ float4 main(VertexOut pin) : SV_Target
 		// occupy empty space).  To find the nearest depth we look it up in the depthmap.
 
         float rz = gDepthMap.SampleLevel(gsamDepthMap, projQ.xy, 0.0f).r;
-        rz = NdcDepthToViewDepth(rz);
-
-		// Reconstruct full view space position r = (rx,ry,rz).  We know r
-		// lies on the ray of q, so there exists a t such that r = t*q.
-		// r.z = t*q.z ==> t = r.z / q.z
-
-        float3 r = (rz / q.z) * q;
+        float3 r = ReconstructViewPos(projQ.xy, rz);
 		
 		//
 		// Test whether r occludes p.

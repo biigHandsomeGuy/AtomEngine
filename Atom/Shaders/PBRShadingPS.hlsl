@@ -114,7 +114,6 @@ Texture2D<float4> GetBindlessTexture2D(uint index)
 
 float4 main(VertexOut pin) : SV_Target
 {
-    //return ClusterColor(pin.ClusterID);
     float3 albedo = 0;
     float metalness = 0;
     float roughness = 0;
@@ -143,7 +142,7 @@ float4 main(VertexOut pin) : SV_Target
         N = normalize(pin.Normal);
         //return float4(N, 1);
     }
-    //return float4(albedo, 1);
+    //return float4(N, 1);
 	// Outgoing light direction (vector from world-space fragment position to the "eye").
     float3 Lo = normalize(gCameraPos - pin.WorldPosition);
     
@@ -266,13 +265,14 @@ float4 main(VertexOut pin) : SV_Target
         ambientLighting = diffuseIBL + specularIBL;
     }
 
-    float ambientOcclution = 1;
-    //if(UseSSAO)
-    //{
-    //    pin.SsaoPosH /= pin.SsaoPosH.w;
-    //    ambientOcclution += gShadowMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
-    //    ambientOcclution = gSsaoMap.Sample(gsamAnisotropicWrap, pin.SsaoPosH.xy);
-    //}
+    float ambientOcclution = 1.0f;
+    if (UseSSAO)
+    {
+        uint aoW, aoH;
+        gSsaoMap.GetDimensions(aoW, aoH);
+        float2 aoUv = saturate((pin.PosH.xy + 0.5f) / float2(aoW, aoH));
+        ambientOcclution = gSsaoMap.Sample(gsamLinearClamp, aoUv).r;
+    }
     
 	// Final fragment color.
     return float4(directLighting + ambientLighting * ambientOcclution, 1.0);
