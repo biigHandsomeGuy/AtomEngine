@@ -315,4 +315,3 @@ void PbrRenderer::Render(GraphicsContext& graphics)
         m_View.PreviousJitter = { 0.0f, 0.0f };
     }
 }
-
