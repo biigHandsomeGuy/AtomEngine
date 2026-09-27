@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Ssao.h"
+#include "RenderGraph.h"
 
 #include "BufferManager.h"
 #include "Camera.h"
@@ -161,71 +162,101 @@ void SSAO::Render(GraphicsContext& GfxContext, const Camera& camera)
         1.0f / float(g_SSAOHalfRes.GetWidth()),
         1.0f / float(g_SSAOHalfRes.GetHeight()));
 
-    ComputeContext& Context = GfxContext.GetComputeContext();
-    Context.SetRootSignature(s_RootSig);
-    Context.SetDynamicConstantBufferView(0, sizeof(s_SsaoConstants), &s_SsaoConstants);
+    ComputeContext& context = GfxContext.GetComputeContext();
+    context.SetRootSignature(s_RootSig);
+    context.SetDynamicConstantBufferView(0, sizeof(s_SsaoConstants), &s_SsaoConstants);
 
-    Context.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    Context.TransitionResource(g_SceneNormalBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    Context.TransitionResource(g_RandomVectorBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-    Context.SetConstants(1, 0);
-    Context.SetPipelineState(s_LinearizeDepthPso);
-    Context.TransitionResource(g_LinearDepthFull, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    Context.SetDynamicDescriptor(2, 0, g_LinearDepthFull.GetUAV());
-    Context.SetDynamicDescriptor(3, 0, g_SceneDepthBuffer.GetDepthSRV());
-    Context.Dispatch2D(g_LinearDepthFull.GetWidth(), g_LinearDepthFull.GetHeight(), 8, 8);
-
-    Context.SetPipelineState(s_DownsampleDepthPso);
-    Context.TransitionResource(g_LinearDepthFull, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    Context.TransitionResource(g_LinearDepthHalf, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    Context.SetDynamicDescriptor(2, 0, g_LinearDepthHalf.GetUAV());
-    Context.SetDynamicDescriptor(3, 0, g_LinearDepthFull.GetSRV());
-    Context.Dispatch2D(g_LinearDepthHalf.GetWidth(), g_LinearDepthHalf.GetHeight(), 8, 8);
-
-    Context.SetPipelineState(s_AoRenderPso);
-    Context.TransitionResource(g_LinearDepthHalf, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    Context.TransitionResource(g_SSAOHalfRes, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    D3D12_CPU_DESCRIPTOR_HANDLE aoRenderSrvs[3] =
+    static RenderGraph graph;
+    static std::once_flag graphInitialization;
+    std::call_once(graphInitialization, []
     {
-        g_SceneNormalBuffer.GetSRV(),
-        g_LinearDepthHalf.GetSRV(),
-        g_RandomVectorBuffer.GetSRV()
-    };
-    Context.SetDynamicDescriptor(2, 0, g_SSAOHalfRes.GetUAV());
-    Context.SetDynamicDescriptors(3, 0, 3, aoRenderSrvs);
-    Context.Dispatch2D(g_SSAOHalfRes.GetWidth(), g_SSAOHalfRes.GetHeight(), 8, 8);
-
-    Context.SetPipelineState(s_AoBlurUpsamplePso);
-    Context.SetConstants(1, 0);
-    Context.TransitionResource(g_SSAOHalfRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    Context.TransitionResource(g_SSAOBlurTemp, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    D3D12_CPU_DESCRIPTOR_HANDLE blurSrvs[4] =
+    graph.AddPass(L"SSAO / Linearize depth", {
+        { &g_SceneDepthBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_LinearDepthFull, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
+    }, [](CommandContext& commandContext)
     {
-        g_SceneNormalBuffer.GetSRV(),
-        g_LinearDepthFull.GetSRV(),
-        g_LinearDepthHalf.GetSRV(),
-        g_SSAOHalfRes.GetSRV()
-    };
-    Context.SetDynamicDescriptor(2, 0, g_SSAOBlurTemp.GetUAV());
-    Context.SetDynamicDescriptors(3, 0, 4, blurSrvs);
-    Context.Dispatch2D(g_SSAOBlurTemp.GetWidth(), g_SSAOBlurTemp.GetHeight(), 8, 8);
+        auto& compute = commandContext.GetComputeContext();
+        compute.SetConstants(1, 0);
+        compute.SetPipelineState(s_LinearizeDepthPso);
+        compute.SetDynamicDescriptor(2, 0, g_LinearDepthFull.GetUAV());
+        compute.SetDynamicDescriptor(3, 0, g_SceneDepthBuffer.GetDepthSRV());
+        compute.Dispatch2D(g_LinearDepthFull.GetWidth(), g_LinearDepthFull.GetHeight(), 8, 8);
+    });
 
-    Context.SetConstants(1, 1);
-    Context.TransitionResource(g_SSAOBlurTemp, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    Context.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    D3D12_CPU_DESCRIPTOR_HANDLE upsampleSrvs[4] =
+    graph.AddPass(L"SSAO / Downsample depth", {
+        { &g_LinearDepthFull, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_LinearDepthHalf, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
+    }, [](CommandContext& commandContext)
     {
-        g_SceneNormalBuffer.GetSRV(),
-        g_LinearDepthFull.GetSRV(),
-        g_LinearDepthHalf.GetSRV(),
-        g_SSAOBlurTemp.GetSRV()
-    };
-    Context.SetDynamicDescriptor(2, 0, g_SSAOFullScreen.GetUAV());
-    Context.SetDynamicDescriptors(3, 0, 4, upsampleSrvs);
-    Context.Dispatch2D(g_SSAOFullScreen.GetWidth(), g_SSAOFullScreen.GetHeight(), 8, 8);
+        auto& compute = commandContext.GetComputeContext();
+        compute.SetPipelineState(s_DownsampleDepthPso);
+        compute.SetDynamicDescriptor(2, 0, g_LinearDepthHalf.GetUAV());
+        compute.SetDynamicDescriptor(3, 0, g_LinearDepthFull.GetSRV());
+        compute.Dispatch2D(g_LinearDepthHalf.GetWidth(), g_LinearDepthHalf.GetHeight(), 8, 8);
+    });
 
-    Context.TransitionResource(g_SSAOFullScreen, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    graph.AddPass(L"SSAO / Generate occlusion", {
+        { &g_SceneNormalBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_LinearDepthHalf, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_RandomVectorBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_SSAOHalfRes, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
+    }, [](CommandContext& commandContext)
+    {
+        auto& compute = commandContext.GetComputeContext();
+        compute.SetPipelineState(s_AoRenderPso);
+        D3D12_CPU_DESCRIPTOR_HANDLE srvs[3] = {
+            g_SceneNormalBuffer.GetSRV(), g_LinearDepthHalf.GetSRV(), g_RandomVectorBuffer.GetSRV()
+        };
+        compute.SetDynamicDescriptor(2, 0, g_SSAOHalfRes.GetUAV());
+        compute.SetDynamicDescriptors(3, 0, 3, srvs);
+        compute.Dispatch2D(g_SSAOHalfRes.GetWidth(), g_SSAOHalfRes.GetHeight(), 8, 8);
+    });
+
+    graph.AddPass(L"SSAO / Blur half resolution", {
+        { &g_SceneNormalBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_LinearDepthFull, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_LinearDepthHalf, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_SSAOHalfRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_SSAOBlurTemp, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
+    }, [](CommandContext& commandContext)
+    {
+        auto& compute = commandContext.GetComputeContext();
+        compute.SetConstants(1, 0);
+        compute.SetPipelineState(s_AoBlurUpsamplePso);
+        D3D12_CPU_DESCRIPTOR_HANDLE srvs[4] = {
+            g_SceneNormalBuffer.GetSRV(), g_LinearDepthFull.GetSRV(), g_LinearDepthHalf.GetSRV(), g_SSAOHalfRes.GetSRV()
+        };
+        compute.SetDynamicDescriptor(2, 0, g_SSAOBlurTemp.GetUAV());
+        compute.SetDynamicDescriptors(3, 0, 4, srvs);
+        compute.Dispatch2D(g_SSAOBlurTemp.GetWidth(), g_SSAOBlurTemp.GetHeight(), 8, 8);
+    });
+
+    graph.AddPass(L"SSAO / Upsample", {
+        { &g_SceneNormalBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_LinearDepthFull, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_LinearDepthHalf, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_SSAOBlurTemp, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+        { &g_SSAOFullScreen, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
+    }, [](CommandContext& commandContext)
+    {
+        auto& compute = commandContext.GetComputeContext();
+        compute.SetConstants(1, 1);
+        compute.SetPipelineState(s_AoBlurUpsamplePso);
+        D3D12_CPU_DESCRIPTOR_HANDLE srvs[4] = {
+            g_SceneNormalBuffer.GetSRV(), g_LinearDepthFull.GetSRV(), g_LinearDepthHalf.GetSRV(), g_SSAOBlurTemp.GetSRV()
+        };
+        compute.SetDynamicDescriptor(2, 0, g_SSAOFullScreen.GetUAV());
+        compute.SetDynamicDescriptors(3, 0, 4, srvs);
+        compute.Dispatch2D(g_SSAOFullScreen.GetWidth(), g_SSAOFullScreen.GetHeight(), 8, 8);
+    });
+
+    // Leave the final AO output ready for subsequent graphics passes.
+    graph.AddPass(L"SSAO / Publish output", {
+        { &g_SSAOFullScreen, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, RenderGraph::Access::Read }
+    }, {});
+    });
+
+    graph.Execute(context);
 }
 
 void SSAO::Shutdown()
