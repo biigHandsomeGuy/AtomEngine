@@ -99,6 +99,7 @@
     <ClInclude Include="src\Graphics\Resources\Color.h" />
     <ClInclude Include="src\Graphics\Resources\ColorBuffer.h" />
     <ClInclude Include="src\Graphics\Commands\CommandContext.h" />
+    <ClInclude Include="src\Graphics\Commands\FrameScheduler.h" />
     <ClInclude Include="src\Core\d3dApp.h" />
     <ClInclude Include="src\Graphics\Resources\DepthBuffer.h" />
     <ClInclude Include="src\Graphics\Resources\DescriptorHeap.h" />
@@ -186,6 +187,7 @@
     <ClCompile Include="src\Renderer\RenderView.cpp" />
     <ClCompile Include="src\Graphics\Resources\BufferManager.cpp" />
     <ClCompile Include="src\Graphics\Commands\CommandContext.cpp" />
+    <ClCompile Include="src\Graphics\Commands\FrameScheduler.cpp" />
     <ClCompile Include="src\Graphics\Resources\DescriptorHeap.cpp" />
     <ClCompile Include="src\Graphics\Display.cpp" />
     <ClInclude Include="src\Math\VectorMath.h" />

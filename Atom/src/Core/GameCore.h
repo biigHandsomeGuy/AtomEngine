@@ -40,6 +40,7 @@ namespace GameCore
 		virtual void Update(float deltaT) = 0;
 		virtual void OnResize() = 0;
 		virtual void RenderScene(void) = 0;
+		virtual void OnFramePresented() {}
 	public:
 
 		GameTimer m_Timer;

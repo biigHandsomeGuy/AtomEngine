@@ -7,6 +7,7 @@
 #include "PbrRenderer.h"
 #include "CameraController.h"
 #include "ModelAssetManager.h"
+#include "FrameScheduler.h"
 
 struct ViewportImage
 {
@@ -50,6 +51,7 @@ public:
     void Update(float deltaTime) override;
     void OnResize() override;
     void RenderScene() override;
+    void OnFramePresented() override;
     bool IsDone() override;
     int ExitCode() const override { return m_ExitCode; }
     bool UsesLegacySceneBuffers() const override { return false; }
@@ -61,14 +63,16 @@ private:
     void CheckViewIsolation();
     void StartAssetChecks();
     void PollAssetChecks();
+    void CheckFrameScheduler();
 
     Scene m_Scene;
     ModelAssetManager m_Assets;
+    FrameScheduler m_Frames;
     RenderView m_View;
     PbrRenderer m_Renderer;
     std::unique_ptr<CameraController> m_CameraController;
     std::unique_ptr<PbrApplicationUi> m_Ui;
-    DescriptorHandle m_ViewportDescriptors[3];
+    DescriptorHandle m_ViewportDescriptors[FrameScheduler::FramesInFlight];
     std::vector<DescriptorHandle> m_FreeUiDescriptors;
     bool m_UiInitialized = false;
     uint32_t m_SmokeFrameLimit = 0;
@@ -81,4 +85,7 @@ private:
     uint32_t m_AssetErrors = 0;
     uint32_t m_AssetChecks = 0;
     bool m_UploadCancelRequested = false;
+    uint32_t m_FrameErrors = 0;
+    uint32_t m_FrameChecks = 0;
+    uint32_t m_PresentationChecks = 0;
 };

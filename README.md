@@ -11,7 +11,7 @@ git submodule update --init --recursive
 pwsh -File scripts/Build-Pbr.ps1 -Target All -Configuration Debug -SmokeTest
 ```
 
-The script builds only PBR and AtomEditor and runs each for 60 frames, including four view sizes, odd-size SSAO, TAA toggling/history reset, a real main-window resize, and resource-isolation checks. It also checks asynchronous model loading, shared asset residency, malformed/missing-file diagnostics, and cancellation before/after GPU submission. Debug smoke tests require D3D12 validation and fail on validation errors, device removal, failed view/asset checks, premature exit, or timeout. Logs are saved under `bin-int/build-logs`. Smoke runs do not save ImGui layout preferences. Windows Graphics Tools must be available for Debug validation.
+The script builds only PBR and AtomEditor and runs each for 60 frames, including four view sizes, odd-size SSAO, TAA toggling/history reset, a real main-window resize, and resource-isolation checks. It also checks asynchronous model loading, shared asset residency, malformed/missing-file diagnostics, and cancellation before/after GPU submission. Five frame-scheduler checks validate fenced resource retention, three queued slots, reuse, and drain; rendering submits without waiting for every frame to finish. Debug smoke tests require D3D12 validation and fail on validation errors, device removal, failed view/asset/frame checks, premature exit, or timeout. Logs are saved under `bin-int/build-logs`. Smoke runs do not save ImGui layout preferences. Windows Graphics Tools must be available for Debug validation.
 
 ```powershell
 # Interactive editor

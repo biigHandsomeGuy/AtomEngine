@@ -82,7 +82,7 @@ private:
     uint64_t m_LastSceneRevision = UINT64_MAX;
     std::unique_ptr<SSAO::ViewPasses> m_SsaoPasses;
     DescriptorHandle m_CommonTextures;
-    DescriptorHandle m_PostProcessTextures;
+    DescriptorHandle m_PostProcessTextures[2];
     RenderGraph m_GeometryGraph;
     RenderGraph m_LightingGraph;
     RenderGraph m_PostProcessGraphs[2];

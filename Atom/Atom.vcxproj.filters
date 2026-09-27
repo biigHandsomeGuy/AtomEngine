@@ -138,6 +138,7 @@
     <ClInclude Include="src\Graphics\Resources\GpuResource.h">
       <Filter>Graphics\Resources</Filter>
     </ClInclude>
+    <ClInclude Include="src\Graphics\Commands\FrameScheduler.h"><Filter>Graphics\Commands</Filter></ClInclude>
     <ClInclude Include="src\Graphics\Commands\CommandContext.h">
       <Filter>Graphics\Commands</Filter>
     </ClInclude>
@@ -308,6 +309,7 @@
     <ClCompile Include="src\Graphics\Resources\Texture.cpp">
       <Filter>Graphics\Resources</Filter>
     </ClCompile>
+    <ClCompile Include="src\Graphics\Commands\FrameScheduler.cpp"><Filter>Graphics\Commands</Filter></ClCompile>
     <ClCompile Include="src\Graphics\Commands\CommandContext.cpp">
       <Filter>Graphics\Commands</Filter>
     </ClCompile>

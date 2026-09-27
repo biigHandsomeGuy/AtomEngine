@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <stdexcept>
 #include <d3d12sdklayers.h>
 
 #include <Imgui/imgui.h>
@@ -23,7 +24,7 @@
 using namespace Graphics;
 
 PbrApplication::PbrApplication(std::unique_ptr<PbrApplicationUi> ui, uint32_t smokeFrameLimit)
-    : m_Renderer(m_Scene, m_View), m_Ui(std::move(ui)), m_SmokeFrameLimit(smokeFrameLimit)
+    : m_Frames(g_CommandManager), m_Renderer(m_Scene, m_View), m_Ui(std::move(ui)), m_SmokeFrameLimit(smokeFrameLimit)
 {
 }
 
@@ -43,6 +44,7 @@ void PbrApplication::Startup()
     {
         m_Ui->StartValidation(m_Scene, m_Assets);
         CheckViewIsolation();
+        CheckFrameScheduler();
         StartAssetChecks();
     }
 }
@@ -73,7 +75,7 @@ void PbrApplication::InitializeUi()
     ImGui_ImplDX12_InitInfo init;
     init.Device = g_Device;
     init.CommandQueue = g_CommandManager.GetCommandQueue();
-    init.NumFramesInFlight = 3;
+    init.NumFramesInFlight = FrameScheduler::FramesInFlight;
     init.RTVFormat = SwapChainFormat;
     init.SrvDescriptorHeap = g_BindlessHeap.GetHeapPointer();
     init.UserData = this;
@@ -99,6 +101,7 @@ void PbrApplication::InitializeUi()
 
 void PbrApplication::Cleanup()
 {
+    m_Frames.Drain();
     const auto uiValidation = m_Ui->Validation();
     if (m_SmokeFrameLimit >= 60 && m_AssetChecks != 6)
         ++m_AssetErrors;
@@ -140,15 +143,25 @@ void PbrApplication::Cleanup()
         const bool deviceRemoved = FAILED(g_Device->GetDeviceRemovedReason());
         if (m_SmokeFrameLimit >= 60 && (m_ResizeChecks != 4 || m_WindowResizes != 1))
             ++m_ViewErrors;
+        if (m_FrameChecks != 5 || (m_SmokeFrameLimit >= 60 && m_PresentationChecks != 2) ||
+            m_Frames.Stats().Submissions != m_CompletedFrames ||
+            m_Frames.Stats().SlotReuses != (m_CompletedFrames > FrameScheduler::FramesInFlight ?
+                m_CompletedFrames - FrameScheduler::FramesInFlight : 0) ||
+            m_Frames.FrameOpen() || m_Frames.PendingFrames() != 0 || m_Frames.RetainedResources() != 0)
+            ++m_FrameErrors;
         m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 ||
-            uiValidation.Errors != 0 || uiValidation.Completed != uiValidation.Expected ||
+            m_FrameErrors != 0 || uiValidation.Errors != 0 || uiValidation.Completed != uiValidation.Expected ||
             m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
         std::cout << "PBR_SMOKE frames=" << m_CompletedFrames << " errors=" << validationErrors
             << " deviceRemoved=" << deviceRemoved << " validation=" << validationAvailable
             << " viewErrors=" << m_ViewErrors << " resizeChecks=" << m_ResizeChecks
             << " windowResizes=" << m_WindowResizes << " assetErrors=" << m_AssetErrors
             << " assetChecks=" << m_AssetChecks << " uiErrors=" << uiValidation.Errors
-            << " uiChecks=" << uiValidation.Completed << " uiExpected=" << uiValidation.Expected << '\n';
+            << " uiChecks=" << uiValidation.Completed << " uiExpected=" << uiValidation.Expected
+            << " frameErrors=" << m_FrameErrors << " frameChecks=" << m_FrameChecks
+            << " submissions=" << m_Frames.Stats().Submissions << " slotReuses=" << m_Frames.Stats().SlotReuses
+            << " drained=" << (m_Frames.PendingFrames() == 0 && m_Frames.RetainedResources() == 0)
+            << " presentationChecks=" << m_PresentationChecks << '\n';
     }
 }
 
@@ -163,6 +176,8 @@ void PbrApplication::Update(float deltaTime)
     m_View.Camera.Update();
     if (m_SmokeFrameLimit >= 60 && m_CompletedFrames == 22)
         SetWindowPos(GameCore::g_hWnd, nullptr, 0, 0, 900, 700, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (m_SmokeFrameLimit >= 60 && m_CompletedFrames == 30) ShowWindow(GameCore::g_hWnd, SW_SHOWMINNOACTIVE);
+    if (m_SmokeFrameLimit >= 60 && m_CompletedFrames == 33) ShowWindow(GameCore::g_hWnd, SW_SHOWNOACTIVATE);
 }
 
 void PbrApplication::OnResize()
@@ -174,16 +189,24 @@ void PbrApplication::OnResize()
         if (m_View.Width() != 641 || m_View.Height() != 359 || !m_View.HistoryValid)
             ++m_ViewErrors;
     }
+    if (m_SmokeFrameLimit >= 60 && (m_CompletedFrames == 31 || m_CompletedFrames == 34))
+    {
+        ++m_PresentationChecks;
+        if (bool(IsIconic(GameCore::g_hWnd)) != (m_CompletedFrames == 31) ||
+            m_View.Width() != 1024 || m_View.Height() != 768 || !m_View.HistoryValid)
+            ++m_FrameErrors;
+    }
 }
 
 void PbrApplication::RenderScene()
 {
+    const uint32_t frameSlot = m_Frames.BeginFrame();
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
     GameCore::g_ImGuiWantsMouseCapture = ImGui::GetIO().WantTextInput;
 
-    const DescriptorHandle& descriptor = m_ViewportDescriptors[g_CurrentBuffer];
+    const DescriptorHandle& descriptor = m_ViewportDescriptors[frameSlot];
     ViewportRequest request = m_Ui->Draw(m_Scene, m_Renderer, {
         descriptor.GetGpuPtr(), m_View.Width(), m_View.Height() });
     if (m_SmokeFrameLimit != 0)
@@ -208,6 +231,7 @@ void PbrApplication::RenderScene()
 
     // Geometry, compute passes and main UI share one ordered direct command list.
     GraphicsContext& graphics = GraphicsContext::Begin(L"PBR application frame");
+    for (const auto& model : m_Scene.Models) m_Frames.Retain(model.GPU);
     m_Renderer.Render(graphics);
     graphics.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, g_BindlessHeap.GetHeapPointer());
     graphics.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET, true);
@@ -215,7 +239,7 @@ void PbrApplication::RenderScene()
     graphics.SetRenderTarget(g_DisplayPlane[g_CurrentBuffer].GetRTV());
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), graphics.GetCommandList());
     graphics.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_PRESENT);
-    graphics.Finish(true);
+    graphics.Finish(false);
 
     // Secondary windows may sample the scene output, so submit them afterwards.
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -224,6 +248,12 @@ void PbrApplication::RenderScene()
         ImGui::RenderPlatformWindowsDefault();
     }
     ++m_CompletedFrames;
+}
+
+void PbrApplication::OnFramePresented()
+{
+    // Covers the main list, font uploads, detached ImGui viewports and Present.
+    m_Frames.EndFrame();
 }
 
 void PbrApplication::CheckViewIsolation()
@@ -242,6 +272,87 @@ void PbrApplication::CheckViewIsolation()
     if (m_View.Output.GetResource() != output || other.Width() != 33 || other.Height() != 25 || other.HistoryValid)
         ++m_ViewErrors;
     other.Destroy();
+}
+
+void PbrApplication::CheckFrameScheduler()
+{
+    auto check = [this](bool passed, const char* label)
+    {
+        ++m_FrameChecks;
+        if (!passed)
+        {
+            ++m_FrameErrors;
+            std::cerr << "FRAME_CHECK_FAILED " << label << '\n';
+        }
+    };
+    // A CPU-signalled gate makes pending fences deterministic even on a fast GPU.
+    // Always release it on exit so a failed check cannot leave the queue blocked.
+    struct QueueGate
+    {
+        Microsoft::WRL::ComPtr<ID3D12Fence> Fence;
+        ~QueueGate() { if (Fence) Fence->Signal(1); }
+    } gate;
+    try
+    {
+        if (FAILED(g_Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&gate.Fence))))
+            throw std::runtime_error("Could not create a frame validation fence.");
+        auto& queue = g_CommandManager.GetGraphicsQueue();
+        FrameScheduler frames(g_CommandManager);
+        auto rejects = [](auto action)
+        {
+            try { action(); } catch (const std::logic_error&) { return true; }
+            return false;
+        };
+        bool protocol = rejects([&] { frames.EndFrame(); }) && rejects([&] { frames.Retain({}); });
+        if (FAILED(queue.GetCommandQueue()->Wait(gate.Fence.Get(), 1)))
+            throw std::runtime_error("Could not gate frame validation submissions.");
+        const auto firstSlot = frames.BeginFrame();
+        protocol = protocol && rejects([&] { frames.BeginFrame(); }) && rejects([&] { frames.Drain(); });
+        check(protocol && firstSlot == 0, "frame begin/end protocol");
+
+        auto first = std::make_shared<int>(1);
+        std::weak_ptr<int> firstOwner = first;
+        frames.Retain(first);
+        frames.Retain(first);
+        const bool deduplicated = frames.RetainedResources() == 1 && first.use_count() == 2;
+        first.reset();
+        const auto firstFence = frames.EndFrame();
+        check(deduplicated && !firstOwner.expired() && !g_CommandManager.IsFenceComplete(firstFence),
+            "owners retained until frame fence, with deduplication");
+
+        const auto secondSlot = frames.BeginFrame();
+        auto second = std::make_shared<int>(2);
+        std::weak_ptr<int> secondOwner = second;
+        frames.Retain(second);
+        second.reset();
+        frames.EndFrame();
+        const auto thirdSlot = frames.BeginFrame();
+        frames.EndFrame();
+        check(secondSlot == 1 && thirdSlot == 2 && frames.PendingFrames() == 3 &&
+            frames.Stats().PeakInFlight == 3 && !firstOwner.expired() && !secondOwner.expired(),
+            "three queued frames use distinct slots");
+
+        if (FAILED(gate.Fence->Signal(1))) throw std::runtime_error("Could not release frame validation gate.");
+        const auto reusedSlot = frames.BeginFrame();
+        check(reusedSlot == firstSlot && firstOwner.expired() && !secondOwner.expired() &&
+            g_CommandManager.IsFenceComplete(firstFence) && frames.Stats().SlotReuses == 1,
+            "slot reuse waits before releasing its resources");
+        auto last = std::make_shared<int>(3);
+        std::weak_ptr<int> lastOwner = last;
+        frames.Retain(last);
+        last.reset();
+        frames.EndFrame();
+        frames.Drain();
+        check(secondOwner.expired() && lastOwner.expired() && !frames.FrameOpen() &&
+            frames.PendingFrames() == 0 && frames.RetainedResources() == 0 &&
+            frames.Stats().Submissions == 4 && frames.Stats().Drains == 1,
+            "drain releases all owners after completion");
+    }
+    catch (const std::exception& error)
+    {
+        ++m_FrameErrors;
+        std::cerr << "FRAME_CHECK_FAILED " << error.what() << '\n';
+    }
 }
 
 void PbrApplication::StartAssetChecks()

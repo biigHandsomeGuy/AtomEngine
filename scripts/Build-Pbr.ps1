@@ -87,6 +87,10 @@ foreach ($item in $targets) {
             Write-Output $smoke.Output
             throw "Scene document and command checks failed: $item (log: $smokeLog)"
         }
+        if ($smoke.Output -notmatch 'frameErrors=0 frameChecks=5 submissions=60 slotReuses=57 drained=1 presentationChecks=2') {
+            Write-Output $smoke.Output
+            throw "Frame lifetime, reuse or drain checks failed: $item (log: $smokeLog)"
+        }
         Write-Output "$item rendered 60 frames and exited normally ($validation; log: $smokeLog)"
     }
 }

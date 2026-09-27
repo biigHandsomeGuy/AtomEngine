@@ -9,7 +9,11 @@
 using namespace Graphics;
 using namespace Microsoft::WRL;
 
-namespace { bool s_UseLegacySceneBuffers = true; }
+namespace
+{
+    bool s_UseLegacySceneBuffers = true;
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> s_SwapChain3;
+}
 
 #define SWAP_CHAIN_BUFFER_COUNT 3
 
@@ -87,8 +91,8 @@ void Display::Initialize(bool useLegacySceneBuffers)
         &fsSwapChainDesc,
         nullptr,
         &s_SwapChain1));
-
-    
+    ASSERT_SUCCEEDED(s_SwapChain1->QueryInterface(IID_PPV_ARGS(&s_SwapChain3)));
+    g_CurrentBuffer = s_SwapChain3->GetCurrentBackBufferIndex();
     for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
     {
         ComPtr<ID3D12Resource> displayPlane;
@@ -104,7 +108,9 @@ void Display::Initialize(bool useLegacySceneBuffers)
 void Display::Shutdown(void)
 {
     s_SwapChain1->SetFullscreenState(FALSE, nullptr);
+    s_SwapChain3.Reset();
     s_SwapChain1->Release();
+    s_SwapChain1 = nullptr;
 
     for (uint32_t i = 0; i < SWAP_CHAIN_BUFFER_COUNT; ++i)
     {
@@ -148,7 +154,7 @@ void Display::Resize(uint32_t width, uint32_t height)
         DXGI_FORMAT_R16G16B16A16_FLOAT,
         DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
-    g_CurrentBuffer = 0;
+    g_CurrentBuffer = s_SwapChain3->GetCurrentBackBufferIndex();
 
     for (UINT i = 0; i < SWAP_CHAIN_BUFFER_COUNT; i++)
     {
@@ -168,8 +174,8 @@ void Display::Resize(uint32_t width, uint32_t height)
 
 void Display::Present(void)
 {
-    s_SwapChain1->Present(0, 0);
-    g_CurrentBuffer = (g_CurrentBuffer + 1) % SWAP_CHAIN_BUFFER_COUNT;
+    ASSERT_SUCCEEDED(s_SwapChain1->Present(0, 0));
+    g_CurrentBuffer = s_SwapChain3->GetCurrentBackBufferIndex();
     int64_t CurrentTick = SystemTime::GetCurrentTick();
     s_FrameTime = (float)SystemTime::TimeBetweenTicks(s_FrameStartTick, CurrentTick);
 

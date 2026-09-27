@@ -74,6 +74,7 @@ namespace GameCore
 		game.RenderScene();
 		
 		Display::Present();
+		game.OnFramePresented();
 		return 1;
 	}
 

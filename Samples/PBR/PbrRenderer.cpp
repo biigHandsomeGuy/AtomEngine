@@ -61,7 +61,7 @@ void PbrRenderer::Initialize()
     Renderer::Initialize(false, { m_View.SceneColor.GetFormat(), m_View.SceneDepth.GetFormat(),
         m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() });
     m_CommonTextures = g_BindlessHeap.Alloc(10);
-    m_PostProcessTextures = g_BindlessHeap.Alloc(4);
+    for (auto& table : m_PostProcessTextures) table = g_BindlessHeap.Alloc(4);
     m_SsaoPasses = std::make_unique<SSAO::ViewPasses>(SSAO::ViewResources{
         m_View.SceneDepth, m_View.SceneNormal, m_View.LinearDepthFull, m_View.LinearDepthHalf,
         m_View.SsaoFull, m_View.SsaoHalf, m_View.SsaoBlur });
@@ -225,12 +225,8 @@ void PbrRenderer::SetupPostProcessGraphs()
 			compute.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
 			compute.SetRootSignature(s_ComputeRootSig);
 			compute.SetPipelineState(s_PostProcessPSO);
-			g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures, m_View.SceneColor.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures + Graphics::CbvSrvUavDescriptorSize, m_View.History[historyReadIndex].GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures + Graphics::CbvSrvUavDescriptorSize * 2, m_View.SceneDepth.GetDepthSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures + Graphics::CbvSrvUavDescriptorSize * 3, m_View.Output.GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			compute.SetDescriptorTable(0, m_PostProcessTextures);
-			compute.SetDescriptorTable(1, m_PostProcessTextures + Graphics::CbvSrvUavDescriptorSize * 3);
+			compute.SetDescriptorTable(0, m_PostProcessTextures[historyReadIndex]);
+			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex] + Graphics::CbvSrvUavDescriptorSize * 3);
 			compute.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
 			compute.Dispatch((m_View.Output.GetWidth() + 7) / 8, (m_View.Output.GetHeight() + 7) / 8);
 		});
@@ -277,6 +273,15 @@ void PbrRenderer::UpdateViewDescriptors()
     for (uint32_t index = 0; index < _countof(source); ++index)
         g_Device->CopyDescriptorsSimple(1, m_CommonTextures + index * CbvSrvUavDescriptorSize,
             source[index], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    // Immutable between view resizes; both history variants can be in flight.
+    for (uint32_t history = 0; history < 2; ++history)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE post[] = { m_View.SceneColor.GetSRV(), m_View.History[history].GetSRV(),
+            m_View.SceneDepth.GetDepthSRV(), m_View.Output.GetUAV() };
+        for (uint32_t index = 0; index < _countof(post); ++index)
+            g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures[history] + index * CbvSrvUavDescriptorSize,
+                post[index], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    }
 }
 void PbrRenderer::Render(GraphicsContext& graphics)
 {
