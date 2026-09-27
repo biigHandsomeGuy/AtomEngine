@@ -6,6 +6,7 @@
 
 #include "SceneGraph.h"
 #include "EditorCommandHistory.h"
+#include "ModelAssetManager.h"
 
 namespace AtomEditor
 {
@@ -18,13 +19,16 @@ namespace AtomEditor
         std::vector<std::filesystem::path> Entries;
         std::string StatusMessage;
         bool StatusIsError = false;
+        std::vector<AssetRequestId> PendingImports;
     };
 
     void Initialize(UiState& state);
     void DrawSceneHierarchy(Scene& scene, UiState& state, CommandHistory& history);
     void DrawInspector(Scene& scene, UiState& state, CommandHistory& history);
-    void DrawContentBrowser(Scene& scene, UiState& state, CommandHistory& history);
+    void DrawContentBrowser(UiState& state, ModelAssetManager& assets);
+    void ProcessImports(Scene& scene, UiState& state, CommandHistory& history, ModelAssetManager& assets);
+    void CancelPendingImports(UiState& state, ModelAssetManager& assets);
 
-    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history);
+    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history, ModelAssetManager& assets);
     bool SaveSceneDialog(const Scene& scene, UiState& state);
 }

@@ -131,12 +131,13 @@ public:
     // and returns row pitch in bytes.
     uint32_t ReadbackTexture(ReadbackBuffer& DstBuffer, PixelBuffer& SrcBuffer);
 
-    DynAlloc ReserveUploadMemory(size_t SizeInBytes)
+    DynAlloc ReserveUploadMemory(size_t SizeInBytes, size_t alignment = 256)
     {
-        return m_CpuLinearAllocator.Allocate(SizeInBytes);
+        return m_CpuLinearAllocator.Allocate(SizeInBytes, alignment);
     }
 
     static void InitializeTexture(GpuResource& Dest, UINT NumSubresources, D3D12_SUBRESOURCE_DATA SubData[]);
+    void UploadTexture(GpuResource& destination, UINT subresourceCount, D3D12_SUBRESOURCE_DATA subresources[]);
     static void InitializeBuffer(GpuBuffer& Dest, const void* Data, size_t NumBytes, size_t DestOffset = 0);
     static void InitializeBuffer(GpuBuffer& Dest, const UploadBuffer& Src, size_t SrcOffset, size_t NumBytes = -1, size_t DestOffset = 0);
     static void InitializeTextureArraySlice(GpuResource& Dest, UINT SliceIndex, GpuResource& Src);

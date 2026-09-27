@@ -127,7 +127,7 @@ TextureID TextureManager::CreateTexture2D(
     uint32_t width,
     uint32_t height,
     DXGI_FORMAT format,
-    const void* data)
+    const void* data, CommandContext* uploadContext)
 {
     TextureCreationDesc desc{};
     desc.usage = TextureUsage::TextureFromData;
@@ -136,10 +136,10 @@ TextureID TextureManager::CreateTexture2D(
     desc.format = format;
     desc.bytesPerPixel = static_cast<uint32_t>(format == DXGI_FORMAT_R32G32B32A32_FLOAT ? sizeof(float) * 4 : 4);
 
-    return CreateTextureInternal(desc, data);
+    return CreateTextureInternal(desc, data, uploadContext);
 }
 
-TextureID TextureManager::CreateTextureInternal(const TextureCreationDesc& desc, const void* data)
+TextureID TextureManager::CreateTextureInternal(const TextureCreationDesc& desc, const void* data, CommandContext* uploadContext)
 {
     Texture tex{};
 
@@ -172,7 +172,10 @@ TextureID TextureManager::CreateTextureInternal(const TextureCreationDesc& desc,
         subresource.RowPitch = static_cast<LONG_PTR>(desc.width) * desc.bytesPerPixel;
         subresource.SlicePitch = static_cast<LONG_PTR>(desc.width) * desc.height * desc.bytesPerPixel;
 
-        CommandContext::InitializeTexture(tex, 1, &subresource);
+        if (uploadContext)
+            uploadContext->UploadTexture(tex, 1, &subresource);
+        else
+            CommandContext::InitializeTexture(tex, 1, &subresource);
     }
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};

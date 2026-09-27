@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Model.h"
 
 #include <cassert>
@@ -6,11 +6,15 @@
 #include <memory>
 #include <filesystem>
 #include <vector>
+#include <stdexcept>
+#include <algorithm>
+#include <cctype>
 
 #include "GraphicsCore.h"
 #include "CommandContext.h"
 #include "Renderer.h"
 #include "ConstantBuffers.h"
+#include "PathUtils.h"
 
 using namespace DirectX;
 
@@ -44,7 +48,7 @@ static void AccumulateSurfaceBasis(
     }
 }
 
-static void RebuildVertexNormalsAndTangents(MeshAsset& mesh, bool rebuildNormals, bool rebuildTangents)
+static void RebuildVertexNormalsAndTangents(MeshAsset& mesh, bool rebuildNormals, bool rebuildTangents, const std::atomic_bool* cancelled)
 {
     if (mesh.Vertices.empty() || mesh.Indices.size() < 3)
         return;
@@ -55,6 +59,7 @@ static void RebuildVertexNormalsAndTangents(MeshAsset& mesh, bool rebuildNormals
 
     for (size_t i = 0; i + 2 < mesh.Indices.size(); i += 3)
     {
+        if ((i & 4095) == 0 && cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
         const uint32_t i0 = mesh.Indices[i + 0];
         const uint32_t i1 = mesh.Indices[i + 1];
         const uint32_t i2 = mesh.Indices[i + 2];
@@ -89,6 +94,7 @@ static void RebuildVertexNormalsAndTangents(MeshAsset& mesh, bool rebuildNormals
 
     for (size_t i = 0; i < mesh.Vertices.size(); ++i)
     {
+        if ((i & 4095) == 0 && cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
         Vertex& v = mesh.Vertices[i];
 
         Vector3 normal = rebuildNormals ? normalAccum[i] : v.Normal;
@@ -157,14 +163,54 @@ static XMFLOAT4 ReadVec4(const tinygltf::Model& model, const tinygltf::Accessor&
     return XMFLOAT4(ptr[0], ptr[1], ptr[2], ptr[3]);
 }
 
+static void ValidateAccessor(const tinygltf::Model& model, int index, int type, bool floatingPoint)
+{
+    const auto& accessor = model.accessors.at(index);
+    if (accessor.type != type || accessor.sparse.isSparse || accessor.bufferView < 0 || accessor.count == 0)
+        throw std::runtime_error("Unsupported or empty glTF accessor (sparse accessors are not supported).");
+    const auto& view = model.bufferViews.at(accessor.bufferView);
+    const auto& buffer = model.buffers.at(view.buffer);
+    if (floatingPoint && accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
+        throw std::runtime_error("Vertex attributes must use floating-point components.");
+    if (!floatingPoint && accessor.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE &&
+        accessor.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT && accessor.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
+        throw std::runtime_error("Indices must use unsigned integer components.");
+    const int componentBytes = tinygltf::GetComponentSizeInBytes(accessor.componentType);
+    const int components = tinygltf::GetNumComponentsInType(accessor.type);
+    const int stride = accessor.ByteStride(view);
+    const size_t elementBytes = static_cast<size_t>(componentBytes) * components;
+    if (stride < 0 || size_t(stride) < elementBytes || view.byteOffset > buffer.data.size() ||
+        view.byteLength > buffer.data.size() - view.byteOffset || accessor.byteOffset > view.byteLength ||
+        elementBytes > view.byteLength - accessor.byteOffset ||
+        accessor.count - 1 > (view.byteLength - accessor.byteOffset - elementBytes) / size_t(stride))
+        throw std::runtime_error("glTF accessor exceeds its buffer view.");
+}
+
 static void LoadPrimitive(
     const tinygltf::Model& model,
     const tinygltf::Primitive& primitive,
     MeshAsset& mesh,
     bool& needsNormalRebuild,
-    bool& needsTangentRebuild)
+    bool& needsTangentRebuild,
+    const std::atomic_bool* cancelled)
 {
+    if (primitive.mode != -1 && primitive.mode != TINYGLTF_MODE_TRIANGLES)
+        throw std::runtime_error("Only triangle primitives are currently supported.");
+    ValidateAccessor(model, primitive.attributes.at("POSITION"), TINYGLTF_TYPE_VEC3, true);
     const auto& posAcc = model.accessors[primitive.attributes.at("POSITION")];
+    for (const auto& attribute : { "NORMAL", "TEXCOORD_0", "TANGENT" })
+    {
+        if (!primitive.attributes.contains(attribute)) continue;
+        const int index = primitive.attributes.at(attribute);
+        ValidateAccessor(model, index, std::string(attribute) == "TEXCOORD_0" ? TINYGLTF_TYPE_VEC2 :
+            std::string(attribute) == "TANGENT" ? TINYGLTF_TYPE_VEC4 : TINYGLTF_TYPE_VEC3, true);
+        if (model.accessors.at(index).count != posAcc.count)
+            throw std::runtime_error("Vertex attribute counts do not match POSITION.");
+    }
+    if (posAcc.count > UINT32_MAX / sizeof(Vertex) || mesh.Vertices.size() > UINT32_MAX / sizeof(Vertex) - posAcc.count)
+        throw std::runtime_error("Mesh vertex buffer exceeds the supported size.");
+    if (primitive.material < -1 || primitive.material >= static_cast<int>(model.materials.size()))
+        throw std::runtime_error("Invalid glTF material index.");
     const tinygltf::Accessor* normAcc = nullptr;
     if (primitive.attributes.contains("NORMAL"))
         normAcc = &model.accessors[primitive.attributes.at("NORMAL")];
@@ -186,6 +232,7 @@ static void LoadPrimitive(
 
     for (uint32_t i = 0; i < vertexCount; i++)
     {
+        if ((i & 4095) == 0 && cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
         Vertex v{};
         v.Position = ReadVec3(model, posAcc, i);
         v.Normal = normAcc ? ReadVec3(model, *normAcc, i) : Vector3(kZero);
@@ -209,34 +256,41 @@ static void LoadPrimitive(
     uint32_t primitiveIndexCount = 0;
     if (primitive.indices >= 0)
     {
+        ValidateAccessor(model, primitive.indices, TINYGLTF_TYPE_SCALAR, false);
         const auto& idxAcc = model.accessors[primitive.indices];
         const auto& view = model.bufferViews[idxAcc.bufferView];
         const auto& buffer = model.buffers[view.buffer];
         const uint8_t* data = buffer.data.data() + view.byteOffset + idxAcc.byteOffset;
         primitiveIndexCount = static_cast<uint32_t>(idxAcc.count);
+        if (idxAcc.count > UINT32_MAX / sizeof(uint32_t) || mesh.Indices.size() > UINT32_MAX / sizeof(uint32_t) - idxAcc.count)
+            throw std::runtime_error("Mesh index buffer exceeds the supported size.");
 
         for (size_t i = 0; i < idxAcc.count; i++)
         {
+            if ((i & 4095) == 0 && cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
             uint32_t index = 0;
 
             switch (idxAcc.componentType)
             {
             case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
-                index = reinterpret_cast<const uint16_t*>(data)[i];
+                index = *reinterpret_cast<const uint16_t*>(data + i * idxAcc.ByteStride(view));
                 break;
             case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
-                index = reinterpret_cast<const uint32_t*>(data)[i];
+                index = *reinterpret_cast<const uint32_t*>(data + i * idxAcc.ByteStride(view));
                 break;
             case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
-                index = reinterpret_cast<const uint8_t*>(data)[i];
+                index = data[i * idxAcc.ByteStride(view)];
                 break;
             default:
                 break;
             }
 
+            if (index >= vertexCount)
+                throw std::runtime_error("glTF index exceeds its primitive vertex count.");
             mesh.Indices.push_back(index + vertexBase);
         }
     }
+
     else
     {
         // glTF primitive can be non-indexed; build a sequential index buffer.
@@ -245,6 +299,9 @@ static void LoadPrimitive(
             mesh.Indices.push_back(vertexBase + i);
     }
 
+    if (primitiveIndexCount == 0 || primitiveIndexCount % 3 != 0)
+        throw std::runtime_error("Triangle primitive has an invalid index count.");
+
     SubMesh sub{};
     sub.IndexOffset = indexBase;
     sub.IndexCount = primitiveIndexCount;
@@ -252,65 +309,35 @@ static void LoadPrimitive(
     mesh.SubMeshes.push_back(sub);
 }
 
-static void CreateBuffer(ID3D12Resource** resource, const void* data, uint64_t size)
+static void CreateBuffer(ID3D12Resource** resource, const void* data, uint64_t size, CommandContext& context)
 {
-    CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
-    CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(size);
-
+    if (size == 0 || size > UINT32_MAX)
+        throw std::runtime_error("A mesh buffer is empty or exceeds the supported size.");
     ASSERT_SUCCEEDED(Graphics::g_Device->CreateCommittedResource(
-        &defaultHeap,
-        D3D12_HEAP_FLAG_NONE,
-        &desc,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        nullptr,
-        IID_PPV_ARGS(resource)));
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> upload;
-    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
-
-    ASSERT_SUCCEEDED(Graphics::g_Device->CreateCommittedResource(
-        &uploadHeap,
-        D3D12_HEAP_FLAG_NONE,
-        &desc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(upload.GetAddressOf())));
-
-    void* mapped = nullptr;
-    upload->Map(0, nullptr, &mapped);
-    memcpy(mapped, data, size);
-    upload->Unmap(0, nullptr);
-
-    CommandContext& ctx = CommandContext::Begin();
-    ctx.GetCommandList()->CopyBufferRegion(*resource, 0, upload.Get(), 0, size);
-
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        *resource,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_GENERIC_READ);
-
-    ctx.GetCommandList()->ResourceBarrier(1, &barrier);
-    ctx.Finish(true);
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(size), D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr, IID_PPV_ARGS(resource)));
+    DynAlloc upload = context.ReserveUploadMemory(size);
+    memcpy(upload.DataPtr, data, static_cast<size_t>(size));
+    context.GetCommandList()->CopyBufferRegion(*resource, 0, upload.Buffer.GetResource(), upload.Offset, size);
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(*resource,
+        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ);
+    context.GetCommandList()->ResourceBarrier(1, &barrier);
 }
 
-static MeshGPU UploadMesh(const MeshAsset& asset)
+static MeshGPU UploadMesh(const MeshAsset& asset, CommandContext& context)
 {
     MeshGPU gpu{};
-
-    uint64_t vbSize = asset.Vertices.size() * sizeof(Vertex);
-    uint64_t ibSize = asset.Indices.size() * sizeof(uint32_t);
-
-    CreateBuffer(gpu.VertexBuffer.GetAddressOf(), asset.Vertices.data(), vbSize);
-    CreateBuffer(gpu.IndexBuffer.GetAddressOf(), asset.Indices.data(), ibSize);
-
+    const uint64_t vbSize = asset.Vertices.size() * sizeof(Vertex);
+    const uint64_t ibSize = asset.Indices.size() * sizeof(uint32_t);
+    CreateBuffer(gpu.VertexBuffer.GetAddressOf(), asset.Vertices.data(), vbSize, context);
+    CreateBuffer(gpu.IndexBuffer.GetAddressOf(), asset.Indices.data(), ibSize, context);
     gpu.VBV = { gpu.VertexBuffer->GetGPUVirtualAddress(), static_cast<UINT>(vbSize), sizeof(Vertex) };
     gpu.IBV = { gpu.IndexBuffer->GetGPUVirtualAddress(), static_cast<UINT>(ibSize), DXGI_FORMAT_R32_UINT };
     gpu.VertexCount = static_cast<uint32_t>(asset.Vertices.size());
     gpu.IndexCount = static_cast<uint32_t>(asset.Indices.size());
-
     return gpu;
 }
-
 static uint32_t ToSceneHeapIndex(TextureID textureId, TextureManager& textureManager)
 {
     if (textureId == INVALID_TEXTURE)
@@ -319,18 +346,17 @@ static uint32_t ToSceneHeapIndex(TextureID textureId, TextureManager& textureMan
     return textureManager.GetBindlessIndex(textureId);
 }
 
-static TextureID LoadTinyGltfImage(const tinygltf::Image& img, TextureManager& textureManager, bool srgb)
+static ImageAsset DecodeImage(const tinygltf::Image& img, bool srgb)
 {
     if (img.image.empty() || img.width <= 0 || img.height <= 0)
-        return INVALID_TEXTURE;
+        throw std::runtime_error("Invalid glTF image dimensions or components.");
 
-    if (img.as_is)
-        return textureManager.LoadTextureFromMemory(img.image.data(), img.image.size(), srgb);
-
-    if (img.bits != 8 || img.pixel_type != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
-        return INVALID_TEXTURE;
+    if (img.as_is || img.bits != 8 || img.pixel_type != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
+        throw std::runtime_error("Only decoded 8-bit glTF images are supported.");
 
     const size_t pixelCount = static_cast<size_t>(img.width) * static_cast<size_t>(img.height);
+    if (img.width > 16384 || img.height > 16384 || img.component < 1 || img.component > 4 || img.image.size() < pixelCount * img.component)
+        throw std::runtime_error("Malformed or oversized glTF image.");
     std::vector<uint8_t> rgba(pixelCount * 4);
 
     switch (img.component)
@@ -367,17 +393,13 @@ static TextureID LoadTinyGltfImage(const tinygltf::Image& img, TextureManager& t
         memcpy(rgba.data(), img.image.data(), rgba.size());
         break;
     default:
-        return INVALID_TEXTURE;
+        throw std::runtime_error("Invalid glTF image dimensions or components.");
     }
 
-    return textureManager.CreateTexture2D(
-        static_cast<uint32_t>(img.width),
-        static_cast<uint32_t>(img.height),
-        srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM,
-        rgba.data());
+    return { static_cast<uint32_t>(img.width), static_cast<uint32_t>(img.height), srgb, std::move(rgba) };
 }
 
-static bool LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelGPU& gpu, TextureManager& textureManager, std::string& error)
+static bool DecodeModelFromGLTF(const std::string& path, ModelAsset& asset, std::string& error, std::string* warnings, const std::atomic_bool* cancelled)
 {
     tinygltf::TinyGLTF loader;
     tinygltf::Model model;
@@ -385,7 +407,9 @@ static bool LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
     std::string err;
     std::string warn;
 
-    bool ret = path.ends_with(".glb")
+    std::string extension = PathFromUtf8(path).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    bool ret = extension == ".glb"
         ? loader.LoadBinaryFromFile(&model, &err, &warn, path)
         : loader.LoadASCIIFromFile(&model, &err, &warn, path);
 
@@ -403,7 +427,8 @@ static bool LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
         return false;
     }
 
-    std::string baseDir = path.substr(0, path.find_last_of("\\/") + 1);
+    if (warnings) *warnings = warn;
+    std::map<std::pair<int, bool>, uint32_t> decodedImages;
 
     asset.Materials.resize(model.materials.size());
     if (asset.Materials.empty())
@@ -414,62 +439,44 @@ static bool LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
         const auto& mat = model.materials[i];
         auto& out = asset.Materials[i];
 
-        auto loadTex = [&](int texIndex, bool srgb)
+        if (cancelled && cancelled->load())
+            throw std::runtime_error("Import cancelled.");
+        auto loadTex = [&](int texIndex, bool srgb) -> uint32_t
         {
-            if (texIndex < 0 || texIndex >= static_cast<int>(model.textures.size()))
-                return INVALID_TEXTURE;
-
-            const auto& tex = model.textures[texIndex];
-            if (tex.source < 0 || tex.source >= static_cast<int>(model.images.size()))
-                return INVALID_TEXTURE;
-            const auto& img = model.images[tex.source];
-
-            if (!img.image.empty())
-                return LoadTinyGltfImage(img, textureManager, srgb);
-
-            if (!img.uri.empty())
-            {
-                std::filesystem::path fullPath = std::filesystem::path(baseDir) / std::filesystem::path(img.uri);
-                return textureManager.LoadTexture(fullPath.generic_wstring(), srgb);
-            }
-
-            return INVALID_TEXTURE;
+            if (texIndex < 0) return INVALID_INDEX;
+            const auto& tex = model.textures.at(texIndex);
+            if (tex.source < 0) return INVALID_INDEX;
+            const auto key = std::make_pair(tex.source, srgb);
+            if (auto found = decodedImages.find(key); found != decodedImages.end()) return found->second;
+            ImageAsset image = DecodeImage(model.images.at(tex.source), srgb);
+            const uint32_t index = static_cast<uint32_t>(asset.Images.size());
+            asset.Images.push_back(std::move(image));
+            decodedImages.emplace(key, index);
+            return index;
         };
-
         out.BaseColor = loadTex(mat.pbrMetallicRoughness.baseColorTexture.index, true);
         out.Normal = loadTex(mat.normalTexture.index, false);
         out.RoughnessMetallic = loadTex(mat.pbrMetallicRoughness.metallicRoughnessTexture.index, false);
         out.Emissive = loadTex(mat.emissiveTexture.index, true);
+        if (mat.emissiveFactor.size() == 3)
+            out.EmissiveFactor = Vector3(float(mat.emissiveFactor[0]), float(mat.emissiveFactor[1]), float(mat.emissiveFactor[2]));
     }
 
     for (const auto& mesh : model.meshes)
     {
+        if (mesh.primitives.empty()) throw std::runtime_error("glTF mesh contains no primitives.");
+        if (cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
         MeshAsset meshAsset{};
         meshAsset.Name = mesh.name;
         bool needsNormalRebuild = false;
         bool needsTangentRebuild = false;
 
         for (const auto& primitive : mesh.primitives)
-            LoadPrimitive(model, primitive, meshAsset, needsNormalRebuild, needsTangentRebuild);
+            LoadPrimitive(model, primitive, meshAsset, needsNormalRebuild, needsTangentRebuild, cancelled);
 
         // Rebuild once after all primitives are merged into one mesh.
-        RebuildVertexNormalsAndTangents(meshAsset, needsNormalRebuild, needsTangentRebuild);
+        RebuildVertexNormalsAndTangents(meshAsset, needsNormalRebuild, needsTangentRebuild, cancelled);
         asset.Meshes.push_back(std::move(meshAsset));
-    }
-
-    for (auto& m : asset.Meshes)
-        gpu.Meshes.push_back(UploadMesh(m));
-
-    gpu.Materials.resize(asset.Materials.size());
-
-    for (size_t i = 0; i < asset.Materials.size(); i++)
-    {
-        const auto& m = asset.Materials[i];
-        auto& g = gpu.Materials[i];
-        g.BaseColorIndex = ToSceneHeapIndex(m.BaseColor, textureManager);
-        g.NormalIndex = ToSceneHeapIndex(m.Normal, textureManager);
-        g.RoughnessMetallicIndex = ToSceneHeapIndex(m.RoughnessMetallic, textureManager);
-        g.EmissiveIndex = ToSceneHeapIndex(m.Emissive, textureManager);
     }
 
     return true;
@@ -477,12 +484,12 @@ static bool LoadModelFromGLTF(const std::string& path, ModelAsset& asset, ModelG
 
 void Model::Draw(GraphicsContext& context, bool bindMaterialData)
 {
-    if (!Asset)
+    if (!Asset || !GPU)
         return;
 
-    for (size_t i = 0; i < GPU.Meshes.size(); i++)
+    for (size_t i = 0; i < GPU->Meshes.size(); i++)
     {
-        const auto& mesh = GPU.Meshes[i];
+        const auto& mesh = GPU->Meshes[i];
         const auto& meshAsset = Asset->Meshes[i];
 
         context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -491,8 +498,8 @@ void Model::Draw(GraphicsContext& context, bool bindMaterialData)
 
         for (const auto& sub : meshAsset.SubMeshes)
         {
-            const size_t materialIndex = sub.MaterialIndex < GPU.Materials.size() ? sub.MaterialIndex : 0;
-            const MaterialGPU& mat = GPU.Materials[materialIndex];
+            const size_t materialIndex = sub.MaterialIndex < GPU->Materials.size() ? sub.MaterialIndex : 0;
+            const MaterialGPU& mat = GPU->Materials[materialIndex];
 
             if (bindMaterialData)
             {
@@ -510,32 +517,66 @@ void Model::Draw(GraphicsContext& context, bool bindMaterialData)
 }
 namespace ModelUtility
 {
-    LoadedModelData LoadGltfAsset(const std::string& path, std::string* error)
+    std::shared_ptr<const ModelAsset> DecodeGltfAsset(const std::string& path, std::string* error,
+        std::string* warnings, const std::atomic_bool* cancelled)
     {
-        LoadedModelData data;
-        data.Asset = std::make_shared<ModelAsset>();
-        data.Asset->Name = std::filesystem::path(path).stem().string();
-        data.Asset->SourcePath = std::filesystem::path(path).lexically_normal().string();
-
-        std::string loadError;
+        if (error) error->clear();
+        if (warnings) warnings->clear();
+        auto asset = std::make_shared<ModelAsset>();
         try
         {
-            if (!LoadModelFromGLTF(path, *data.Asset, data.GPU, Graphics::g_TextureManager, loadError))
-            {
-                data.Asset.reset();
-                if (error)
-                    *error = std::move(loadError);
-            }
+            if (cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
+            asset->Name = PathToUtf8(PathFromUtf8(path).stem());
+            asset->SourcePath = PathToUtf8(PathFromUtf8(path).lexically_normal());
+            std::string message;
+            if (!DecodeModelFromGLTF(path, *asset, message, warnings, cancelled))
+                throw std::runtime_error(message);
+            if (cancelled && cancelled->load()) throw std::runtime_error("Import cancelled.");
+            return asset;
         }
         catch (const std::exception& exception)
         {
-            data.Asset.reset();
-            if (error)
-                *error = exception.what();
+            if (error) *error = exception.what();
+            return {};
         }
-        return data;
     }
 
+    std::shared_ptr<const ModelGPU> UploadAsset(const ModelAsset& asset, CommandContext& context)
+    {
+        auto gpu = std::make_shared<ModelGPU>();
+        for (const auto& image : asset.Images)
+            gpu->Textures.push_back(Graphics::g_TextureManager.CreateTexture2D(image.Width, image.Height,
+                image.Srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM,
+                image.Pixels.data(), &context));
+        for (const auto& mesh : asset.Meshes)
+            gpu->Meshes.push_back(UploadMesh(mesh, context));
+        auto resolve = [&](uint32_t index)
+        {
+            return ToSceneHeapIndex(index == INVALID_INDEX ? INVALID_TEXTURE : gpu->Textures.at(index), Graphics::g_TextureManager);
+        };
+        for (const auto& material : asset.Materials)
+        {
+            MaterialGPU result{};
+            result.BaseColorIndex = resolve(material.BaseColor);
+            result.NormalIndex = resolve(material.Normal);
+            result.RoughnessMetallicIndex = resolve(material.RoughnessMetallic);
+            result.EmissiveIndex = resolve(material.Emissive);
+            result.EmissiveFactor = material.EmissiveFactor;
+            gpu->Materials.push_back(result);
+        }
+        return gpu;
+    }
+
+    LoadedModelData LoadGltfAsset(const std::string& path, std::string* error)
+    {
+        LoadedModelData data;
+        data.Asset = DecodeGltfAsset(path, error);
+        if (!data.Asset) return data;
+        auto& context = CommandContext::Begin(L"Model asset upload");
+        data.GPU = UploadAsset(*data.Asset, context);
+        context.Finish(true);
+        return data;
+    }
     Model CreateModel(LoadedModelData&& data)
     {
         Model model;

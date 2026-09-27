@@ -79,6 +79,9 @@ foreach ($item in $targets) {
         if ($smoke.Output -notmatch 'viewErrors=0 resizeChecks=4 windowResizes=1') {
             throw "Render-view resize and isolation checks failed: $item (log: $smokeLog)"
         }
+        if ($smoke.Output -notmatch 'assetErrors=0 assetChecks=6') {
+            throw "Asset import, sharing, diagnostics or cancellation checks failed: $item (log: $smokeLog)"
+        }
         Write-Output "$item rendered 60 frames and exited normally ($validation; log: $smokeLog)"
     }
 }

@@ -25,6 +25,7 @@
 #include "FileSystem.h"
 #include "GameCore.h"
 #include "Model.h"
+#include "PathUtils.h"
 
 #pragma comment(lib, "Comdlg32.lib")
 
@@ -34,7 +35,7 @@ namespace
 
     std::string ToUtf8(const std::filesystem::path& path)
     {
-        return path.u8string();
+        return PathToUtf8(path);
     }
 
     DirectX::XMFLOAT3 RotationToEulerDegrees(const Math::Quaternion& rotation)
@@ -81,7 +82,7 @@ namespace
 
     std::filesystem::path AssetPathForDocument(const Model& model)
     {
-        std::filesystem::path assetPath(model.Asset ? model.Asset->SourcePath : std::string{});
+        std::filesystem::path assetPath = PathFromUtf8(model.Asset ? model.Asset->SourcePath : std::string{});
         if (assetPath.empty())
             return {};
 
@@ -198,7 +199,7 @@ namespace
         return true;
     }
 
-    bool LoadSceneFromFile(Scene& scene, const std::filesystem::path& path, AtomEditor::UiState& state, std::string& error)
+    bool LoadSceneFromFile(Scene& scene, const std::filesystem::path& path, AtomEditor::UiState& state, ModelAssetManager& assets, std::string& error)
     {
         Json document;
         try
@@ -236,7 +237,7 @@ namespace
                     assetPath = std::filesystem::path(FileSystem::GetFullPath(assetString));
 
                 std::string loadError;
-                auto loaded = ModelUtility::LoadGltfAsset(ToUtf8(assetPath), &loadError);
+                auto loaded = assets.LoadBlocking(ToUtf8(assetPath), &loadError);
                 if (!loaded.Asset)
                 {
                     error = "Failed to load " + assetString + ": " + loadError;
@@ -427,7 +428,7 @@ namespace AtomEditor
         ImGui::End();
     }
 
-    void DrawContentBrowser(Scene& scene, UiState& state, CommandHistory& history)
+    void DrawContentBrowser(UiState& state, ModelAssetManager& assets)
     {
         ImGui::Begin("Content Browser");
         if (ImGui::Button("Up") && state.CurrentFolder != state.ContentRoot && state.CurrentFolder.has_parent_path())
@@ -458,29 +459,19 @@ namespace AtomEditor
         ImGui::EndChild();
         if (!state.SelectedAsset.empty() && IsModelFile(state.SelectedAsset) && ImGui::Button("Import selected model"))
         {
-            std::string error;
-            auto loaded = ModelUtility::LoadGltfAsset(ToUtf8(state.SelectedAsset), &error);
-            if (loaded.Asset)
-            {
-                const size_t importedIndex = scene.Models.size();
-                auto modelPayload = std::make_shared<std::optional<Model>>();
-                Model& importedModel = scene.AddModel(ModelUtility::CreateModel(std::move(loaded)));
-                const EntityId importedId = importedModel.Id;
-                history.RecordApplied("Import model",
-                    [modelPayload, importedId](Scene& target) { *modelPayload = target.ExtractModel(importedId); },
-                    [modelPayload, importedIndex](Scene& target)
-                    {
-                        if (modelPayload->has_value())
-                        {
-                            target.InsertModel(importedIndex, std::move(modelPayload->value()));
-                            modelPayload->reset();
-                        }
-                    });
-                state.SelectedEntity = importedId;
-                SetStatus(state, "Imported " + ToUtf8(state.SelectedAsset.filename()));
-            }
-            else
-                SetStatus(state, "Import failed: " + error, true);
+            const auto id = assets.Request(ToUtf8(state.SelectedAsset));
+            if (std::find(state.PendingImports.begin(), state.PendingImports.end(), id) == state.PendingImports.end())
+                state.PendingImports.push_back(id);
+            SetStatus(state, "Import queued: " + ToUtf8(state.SelectedAsset.filename()));
+        }
+        for (const auto id : state.PendingImports)
+        {
+            const auto job = assets.Snapshot(id);
+            ImGui::PushID(static_cast<int>(id));
+            ImGui::TextWrapped("%s: %s", ToUtf8(std::filesystem::u8path(job.SourcePath).filename()).c_str(), ModelAssetManager::StateName(job.State));
+            if (ImGui::Button(job.CancelRequested ? "Cancelling..." : "Cancel import"))
+                assets.Cancel(id);
+            ImGui::PopID();
         }
         if (!state.StatusMessage.empty())
         {
@@ -492,17 +483,58 @@ namespace AtomEditor
         ImGui::End();
     }
 
-    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history)
+    void ProcessImports(Scene& scene, UiState& state, CommandHistory& history, ModelAssetManager& assets)
+    {
+        for (auto iterator = state.PendingImports.begin(); iterator != state.PendingImports.end();)
+        {
+            auto job = assets.Snapshot(*iterator);
+            if (job.State == AssetLoadState::Ready)
+            {
+                const size_t index = scene.Models.size();
+                auto payload = std::make_shared<std::optional<Model>>();
+                Model& model = scene.AddModel(ModelUtility::CreateModel(std::move(job.Data)));
+                const EntityId id = model.Id;
+                history.RecordApplied("Import model",
+                    [payload, id](Scene& target) { *payload = target.ExtractModel(id); },
+                    [payload, index](Scene& target)
+                    {
+                        if (payload->has_value())
+                        {
+                            target.InsertModel(index, std::move(payload->value()));
+                            payload->reset();
+                        }
+                    });
+                state.SelectedEntity = id;
+                SetStatus(state, "Imported " + ToUtf8(std::filesystem::u8path(job.SourcePath).filename()) +
+                    (job.Warnings.empty() ? "" : "\n" + job.Warnings));
+            }
+            else if (job.State == AssetLoadState::Failed)
+                SetStatus(state, "Import failed: " + job.Error, true);
+            else if (job.State == AssetLoadState::Cancelled)
+                SetStatus(state, "Import cancelled.");
+            else { ++iterator; continue; }
+            iterator = state.PendingImports.erase(iterator);
+        }
+    }
+
+    void CancelPendingImports(UiState& state, ModelAssetManager& assets)
+    {
+        for (const auto id : state.PendingImports) assets.Cancel(id);
+        state.PendingImports.clear();
+    }
+    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history, ModelAssetManager& assets)
     {
         std::filesystem::path path;
         if (!ShowSceneDialog(false, path))
             return false;
+        CancelPendingImports(state, assets);
         std::string error;
-        if (!LoadSceneFromFile(scene, path, state, error))
+        if (!LoadSceneFromFile(scene, path, state, assets, error))
         {
             SetStatus(state, "Open failed: " + error, true);
             return false;
         }
+        CancelPendingImports(state, assets);
         history.Clear();
         SetStatus(state, "Opened " + ToUtf8(path.filename()));
         return true;

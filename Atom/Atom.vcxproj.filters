@@ -78,6 +78,9 @@
     <ClInclude Include="src\Scene\Model.h">
       <Filter>Scene</Filter>
     </ClInclude>
+    <ClInclude Include="src\Scene\ModelAssetManager.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
     <ClInclude Include="src\Model.h">
       <Filter>Scene</Filter>
     </ClInclude>
@@ -237,6 +240,9 @@
     <ClInclude Include="src\Core\FileSystem.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="src\Core\PathUtils.h">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="src\Graphics\Resources\GpuBuffer.h">
       <Filter>Graphics\Resources</Filter>
     </ClInclude>
@@ -267,6 +273,9 @@
       <Filter>Core</Filter>
     </ClCompile>
     <ClCompile Include="src\Scene\Model.cpp">
+      <Filter>Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Scene\ModelAssetManager.cpp">
       <Filter>Scene</Filter>
     </ClCompile>
     <ClCompile Include="src\Core\GameCore.cpp">

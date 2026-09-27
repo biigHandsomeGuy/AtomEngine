@@ -6,9 +6,10 @@
 
 namespace AtomEditor
 {
-    void EditorLayer::Initialize(Scene& scene)
+    void EditorLayer::Initialize(Scene& scene, ModelAssetManager& assets)
     {
         AtomEditor::Initialize(m_State);
+        m_Assets = &assets;
         m_State.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models.front().Id;
     }
 
@@ -19,7 +20,7 @@ namespace AtomEditor
             if (ImGui::BeginMenu("File"))
             {
                 if (ImGui::MenuItem("Open Scene..."))
-                    OpenSceneDialog(scene, m_State, m_History);
+                    OpenSceneDialog(scene, m_State, m_History, *m_Assets);
                 if (ImGui::MenuItem("Save Scene As..."))
                     SaveSceneDialog(scene, m_State);
                 ImGui::EndMenu();
@@ -50,6 +51,7 @@ namespace AtomEditor
 
     ViewportRequest EditorLayer::Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image)
     {
+        ProcessImports(scene, m_State, m_History, *m_Assets);
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
@@ -72,7 +74,7 @@ namespace AtomEditor
             ImGui::BeginDisabled();
         DrawSceneHierarchy(scene, m_State, m_History);
         DrawInspector(scene, m_State, m_History);
-        DrawContentBrowser(scene, m_State, m_History);
+        DrawContentBrowser(m_State, *m_Assets);
         if (disabled)
             ImGui::EndDisabled();
         return DrawRenderViewport(image);
@@ -80,6 +82,7 @@ namespace AtomEditor
 
     void EditorLayer::Shutdown()
     {
+        CancelPendingImports(m_State, *m_Assets);
         m_History.Clear();
     }
 }

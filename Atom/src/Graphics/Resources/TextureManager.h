@@ -6,6 +6,7 @@
 #include <string>
 
 #include "Texture.h"
+class CommandContext;
 
 enum class TextureUsage
 {
@@ -49,7 +50,7 @@ public:
 		uint32_t width,
 		uint32_t height,
 		DXGI_FORMAT format,
-		const void* data = nullptr);
+		const void* data = nullptr, CommandContext* uploadContext = nullptr);
 
 	Texture& Get(TextureID id);
 	const Texture& Get(TextureID id) const;
@@ -62,7 +63,7 @@ private:
 
 	TextureID CreateTextureInternal(
 		const TextureCreationDesc& desc,
-		const void* data);
+		const void* data, CommandContext* uploadContext = nullptr);
 
 private:
 

@@ -8,7 +8,7 @@ namespace AtomEditor
     class EditorLayer final : public PbrApplicationUi
     {
     public:
-        void Initialize(Scene& scene) override;
+        void Initialize(Scene& scene, ModelAssetManager& assets) override;
         ViewportRequest Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) override;
         void Shutdown() override;
 
@@ -17,5 +17,6 @@ namespace AtomEditor
 
         UiState m_State;
         CommandHistory m_History;
+        ModelAssetManager* m_Assets = nullptr;
     };
 }

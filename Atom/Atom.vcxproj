@@ -104,6 +104,7 @@
     <ClInclude Include="src\Graphics\Resources\DescriptorHeap.h" />
     <ClInclude Include="src\Graphics\Commands\DynamicDescriptorHeap.h" />
     <ClInclude Include="src\Core\FileSystem.h" />
+    <ClInclude Include="src\Core\PathUtils.h" />
     <ClInclude Include="src\Core\GameCore.h" />
     <ClInclude Include="src\Scene\Camera.h" />
     <ClInclude Include="src\Camera.h" />
@@ -145,6 +146,7 @@
     <ClInclude Include="src\Scene\Mesh.h" />
     <ClInclude Include="src\Mesh.h" />
     <ClInclude Include="src\Scene\Model.h" />
+    <ClInclude Include="src\Scene\ModelAssetManager.h" />
     <ClInclude Include="src\Model.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\Graphics\Pipeline\PipelineState.h" />
@@ -198,6 +200,7 @@
     </ClCompile>
     <ClCompile Include="src\Graphics\Pipeline\GraphicsCore.cpp" />
     <ClCompile Include="src\Scene\Model.cpp" />
+    <ClCompile Include="src\Scene\ModelAssetManager.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>

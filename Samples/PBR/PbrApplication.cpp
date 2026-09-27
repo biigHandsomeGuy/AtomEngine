@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cwchar>
 #include <iostream>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <d3d12sdklayers.h>
 
@@ -16,6 +18,7 @@
 #include "Display.h"
 #include "FileSystem.h"
 #include "GraphicsCore.h"
+#include "PathUtils.h"
 
 using namespace Graphics;
 
@@ -32,12 +35,15 @@ void PbrApplication::Startup()
     m_View.Resize(1280, 720);
     m_CameraController = std::make_unique<FlyingFPSCamera>(m_View.Camera, Math::Vector3(Math::kYUnitVector));
     m_Renderer.Initialize();
-    auto model = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(
+    auto model = ModelUtility::CreateModel(m_Assets.LoadBlocking(
         FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf")));
     m_Scene.AddModel(std::move(model));
-    m_Ui->Initialize(m_Scene);
+    m_Ui->Initialize(m_Scene, m_Assets);
     if (m_SmokeFrameLimit != 0)
+    {
         CheckViewIsolation();
+        StartAssetChecks();
+    }
 }
 
 void PbrApplication::InitializeUi()
@@ -75,6 +81,8 @@ void PbrApplication::InitializeUi()
 
 void PbrApplication::Cleanup()
 {
+    if (m_SmokeFrameLimit >= 60 && m_AssetChecks != 6)
+        ++m_AssetErrors;
     m_Ui->Shutdown();
     if (m_UiInitialized)
     {
@@ -84,6 +92,7 @@ void PbrApplication::Cleanup()
         m_UiInitialized = false;
     }
     m_Scene.ReplaceModels({});
+    m_Assets.Shutdown();
     m_Renderer.Shutdown();
     m_CameraController.reset();
     m_View.Destroy();
@@ -112,16 +121,20 @@ void PbrApplication::Cleanup()
         const bool deviceRemoved = FAILED(g_Device->GetDeviceRemovedReason());
         if (m_SmokeFrameLimit >= 60 && (m_ResizeChecks != 4 || m_WindowResizes != 1))
             ++m_ViewErrors;
-        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
+        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 || m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
         std::cout << "PBR_SMOKE frames=" << m_CompletedFrames << " errors=" << validationErrors
             << " deviceRemoved=" << deviceRemoved << " validation=" << validationAvailable
             << " viewErrors=" << m_ViewErrors << " resizeChecks=" << m_ResizeChecks
-            << " windowResizes=" << m_WindowResizes << '\n';
+            << " windowResizes=" << m_WindowResizes << " assetErrors=" << m_AssetErrors
+            << " assetChecks=" << m_AssetChecks << '\n';
     }
 }
 
 void PbrApplication::Update(float deltaTime)
 {
+    m_Assets.Update();
+    if (m_SmokeFrameLimit != 0)
+        PollAssetChecks();
     m_View.FarClip = std::max(m_View.FarClip, m_View.NearClip + 0.01f);
     m_View.Camera.SetZRange(m_View.NearClip, m_View.FarClip);
     m_CameraController->Update(deltaTime);
@@ -207,6 +220,82 @@ void PbrApplication::CheckViewIsolation()
     if (m_View.Output.GetResource() != output || other.Width() != 33 || other.Height() != 25 || other.HistoryValid)
         ++m_ViewErrors;
     other.Destroy();
+}
+
+void PbrApplication::StartAssetChecks()
+{
+    const auto root = PathFromUtf8(FileSystem::GetFullPath("bin-int/smoke-assets"));
+    std::filesystem::create_directories(root);
+    const float vertices[] = { 0, 0, 0, 1, 0, 0, 0, 1, 0 };
+    std::ofstream binary(root / "triangle.bin", std::ios::binary | std::ios::trunc);
+    binary.write(reinterpret_cast<const char*>(vertices), sizeof(vertices));
+    binary.close();
+    const std::string triangle = R"({"asset":{"version":"2.0"},"buffers":[{"uri":"triangle.bin","byteLength":36}],"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}],"meshes":[{"primitives":[{"attributes":{"POSITION":0},"mode":4}]}]})";
+    std::ofstream(root / "cancel-before.gltf") << triangle;
+    std::ofstream(root / "cancel-after.gltf") << triangle;
+    std::string badBounds = triangle;
+    badBounds.replace(badBounds.find("\"count\":3"), 9, "\"count\":4");
+    std::ofstream(root / "invalid-bounds.gltf") << badBounds;
+    std::ofstream(root / "invalid-json.gltf") << "{ invalid";
+
+    const std::string cubePath = FileSystem::GetFullPath("Assets/Models/cube.glb");
+    m_AssetRequests[0] = m_Assets.Request(cubePath);
+    if (m_Assets.Request(FileSystem::GetFullPath("Assets/Models/./cube.glb")) != m_AssetRequests[0])
+        ++m_AssetErrors;
+    m_AssetRequests[1] = m_Assets.Request(PathToUtf8(root / "missing.gltf"));
+    m_AssetRequests[2] = m_Assets.Request(PathToUtf8(root / "invalid-bounds.gltf"));
+    m_AssetRequests[3] = m_Assets.Request(PathToUtf8(root / "invalid-json.gltf"));
+    m_AssetRequests[4] = m_Assets.Request(PathToUtf8(root / "cancel-before.gltf"));
+    if (!m_Assets.Cancel(m_AssetRequests[4])) ++m_AssetErrors;
+    m_AssetRequests[5] = m_Assets.Request(PathToUtf8(root / "cancel-after.gltf"));
+
+    const auto helmet = m_Assets.Snapshot(m_Assets.Request(FileSystem::GetFullPath(
+        "Assets/Models/DamagedHelmet/./DamagedHelmet.gltf")));
+    if (helmet.State != AssetLoadState::Ready || helmet.Data.Asset != m_Scene.Models.front().Asset ||
+        helmet.Data.GPU != m_Scene.Models.front().GPU)
+        ++m_AssetErrors;
+}
+
+void PbrApplication::PollAssetChecks()
+{
+    if (m_AssetChecks != 0) return;
+    std::array<AssetLoadSnapshot, 6> jobs;
+    bool finished = true;
+    for (size_t index = 0; index < jobs.size(); ++index)
+    {
+        jobs[index] = m_Assets.Snapshot(m_AssetRequests[index]);
+        auto& job = jobs[index];
+        if (job.State == AssetLoadState::Uploading && job.Data.GPU) ++m_AssetErrors;
+        if (index == 5 && job.State == AssetLoadState::Uploading && !m_UploadCancelRequested)
+            m_UploadCancelRequested = m_Assets.Cancel(job.Id);
+        if (job.State != AssetLoadState::Ready && job.State != AssetLoadState::Failed && job.State != AssetLoadState::Cancelled)
+            finished = false;
+    }
+    if (!finished) return;
+    const auto& ready = jobs[0];
+    if (ready.State != AssetLoadState::Ready || !ready.Data.Asset || !ready.Data.GPU || ready.UploadFence == 0 ||
+        !g_CommandManager.IsFenceComplete(ready.UploadFence))
+        ++m_AssetErrors;
+    else
+    {
+        LoadedModelData firstData = ready.Data, secondData = ready.Data;
+        Model first = ModelUtility::CreateModel(std::move(firstData));
+        Model second = ModelUtility::CreateModel(std::move(secondData));
+        if (first.Asset != second.Asset || first.GPU != second.GPU || first.GPU->Meshes.empty())
+            ++m_AssetErrors;
+        first.Transform.transform.SetTranslation(Math::Vector3(5.0f, 0.0f, 0.0f));
+        m_Scene.AddModel(std::move(first)); // Draw the imported residency in subsequent frames.
+        m_View.InvalidateHistory();
+    }
+    for (size_t index = 1; index <= 3; ++index)
+        if (jobs[index].State != AssetLoadState::Failed || jobs[index].Error.empty() || jobs[index].Data.GPU || jobs[index].UploadFence != 0)
+            ++m_AssetErrors;
+    if (jobs[4].State != AssetLoadState::Cancelled || jobs[4].UploadFence != 0 || jobs[4].Data.GPU)
+        ++m_AssetErrors;
+    if (!m_UploadCancelRequested || jobs[5].State != AssetLoadState::Cancelled || jobs[5].UploadFence == 0 || jobs[5].Data.GPU ||
+        !g_CommandManager.IsFenceComplete(jobs[5].UploadFence))
+        ++m_AssetErrors;
+    m_AssetChecks = 6;
 }
 
 bool PbrApplication::IsDone()

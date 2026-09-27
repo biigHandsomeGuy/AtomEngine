@@ -6,6 +6,7 @@
 #include "GameCore.h"
 #include "PbrRenderer.h"
 #include "CameraController.h"
+#include "ModelAssetManager.h"
 
 struct ViewportImage
 {
@@ -25,7 +26,7 @@ class PbrApplicationUi
 {
 public:
     virtual ~PbrApplicationUi() = default;
-    virtual void Initialize(Scene& scene) {}
+    virtual void Initialize(Scene& scene, ModelAssetManager& assets) {}
     virtual ViewportRequest Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) = 0;
     virtual void Shutdown() {}
 };
@@ -49,8 +50,11 @@ public:
 private:
     void InitializeUi();
     void CheckViewIsolation();
+    void StartAssetChecks();
+    void PollAssetChecks();
 
     Scene m_Scene;
+    ModelAssetManager m_Assets;
     RenderView m_View;
     PbrRenderer m_Renderer;
     std::unique_ptr<CameraController> m_CameraController;
@@ -63,4 +67,8 @@ private:
     uint32_t m_ViewErrors = 0;
     uint32_t m_ResizeChecks = 0;
     uint32_t m_WindowResizes = 0;
+    AssetRequestId m_AssetRequests[6]{};
+    uint32_t m_AssetErrors = 0;
+    uint32_t m_AssetChecks = 0;
+    bool m_UploadCancelRequested = false;
 };

@@ -30,7 +30,7 @@ Editor application
 2. Move editor UI orchestration and document commands fully out of `PbrRenderer`; add an undoable command boundary. Implemented: `EditorMain` creates `EditorLayer`, which owns panels, selection, scene dialogs, and command history. `PbrMain` creates a sample UI with no editor dependency. Both use `PbrApplication` for ImGui and application lifecycle. `PbrRenderer` takes a scene and records rendering into a caller-owned command context; it has no ImGui dependency or entry point.
 3. Introduce an explicit engine/application lifetime and a per-viewport render-view API. Implemented: the application owns the scene, `RenderView`, renderer, camera controller, UI, and shutdown order. Each view owns its camera, pixel dimensions, color/depth/normal targets, shadow target, SSAO intermediates, and TAA history/state. UI returns a `ViewportRequest` in pixels; the application applies it before rendering. Presentation resize no longer recreates PBR view resources. GPU work finishes before target recreation and cleanup. Input capture and device/shared IBL resources still use process-wide state.
 4. Add a small render graph for the current forward PBR path: depth/normal, shadow, AO, opaque+sky, temporal/post, editor composition. Compare output against the current path after each pass moves. The graphs now own depth/normal, shadow depth and publication, SSAO dependencies, opaque+sky rendering, and temporal resolve/history publication. The display composition and editor UI remain on the legacy path until migrated.
-5. Separate CPU assets from GPU residency and make import/upload asynchronous with cancellation and diagnostics.
+5. Separate CPU assets from GPU residency and make import/upload asynchronous with cancellation and diagnostics. Implemented: CPU-only glTF decoding produces meshes, decoded RGBA images, and material image indices. `ModelAssetManager` owns a CPU worker and canonical-path cache. The render thread submits one complete asset upload per update and publishes residency only after its fence. Instances share immutable CPU assets and GPU geometry/materials. The content browser exposes task state/cancellation and records a scene command only when an asset is ready. Scene opening reuses this cache but still waits for the complete document; asynchronous document transactions remain to be implemented.
 6. Add broader renderer features (deferred/clustered lighting, multithreaded recording, richer post) only on top of the graph and frame-resource ownership.
 
 ## First editor milestone
@@ -47,6 +47,21 @@ The editor starts from the current working PBR scene, allows selecting and trans
 - Geometry, lighting, post, and SSAO graphs reference view-owned resources. PBR descriptor tables are local to the renderer/view pair, and PSO creation receives explicit attachment formats. PBR/Editor disable the legacy display-sized scene buffers; the shared IBL textures and SSAO random texture remain device-scoped. The default legacy-buffer path is retained for the other samples.
 - Frame submission currently waits for completion. Moving to multiple frames in flight requires fence-owned upload allocations, descriptors, and target/history residency first.
 
+## Asset loading rules
+
+```text
+Request → Queued → Decoding (CPU worker) → ReadyForUpload
+        → Uploading (render thread submission + fence) → Ready → scene instance
+        ↘ Failed / Cancelled
+```
+
+- CPU materials reference decoded images by asset-local index. They contain no device texture IDs. Model instances hold shared immutable CPU assets and GPU residency; importing/reopening the same canonical source reuses those entries.
+- Texture and geometry copies for one asset share a direct command context. Upload pages are retired by its fence; texture placement respects 512-byte alignment and each allocation's offset. No per-texture/per-mesh GPU wait occurs on the asynchronous import path.
+- A cancelled CPU task never submits. Cancellation after submission retains residency until its fence completes, then discards unpublished geometry. Public snapshots expose drawable GPU residency only in `Ready`.
+- Cancellation is cooperative between decode stages and within mesh conversion/rebuild loops. The underlying TinyGLTF file/image read cannot be interrupted mid-call. Shutdown joins the worker and waits for pending uploads before releasing the cache.
+- Loader errors, warnings, unsupported primitive/accessor formats, and malformed buffer/index ranges are reported through task snapshots. The existing forward path supports triangle primitives and float vertex attributes; unsupported sparse/quantized accessors fail explicitly.
+- Opening a scene or shutting down the editor cancels pending scene imports. Imports that finish normally remain undoable. The cache lives for the application session; individual texture eviction, descriptor recycling, memory budgets, and source-change/reimport detection remain future work.
+
 ## Reproducible validation
 
 Use PowerShell 7 from the repository root:
@@ -59,3 +74,5 @@ pwsh -File scripts/Build-Pbr.ps1 -Target All -Configuration Release -SmokeTest
 The build script discovers MSBuild, fixes the solution root, and normalizes inherited environment variable names. PBR, AtomEditor, Atom core, and ImGui use separate intermediate directories; the dependency project is configured through project-reference properties. The script does not modify dependency source files.
 
 Each runtime check renders 60 frames and exits through normal application cleanup. It renders at 640×360, 641×359, 1024×768, and 8×8; toggles TAA; checks history reset and rounded-up SSAO sizes; and resizes the real main window while checking that view dimensions/history survive. It also creates/resizes a second view, checks resource independence, and checks that zero-size requests preserve the active target and legacy scene buffers are absent. The log records frame count, D3D12 error count, device removal, validation availability, view errors, four resize checks, and one window resize. Debug checks require GPU validation and all these gates. Release checks exercise the same lifecycle and resize gates without claiming Debug-layer coverage. These checks do not prove simultaneous rendering of multiple views, visual correctness, or interactive editor workflow behavior.
+
+The same smoke run also checks six import cases: a valid `.glb` with canonical-path and shared-residency checks, a missing file, an accessor beyond its buffer view, malformed JSON, cancellation before submission, and cancellation after submission. It checks that GPU data is hidden until ready, that failed/pre-submit-cancelled jobs have no upload fence, and that post-submit cancellation waits for fence completion. The imported valid model is added to the scene and drawn. Fixtures are generated only under ignored `bin-int/smoke-assets`. The build script requires `assetErrors=0 assetChecks=6`. These service checks do not replace UI interaction tests or an import benchmark on large assets.

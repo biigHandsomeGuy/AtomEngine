@@ -10,10 +10,12 @@
 #include "DescriptorHeap.h"
 #include "TextureManager.h"
 #include <cstdint>
+#include <atomic>
 #include <memory>
 #include <wrl/client.h>
 
 class GraphicsContext;
+class CommandContext;
 
 using AABB = Math::AxisAlignedBox;
 
@@ -116,13 +118,13 @@ struct MaterialAsset
 {
     std::string Name;
 
-    TextureID BaseColor = INVALID_TEXTURE;
+    uint32_t BaseColor = INVALID_INDEX;
 
-    TextureID Normal = INVALID_TEXTURE;
+    uint32_t Normal = INVALID_INDEX;
 
-    TextureID RoughnessMetallic = INVALID_TEXTURE;
+    uint32_t RoughnessMetallic = INVALID_INDEX;
 
-    TextureID Emissive = INVALID_TEXTURE;
+    uint32_t Emissive = INVALID_INDEX;
 
     Vector3 EmissiveFactor{ 0,0,0 };
 };
@@ -150,7 +152,15 @@ struct MeshInstance
     MeshConstants Constants;
 };
 
-// Model Asset (immutable)
+struct ImageAsset
+{
+    uint32_t Width = 0;
+    uint32_t Height = 0;
+    bool Srgb = false;
+    std::vector<uint8_t> Pixels; // Decoded RGBA8; no GPU handles.
+};
+
+// Model Asset (immutable). Material texture fields index Images.
 struct ModelAsset
 {
     std::string Name;
@@ -161,6 +171,7 @@ struct ModelAsset
     std::vector<MeshAsset> Meshes;
 
     std::vector<MaterialAsset> Materials;
+    std::vector<ImageAsset> Images;
 
     AABB Bounds;
 };
@@ -172,6 +183,7 @@ struct ModelGPU
     std::vector<MeshGPU> Meshes;
 
     std::vector<MaterialGPU> Materials;
+    std::vector<TextureID> Textures;
 };
 
 
@@ -183,9 +195,9 @@ public:
     EntityId Id = InvalidEntityId;
     std::string InstanceName;
 
-    std::shared_ptr<ModelAsset> Asset;
+    std::shared_ptr<const ModelAsset> Asset;
 
-    ModelGPU GPU;
+    std::shared_ptr<const ModelGPU> GPU;
 
     TransformComponent Transform;
 
@@ -203,12 +215,17 @@ public:
 
 struct LoadedModelData
 {
-    std::shared_ptr<ModelAsset> Asset;
-    ModelGPU GPU;
+    std::shared_ptr<const ModelAsset> Asset;
+    std::shared_ptr<const ModelGPU> GPU;
 };
 
 namespace ModelUtility
 {
+    // CPU-only decoding is safe on an importer worker; upload runs on the render thread.
+    std::shared_ptr<const ModelAsset> DecodeGltfAsset(const std::string& path,
+        std::string* error = nullptr, std::string* warnings = nullptr,
+        const std::atomic_bool* cancelled = nullptr);
+    std::shared_ptr<const ModelGPU> UploadAsset(const ModelAsset& asset, CommandContext& context);
     LoadedModelData LoadGltfAsset(const std::string& path, std::string* error = nullptr);
     Model CreateModel(LoadedModelData&& data);
 
