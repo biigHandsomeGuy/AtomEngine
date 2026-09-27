@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "Scene.h"
+#include "SceneGraph.h"
 #include "EditorCommandHistory.h"
 
 namespace AtomEditor

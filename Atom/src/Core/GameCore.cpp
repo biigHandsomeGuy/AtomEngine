@@ -79,7 +79,10 @@ namespace GameCore
 
 	void TerminateApplication(IGameApp& game)
 	{
-		
+		GameInput::EndMouseLook();
+		Graphics::g_CommandManager.IdleGPU();
+		game.Cleanup();
+		GameInput::Shutdown();
 	}
 
 	int GameCore::RunApplication(IGameApp& app, const wchar_t* className, HINSTANCE hInst, int nCmdShow)
@@ -128,7 +131,7 @@ namespace GameCore
 
 		MSG msg = { 0 };
 
-		while (msg.message != WM_QUIT)
+		while (msg.message != WM_QUIT && !app.IsDone())
 		{
 			// If there are Window messages then process them.
 			if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
@@ -144,8 +147,11 @@ namespace GameCore
 		}
 		TerminateApplication(app);
 		Graphics::Shutdown();
+		if (IsWindow(g_hWnd))
+			DestroyWindow(g_hWnd);
+		g_hWnd = nullptr;
 		                                                            
-		return 0;
+		return app.ExitCode();
 	}
 
 }

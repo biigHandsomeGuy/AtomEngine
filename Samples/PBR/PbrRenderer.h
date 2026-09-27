@@ -6,13 +6,11 @@
 #include "ShadowCamera.h"
 #include "Ssao.h"
 
-#include "Scene.h"
+#include "SceneGraph.h"
 #include "SkyBox.h"
 #include "RenderGraph.h"
-#include "..\Editor\EditorPanels.h"
+#include "ConstantBuffers.h"
 #include <DirectXCollision.h>
-#include "GameCore.h"
-#include <iostream>
 
 
 using Microsoft::WRL::ComPtr;
@@ -26,12 +24,12 @@ __declspec(align(256)) struct ShaderParams
     char pad1[3]{ 0,0,0 };
     bool UseTexture = true;
     char pad2[3]{ 0,0,0 };
-    float roughness = 0.5;
-    float albedo[3] = { 0.5,0.3,0.1 };
-    float metallic = 0.5;
-    bool UseEmu;
+    float roughness = 0.5f;
+    float albedo[3] = { 0.5f, 0.3f, 0.1f };
+    float metallic = 0.5f;
+    bool UseEmu = false;
     char pad3[3]{ 0,0,0 };
-    bool UseSSS;
+    bool UseSSS = false;
     char pad4[3]{ 0,0,0 };
     float CurveFactor = {};
     float SpecularFactor = {};
@@ -39,29 +37,31 @@ __declspec(align(256)) struct ShaderParams
 
 inline TextureID g_IBLTexture = INVALID_TEXTURE;
 
-class PbrRenderer : public GameCore::IGameApp
+class PbrRenderer
 {
 public:
-    
-    PbrRenderer(HINSTANCE hInstance);
+    explicit PbrRenderer(Scene& scene);
     PbrRenderer(const PbrRenderer& rhs) = delete;
     PbrRenderer& operator=(const PbrRenderer& rhs) = delete;
-    ~PbrRenderer();
+    void Initialize();
+    void Shutdown();
+    void OnResize();
+    void Update(float deltaTime);
+    void Render(GraphicsContext& graphics);
 
-    void OnResize() override;
-    void Startup() override;
-    void Cleanup()override {};
+    const Math::Camera& Camera() const { return m_Camera; }
+    float& CameraNearClip() { return m_CameraNearClip; }
+    float& CameraFarClip() { return m_CameraFarClip; }
+    ShaderParams& ShadingSettings() { return m_ShaderAttribs; }
+    EnvMapRenderer::RenderAttribs& EnvironmentSettings() { return m_EnvMapAttribs; }
+    PostProcess::RenderAttribs& PostSettings() { return m_ppAttribs; }
 
 private:
-    virtual void Update(float gt)override;
-    virtual void RenderScene()override;
-
-	void UpdateUI();
 	void SetupGeometryGraph();
 	void SetupLightingGraph();
 	void SetupPostProcessGraphs();
 
-    void PrecomputeCubemaps(CommandContext& gfxContext);
+    void PrecomputeCubemaps();
 
 
 private:
@@ -87,28 +87,10 @@ private:
     GlobalConstants m_ShadowPassGlobalConstants = {};
     GlobalConstants m_LightPassGlobalConstants = {};
 
-    Scene m_Scene;
-    AtomEditor::UiState m_EditorUi;
-    AtomEditor::CommandHistory m_EditorHistory;
+    Scene& m_Scene;
     RenderGraph m_GeometryGraph;
     RenderGraph m_LightingGraph;
     RenderGraph m_PostProcessGraphs[2];
     DirectX::XMFLOAT2 m_FrameJitter = { 0.0f, 0.0f };
     SkyBox m_SkyBox;
-    DescriptorHandle m_BackBufferHandle[3];
 };
-
-namespace
-{
-
-    inline const char* c_str(const std::string& str)
-    {
-        return str.c_str();
-    }
-
-    inline const char* c_str(const char* str)
-    {
-        return str;
-    }
-
-} // namespace

@@ -56,7 +56,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;ATOM_EDITOR_APP;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;$(MSBuildThisFileDirectory)..\..\Dependencies\stb_image\stb_image;$(MSBuildThisFileDirectory)..\..\Dependencies\tinyobjloader;$(MSBuildThisFileDirectory)..\..\Dependencies;$(MSBuildThisFileDirectory)..\..\Dependencies\Imgui;$(MSBuildThisFileDirectory)..\..\Dependencies\Imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -76,7 +76,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;ATOM_EDITOR_APP;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;$(MSBuildThisFileDirectory)..\..\Dependencies\stb_image\stb_image;$(MSBuildThisFileDirectory)..\..\Dependencies\tinyobjloader;$(MSBuildThisFileDirectory)..\..\Dependencies;$(MSBuildThisFileDirectory)..\..\Dependencies\Imgui;$(MSBuildThisFileDirectory)..\..\Dependencies\Imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -91,16 +91,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\PBR\PbrRenderer.cpp">
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\Editor\EditorPanels.cpp" />
+    <ClCompile Include="EditorMain.cpp" />
+    <ClCompile Include="EditorLayer.cpp" />
+    <ClCompile Include="EditorPanels.cpp" />
+    <ClCompile Include="..\PBR\PbrApplication.cpp" />
+    <ClCompile Include="..\PBR\PbrRenderer.cpp" />
+    <ClCompile Include="..\PBR\PbrUiPanels.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="EditorLayer.h" />
+    <ClInclude Include="EditorPanels.h" />
+    <ClInclude Include="EditorCommandHistory.h" />
+    <ClInclude Include="..\PBR\PbrApplication.h" />
     <ClInclude Include="..\PBR\PbrRenderer.h" />
-    <ClInclude Include="..\Editor\EditorPanels.h" />
-    <ClInclude Include="..\Editor\EditorCommandHistory.h" />
+    <ClInclude Include="..\PBR\PbrUiPanels.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Atom\Atom.vcxproj">
@@ -108,6 +112,7 @@
     </ProjectReference>
     <ProjectReference Include="..\..\Dependencies\Imgui\imgui.vcxproj">
       <Project>{e582a143-5d2d-443f-af35-a6673f41ba6d}</Project>
+      <AdditionalProperties>IntDir=$(SolutionDir)bin-int\$(Configuration)-windows-x86_64\Imgui\;OutDir=$(SolutionDir)bin\$(Configuration)-windows-x86_64\Imgui\</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

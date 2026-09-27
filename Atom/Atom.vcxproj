@@ -43,14 +43,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)bin\Debug-windows-x86_64\Atom\</OutDir>
-    <IntDir>$(SolutionDir)bin-int\Debug-windows-x86_64\Atom\</IntDir>
+    <IntDir>$(SolutionDir)bin-int\Debug-windows-x86_64\AtomCore\</IntDir>
     <TargetName>Atom</TargetName>
     <TargetExt>.lib</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)bin\Release-windows-x86_64\Atom\</OutDir>
-    <IntDir>$(SolutionDir)bin-int\Release-windows-x86_64\Atom\</IntDir>
+    <IntDir>$(SolutionDir)bin-int\Release-windows-x86_64\AtomCore\</IntDir>
     <TargetName>Atom</TargetName>
     <TargetExt>.lib</TargetExt>
   </PropertyGroup>

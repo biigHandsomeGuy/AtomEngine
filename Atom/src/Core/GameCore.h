@@ -28,11 +28,13 @@ namespace GameCore
 	class IGameApp
 	{
 	public:
+		virtual ~IGameApp() = default;
 
 		virtual void Startup(void) = 0;
 		virtual void Cleanup(void) = 0;
 
 		virtual bool IsDone(void) { return false; };
+		virtual int ExitCode() const { return 0; }
 
 		virtual void Update(float deltaT) = 0;
 		virtual void OnResize() = 0;

@@ -44,12 +44,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)bin\Debug-windows-x86_64\Atom\</OutDir>
-    <IntDir>$(SolutionDir)bin-int\Debug-windows-x86_64\Atom\</IntDir>
+    <OutDir>$(SolutionDir)bin\Debug-windows-x86_64\PBR\</OutDir>
+    <IntDir>$(SolutionDir)bin-int\Debug-windows-x86_64\PBR\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)bin\Release-windows-x86_64\Atom\</OutDir>
-    <IntDir>$(SolutionDir)bin-int\Release-windows-x86_64\Atom\</IntDir>
+    <OutDir>$(SolutionDir)bin\Release-windows-x86_64\PBR\</OutDir>
+    <IntDir>$(SolutionDir)bin-int\Release-windows-x86_64\PBR\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -90,16 +90,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="PbrRenderer.cpp">
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(MSBuildThisFileDirectory)..\..\Atom\src;$(MSBuildThisFileDirectory)..\..\Atom\src\Core;$(MSBuildThisFileDirectory)..\..\Atom\src\Math;$(MSBuildThisFileDirectory)..\..\Atom\src\Scene;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Commands;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Resources;$(MSBuildThisFileDirectory)..\..\Atom\src\Graphics\Pipeline;$(MSBuildThisFileDirectory)..\..\Atom\src\Renderer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\Editor\EditorPanels.cpp" />
+    <ClCompile Include="PbrMain.cpp" />
+    <ClCompile Include="PbrApplication.cpp" />
+    <ClCompile Include="PbrRenderer.cpp" />
+    <ClCompile Include="PbrUiPanels.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="PbrApplication.h" />
     <ClInclude Include="PbrRenderer.h" />
-    <ClInclude Include="..\Editor\EditorPanels.h" />
-    <ClInclude Include="..\Editor\EditorCommandHistory.h" />
+    <ClInclude Include="PbrUiPanels.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Atom\Atom.vcxproj">
@@ -107,6 +106,7 @@
     </ProjectReference>
     <ProjectReference Include="..\..\Dependencies\Imgui\imgui.vcxproj">
       <Project>{e582a143-5d2d-443f-af35-a6673f41ba6d}</Project>
+      <AdditionalProperties>IntDir=$(SolutionDir)bin-int\$(Configuration)-windows-x86_64\Imgui\;OutDir=$(SolutionDir)bin\$(Configuration)-windows-x86_64\Imgui\</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

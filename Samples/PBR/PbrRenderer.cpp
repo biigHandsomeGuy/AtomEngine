@@ -6,18 +6,10 @@
 #include "GraphicsCommon.h"
 #include "GraphicsCore.h"
 #include "PipelineState.h"
-#include <utility>
-#include "stb_image.h"
-#include <Imgui/imgui.h>
-#include <Imgui/backends/imgui_impl_dx12.h>
-#include <Imgui/backends/imgui_impl_win32.h>
-#include "Display.h"
-#include "CommandListManager.h"
 #include "BufferManager.h"
-#include <dxcapi.h>
-#include <d3d12shader.h>
+#include "Display.h"
 #include "FileSystem.h"
-#include "GameInput.h"
+
 #include "Model.h"
 
 namespace CS
@@ -60,118 +52,41 @@ using namespace Microsoft::WRL;
 using namespace CS;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
-float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
-int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) 
+PbrRenderer::PbrRenderer(Scene& scene) : m_Scene(scene)
 {
-#ifdef ATOM_EDITOR_APP
-	return GameCore::RunApplication(PbrRenderer(hInstance), L"Atom Editor", hInstance, nCmdShow);
-#else
-	return GameCore::RunApplication(PbrRenderer(hInstance), L"ModelViewer", hInstance, nCmdShow);
-#endif
 }
 
-
-PbrRenderer::PbrRenderer(HINSTANCE hInstance)
-{    
-	
-}
-
-PbrRenderer::~PbrRenderer()
-{
-	ImGui_ImplDX12_Shutdown();
-	ImGui_ImplWin32_Shutdown();
-	ImGui::DestroyContext();
-}
-
-void PbrRenderer::Startup()
+void PbrRenderer::Initialize()
 {
 	Renderer::Initialize();
 
-	CommandContext& gfxContext = CommandContext::Begin(L"Scene Startup");
-
 	m_Camera.SetEyeAtUp(Vector3(0.0f, 0.0f, -20.0f), Vector3(kZero), Vector3(kYUnitVector));
 	m_Camera.SetZRange(m_CameraNearClip, m_CameraFarClip);
-	m_Camera.SetAspectRatio(9.0f / 16.0f);
+	m_Camera.SetAspectRatio(float(g_SceneColorBuffer.GetHeight()) / float(g_SceneColorBuffer.GetWidth()));
 	m_CameraController.reset(new FlyingFPSCamera(m_Camera, Vector3(kYUnitVector)));
 
 	g_IBLTexture = g_TextureManager.LoadHDR(FileSystem::GetFullPath(L"Assets/Textures/EnvirMap/sun.hdr"));
 
-	PrecomputeCubemaps(gfxContext);
+	PrecomputeCubemaps();
 
-	// Setup Dear ImGui context
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
-	//io.ConfigViewportsNoAutoMerge = true;
-	//io.ConfigViewportsNoTaskBarIcon = true;
-
-	// Setup Dear ImGui style
-	ImGui::StyleColorsDark();
-	//ImGui::StyleColorsLight();
-
-	// Setup scaling
-	ImGuiStyle& style = ImGui::GetStyle();
-	style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
-	style.FontScaleDpi = main_scale;        // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
-	io.ConfigDpiScaleFonts = true;          // [Experimental] Automatically overwrite style.FontScaleDpi in Begin() when Monitor DPI changes. This will scale fonts but _NOT_ scale sizes/padding for now.
-	io.ConfigDpiScaleViewports = true;      // [Experimental] Scale Dear ImGui and Platform Windows when Monitor DPI changes.
-	io.Fonts->AddFontDefault();
-	io.Fonts->Build();
-
-	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		style.WindowRounding = 0.0f;
-		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-	}
-
-	// Setup Platform/Renderer backends
-	ImGui_ImplWin32_Init(GameCore::g_hWnd);
-
-	DescriptorHandle ImGuiHandle[3] = 
-	{ Graphics::g_BindlessHeap.Alloc(),
-	Graphics::g_BindlessHeap.Alloc(),
-	Graphics::g_BindlessHeap.Alloc(), };
-
-	D3D12_CPU_DESCRIPTOR_HANDLE srv[3] = { AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
-	AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),
-	AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV), };
-
-	g_Device->CopyDescriptorsSimple(1, ImGuiHandle[0], srv[0], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	g_Device->CopyDescriptorsSimple(1, ImGuiHandle[1], srv[1], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	g_Device->CopyDescriptorsSimple(1, ImGuiHandle[2], srv[2], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	ImGui_ImplDX12_Init(g_Device, 3,
-		DXGI_FORMAT_R16G16B16A16_FLOAT, Graphics::g_BindlessHeap.GetHeapPointer(),
-		*ImGuiHandle,
-		*ImGuiHandle);
-
-	m_BackBufferHandle[0] = Graphics::g_BindlessHeap.Alloc();
-	m_BackBufferHandle[1] = Graphics::g_BindlessHeap.Alloc();
-	m_BackBufferHandle[2] = Graphics::g_BindlessHeap.Alloc();
-
-	Model skyBox, pbrModel;
-	skyBox = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/cube.glb")));
-	pbrModel = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/DamagedHelmet/DamagedHelmet.gltf")));
-	//pbrModel = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/silver_sphere.glb")));
-	//pbrModel = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/Sponza/Sponza.glb")));
-	//pbrModel.
-	m_SkyBox.model = std::move(skyBox);
-	m_Scene.AddModel(std::move(pbrModel));
-	AtomEditor::Initialize(m_EditorUi);
-	m_EditorUi.SelectedEntity = m_Scene.Models.empty() ? InvalidEntityId : m_Scene.Models.front().Id;
+	m_SkyBox.model = ModelUtility::CreateModel(ModelUtility::LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/cube.glb")));
 	SetupGeometryGraph();
 	SetupLightingGraph();
 	SetupPostProcessGraphs();
 
 	s_IBL_PSOCache.clear();
 
-	gfxContext.Finish(true);
+}
 
+void PbrRenderer::Shutdown()
+{
+    m_GeometryGraph.Clear();
+    m_LightingGraph.Clear();
+    for (auto& graph : m_PostProcessGraphs)
+        graph.Clear();
+    m_SkyBox.model = Model{};
+    m_CameraController.reset();
+    Renderer::Shutdown();
 }
 
 
@@ -342,11 +257,9 @@ void PbrRenderer::SetupPostProcessGraphs()
 	}
 }
 
-
-
 void PbrRenderer::OnResize()
 {
-    m_Camera.SetAspectRatio(9.0f / 16.0f);
+    m_Camera.SetAspectRatio(float(g_SceneColorBuffer.GetHeight()) / float(g_SceneColorBuffer.GetWidth()));
     m_Camera.Update();
     m_TaaHistoryValid = false;
     m_FrameIndex = 0;
@@ -357,181 +270,30 @@ void PbrRenderer::OnResize()
 void PbrRenderer::Update(float gt)
 {
 	Renderer::UpdateGlobalDescriptors();
-	
+
     m_Camera.SetZRange(m_CameraNearClip, m_CameraFarClip);
-	
+
 	m_CameraController->Update(gt);
     m_Camera.Update();
 
 }
 
-void PbrRenderer::RenderScene()
+void PbrRenderer::Render(GraphicsContext& graphics)
 {
-	GraphicsContext& GraphicsContext = GraphicsContext::Begin(L"Scene Render");
-	ComputeContext& ComputeContext = ComputeContext::Begin(L"PrecomputeCubemaps");
-	// Start the Dear ImGui frame
-	ImGui_ImplDX12_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-
-	static bool opt_fullscreen = true;
-	static bool dockspaceOpen = true;
-	static bool opt_padding = false;
-	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
-
-	// We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
-	// because it would be confusing to have two docking targets within each others.
-	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-	if (opt_fullscreen)
-	{
-		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowPos(viewport->WorkPos);
-		ImGui::SetNextWindowSize(viewport->WorkSize);
-		ImGui::SetNextWindowViewport(viewport->ID);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-		window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-	}
-
-	// When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will render our background
-	// and handle the pass-thru hole, so we ask Begin() to not render a background.
-	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
-		window_flags |= ImGuiWindowFlags_NoBackground;
-
-	// Important: note that we proceed even if Begin() returns false (aka window is collapsed).
-	// This is because we want to keep our DockSpace() active. If a DockSpace() is inactive,
-	// all active windows docked into it will lose their parent and become undocked.
-	// We cannot preserve the docking relationship between an active window and an inactive docking, otherwise
-	// any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
-
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	ImGui::Begin("DockSpace Demo", &dockspaceOpen, window_flags);
-	ImGui::PopStyleVar();
-
-	if (opt_fullscreen)
-		ImGui::PopStyleVar(2);
-
-	// Submit the DockSpace
-	ImGuiIO& io = ImGui::GetIO();
-    // Only block camera RMB look while text input widgets are actively consuming input.
-    GameCore::g_ImGuiWantsMouseCapture = io.WantTextInput;
-	if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
-	{
-		ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
-	}
-
-	if (ImGui::BeginMenuBar())
-	{
-		if (ImGui::BeginMenu("Edit"))
-		{
-			const bool canUndo = m_EditorHistory.CanUndo();
-			const bool canRedo = m_EditorHistory.CanRedo();
-			if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo))
-				m_EditorHistory.Undo(m_Scene);
-			if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo))
-				m_EditorHistory.Redo(m_Scene);
-			ImGui::EndMenu();
-		}
-		if (ImGui::BeginMenu("File"))
-		{
-			if (ImGui::MenuItem("Open Scene..."))
-				AtomEditor::OpenSceneDialog(m_Scene, m_EditorUi, m_EditorHistory);
-			if (ImGui::MenuItem("Save Scene As..."))
-				AtomEditor::SaveSceneDialog(m_Scene, m_EditorUi);
-			ImGui::Separator();
-
-			if (ImGui::MenuItem("Close", NULL, false, dockspaceOpen != NULL))
-				dockspaceOpen = false;
-			ImGui::EndMenu();
-		}
-
-		ImGui::EndMenuBar();
-	}
-	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Z, false))
-		m_EditorHistory.Undo(m_Scene);
-	if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Y, false))
-		m_EditorHistory.Redo(m_Scene);
-	if (m_Scene.FindModel(m_EditorUi.SelectedEntity) == nullptr)
-		m_EditorUi.SelectedEntity = m_Scene.Models.empty() ? InvalidEntityId : m_Scene.Models.front().Id;
-
-	
-	static float f = 0.0f;
-    const bool blockEditorUi = GameCore::g_ViewportCapturingMouse;
-
-    if (blockEditorUi)
-        ImGui::BeginDisabled();
-	ImGui::Begin("Renderer Settings");
-	XMVECTOR pos = m_Camera.GetPosition();
-	XMFLOAT4 temp;
-	XMStoreFloat4(&temp, pos);
-
-
-	ImGui::Text("Camera Position: (%.3f, %.3f, %.3f, %.3f)", temp.x, temp.y, temp.z, temp.w);
-    ImGui::DragFloat("Camera Near", &m_CameraNearClip, 0.05f, 0.01f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
-    ImGui::DragFloat("Camera Far", &m_CameraFarClip, 10.0f, 10.0f, 200000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
-
-	ImGui::SliderFloat("Env mip map", &m_EnvMapAttribs.EnvMapMipLevel, 0.0f, 10.0f);
-	ImGui::SliderFloat("exposure", &m_ppAttribs.exposure, 0.1f, 5.0f);
-	ImGui::Checkbox("UseFXAA", &m_ppAttribs.isRenderingLuminance);
-    ImGui::Checkbox("UseTAA", &m_ppAttribs.useTAA);
-    if (m_ppAttribs.useTAA)
-    {
-        ImGui::SliderFloat("TAA Feedback", &m_ppAttribs.taaFeedback, 0.85f, 0.99f);
-    }
-	ImGui::Checkbox("UseReinhard", &m_ppAttribs.reinhard);
-	ImGui::Checkbox("UseFilmic", &m_ppAttribs.filmic);
-	ImGui::Checkbox("UseAces", &m_ppAttribs.aces);
-	ImGui::Checkbox("UseGama", &m_ppAttribs.useGama);
-    ImGui::Checkbox("Use Bloom", &m_ppAttribs.useBloom);
-    if (m_ppAttribs.useBloom)
-    {
-        ImGui::SliderFloat("Bloom Threshold", &m_ppAttribs.bloomThreshold, 0.1f, 5.0f);
-        ImGui::SliderFloat("Bloom Strength", &m_ppAttribs.bloomStrength, 0.0f, 1.0f);
-    }
-
-	ImGui::Checkbox("UseSsao", &m_ShaderAttribs.UseSSAO);
-	ImGui::Checkbox("UseShadow", &m_ShaderAttribs.UseShadow);
-	ImGui::Checkbox("UseTexture", &m_ShaderAttribs.UseTexture);
-	ImGui::Checkbox("UseEmu", &m_ShaderAttribs.UseEmu);
-	ImGui::Checkbox("UseSSS", &m_ShaderAttribs.UseSSS);
-
-	if (m_ShaderAttribs.UseSSS)
-	{
-		ImGui::SliderFloat("CurveFactor", &m_ShaderAttribs.CurveFactor, 0, 10);
-		ImGui::SliderFloat("SpecularFactor", &m_ShaderAttribs.SpecularFactor, 0, 1);
-	}
-	
-	if (m_ShaderAttribs.UseTexture == false)
-	{
-		ImGui::ColorPicker3("albedo", m_ShaderAttribs.albedo);
-		ImGui::SliderFloat("metallic", &m_ShaderAttribs.metallic, 0.0f, 1.0f);
-		ImGui::SliderFloat("roughness", &m_ShaderAttribs.roughness, 0.0f, 1.0f);
-	}
-	AtomEditor::DrawSceneHierarchy(m_Scene, m_EditorUi, m_EditorHistory);
-	AtomEditor::DrawInspector(m_Scene, m_EditorUi, m_EditorHistory);
-	AtomEditor::DrawContentBrowser(m_Scene, m_EditorUi, m_EditorHistory);
-
-
-	UINT PrevBufferIndex = (g_CurrentBuffer + 3 - 1) % 3;
-
-
-	GraphicsContext.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
-	GraphicsContext.SetViewportAndScissor(g_ViewPort, g_Rect);
-
-	GraphicsContext.TransitionResource(g_DisplayPlane[g_CurrentBuffer], D3D12_RESOURCE_STATE_RENDER_TARGET);
+    auto& compute = graphics.GetComputeContext();
+	graphics.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
+	graphics.SetViewportAndScissor(g_ViewPort, g_Rect);
 
 	// Geometry and shadow pass declarations own their output transitions.
-	m_GeometryGraph.Execute(GraphicsContext);
+	m_GeometryGraph.Execute(graphics);
 
 	// ----------------------------------- Render SSAO --------------------------------
-	SSAO::Render(GraphicsContext, m_Camera);
+	SSAO::Render(graphics, m_Camera);
 
 	// ------------------------------- Opaque and sky -------------------------------
-	m_LightingGraph.Execute(GraphicsContext);
-	GraphicsContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-	GraphicsContext.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	m_LightingGraph.Execute(graphics);
+	graphics.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	graphics.TransitionResource(g_SceneDepthBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 
 	// ------------------------- postprocess -----------------------
@@ -543,7 +305,7 @@ void PbrRenderer::RenderScene()
     m_ppAttribs.CurrJitter = m_FrameJitter;
     m_ppAttribs.PrevJitter = m_TaaHistoryValid ? m_PrevJitter : m_FrameJitter;
 
-	m_PostProcessGraphs[taaReadIndex].Execute(ComputeContext);
+	m_PostProcessGraphs[taaReadIndex].Execute(compute);
 
     if (m_ppAttribs.useTAA)
     {
@@ -560,73 +322,9 @@ void PbrRenderer::RenderScene()
         m_PrevViewProj = m_LightPassGlobalConstants.ViewProjMatrix;
         m_PrevJitter = { 0.0f, 0.0f };
     }
-
-
-	ImGui::Text("GameCore average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-
-	ImGui::End();
-    if (blockEditorUi)
-        ImGui::EndDisabled();
-	
-	
-
-	ImGui::Begin("ViewPort");
-	ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-    constexpr float kRenderAspect = 16.0f / 9.0f;
-    const float panelAspect = (viewportPanelSize.y > 0.0f) ? (viewportPanelSize.x / viewportPanelSize.y) : kRenderAspect;
-    ImVec2 uv0(0.0f, 0.0f);
-    ImVec2 uv1(1.0f, 1.0f);
-    if (panelAspect > kRenderAspect)
-    {
-        const float visibleV = kRenderAspect / panelAspect;
-        const float cropV = (1.0f - visibleV) * 0.5f;
-        uv0.y = cropV;
-        uv1.y = 1.0f - cropV;
-    }
-    else if (panelAspect < kRenderAspect)
-    {
-        const float visibleU = panelAspect / kRenderAspect;
-        const float cropU = (1.0f - visibleU) * 0.5f;
-        uv0.x = cropU;
-        uv1.x = 1.0f - cropU;
-    }
-	g_Device->CopyDescriptorsSimple(1, m_BackBufferHandle[g_CurrentBuffer], g_PostProcessBuffer.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-    auto texID = (ImTextureID)m_BackBufferHandle[g_CurrentBuffer].GetGpuPtr();
-	ImGui::Image(texID, viewportPanelSize, uv0, uv1);
-    GameCore::g_ViewportHovered = ImGui::IsItemHovered();
-    GameCore::g_ViewportCapturingMouse = GameInput::IsMouseLookActive();
-	ImGui::End();
-	
-
-	ImGui::End();
-	GraphicsContext.SetRenderTarget(g_DisplayPlane[g_CurrentBuffer].GetRTV(), g_SceneDepthBuffer.GetDSV());
-	GraphicsContext.TransitionResource(
-		g_DisplayPlane[g_CurrentBuffer],
-		D3D12_RESOURCE_STATE_PRESENT);
-
-	ImGui::Render();
-
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), GraphicsContext.GetCommandList());
-
-	// Update and Render additional Platform Windows
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
-	}
-
-	GraphicsContext.Finish(true);
-	ComputeContext.Finish(true);
 }
 
-void PbrRenderer::UpdateUI()
-{
-	
-
-}
-
-void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
+void PbrRenderer::PrecomputeCubemaps()
 {
 	ComputeContext& ComputeContext = ComputeContext::Begin(L"PrecomputeCubemaps");
     const auto CeilDiv = [](UINT value, UINT divisor) -> UINT
@@ -698,7 +396,7 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		//// =======================  Generic MipMap
 		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["GenerateMipMap"]);
-	
+
         const UINT envMipLevels = g_EnvirMap.GetResource()->GetDesc().MipLevels;
 		for (UINT level = 1; level < envMipLevels; ++level)
 		{
@@ -714,10 +412,15 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 			ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		}
 		ComputeContext.TransitionResource(g_EnvirMap, D3D12_RESOURCE_STATE_GENERIC_READ);
-	}	
-		
+	}
+
 	// Compute pre-filtered specular environment map
-	{	
+	{
+		__declspec(align(256)) struct SpecularParameters
+		{
+			float Roughness = 0.0f;
+		};
+		SpecularParameters specularParameters;
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrefilterSpecularMap"]);
 		ComputeContext.SetDynamicDescriptor(0, 0, g_EnvirMap.GetSRV());
 		ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -731,21 +434,19 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
             const UINT mipHeight = MipSize(g_RadianceMap.GetHeight(), level);
 			const float spmapRoughness = level * deltaRoughness;
 			ComputeContext.SetDynamicDescriptor(1, 0, g_RadianceMap.GetUAVArray()[level]);
-			shaderParams.param0 = spmapRoughness;
-			ComputeContext.SetDynamicConstantBufferView(2, sizeof(ShaderParams), &shaderParams);
+			specularParameters.Roughness = spmapRoughness;
+			ComputeContext.SetDynamicConstantBufferView(2, sizeof(SpecularParameters), &specularParameters);
 			ComputeContext.Dispatch(CeilDiv(mipWidth, 32), CeilDiv(mipHeight, 32), 6);
 
 			ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		}
 		ComputeContext.TransitionResource(g_RadianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	}	
-		
-		
-		
+	}
+
 	// create irradiance map compute pso
-	{	
-		
+	{
+
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrecomputeIrradianceMap"]);
 
 
@@ -756,29 +457,29 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		ComputeContext.Dispatch(CeilDiv(g_IrradianceMap.GetWidth(), 32), CeilDiv(g_IrradianceMap.GetHeight(), 32), 6);
 		ComputeContext.TransitionResource(g_IrradianceMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
-		
-		
-	{	
-		
+
+
+	{
+
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["PrecomputeBRDF"]);
-		
+
 		ComputeContext.SetDynamicDescriptor(1, 0, g_LUT.GetUAV());
 		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 		ComputeContext.Dispatch(CeilDiv(g_LUT.GetWidth(), 32), CeilDiv(g_LUT.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_LUT, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	}	
-		
-	{	
+	}
+
+	{
 
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["emu"]);
 		ComputeContext.SetDynamicDescriptor(1, 0, g_Emu.GetUAV());
 		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		ComputeContext.Dispatch(CeilDiv(g_Emu.GetWidth(), 32), CeilDiv(g_Emu.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_Emu, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	}	
-		
+	}
+
 	{
 		ComputeContext.SetPipelineState(s_IBL_PSOCache["eavg"]);
 
@@ -805,5 +506,5 @@ void PbrRenderer::PrecomputeCubemaps(CommandContext& gfxContext)
 		ComputeContext.Dispatch(CeilDiv(g_SSSSpecularLut.GetWidth(), 32), CeilDiv(g_SSSSpecularLut.GetHeight(), 32), 1);
 		ComputeContext.TransitionResource(g_SSSSpecularLut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
-	ComputeContext.Finish();
+	ComputeContext.Finish(true);
 }
