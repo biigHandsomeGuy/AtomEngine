@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "SceneGraph.h"
 
 struct Scene;
 
@@ -33,6 +34,7 @@ namespace AtomEditor
             if (!CanUndo())
                 return false;
             m_Commands[--m_Cursor].Undo(scene);
+            scene.MarkModified();
             return true;
         }
 
@@ -41,6 +43,7 @@ namespace AtomEditor
             if (!CanRedo())
                 return false;
             m_Commands[m_Cursor++].Redo(scene);
+            scene.MarkModified();
             return true;
         }
 

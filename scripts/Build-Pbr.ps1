@@ -82,6 +82,11 @@ foreach ($item in $targets) {
         if ($smoke.Output -notmatch 'assetErrors=0 assetChecks=6') {
             throw "Asset import, sharing, diagnostics or cancellation checks failed: $item (log: $smokeLog)"
         }
+        $expectedUiChecks = if ($item -eq 'Editor') { 12 } else { 0 }
+        if ($smoke.Output -notmatch "uiErrors=0 uiChecks=$expectedUiChecks uiExpected=$expectedUiChecks") {
+            Write-Output $smoke.Output
+            throw "Scene document and command checks failed: $item (log: $smokeLog)"
+        }
         Write-Output "$item rendered 60 frames and exited normally ($validation; log: $smokeLog)"
     }
 }

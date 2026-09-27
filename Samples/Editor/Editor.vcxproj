@@ -94,6 +94,8 @@
     <ClCompile Include="EditorMain.cpp" />
     <ClCompile Include="EditorLayer.cpp" />
     <ClCompile Include="EditorPanels.cpp" />
+    <ClCompile Include="SceneDocument.cpp" />
+    <ClCompile Include="SceneDocumentChecks.cpp" />
     <ClCompile Include="..\PBR\PbrApplication.cpp" />
     <ClCompile Include="..\PBR\PbrRenderer.cpp" />
     <ClCompile Include="..\PBR\PbrUiPanels.cpp" />
@@ -101,6 +103,8 @@
   <ItemGroup>
     <ClInclude Include="EditorLayer.h" />
     <ClInclude Include="EditorPanels.h" />
+    <ClInclude Include="SceneDocument.h" />
+    <ClInclude Include="SceneDocumentChecks.h" />
     <ClInclude Include="EditorCommandHistory.h" />
     <ClInclude Include="..\PBR\PbrApplication.h" />
     <ClInclude Include="..\PBR\PbrRenderer.h" />

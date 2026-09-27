@@ -280,6 +280,11 @@ void PbrRenderer::UpdateViewDescriptors()
 }
 void PbrRenderer::Render(GraphicsContext& graphics)
 {
+    if (m_Scene.Revision() != m_LastSceneRevision)
+    {
+        m_View.InvalidateHistory();
+        m_LastSceneRevision = m_Scene.Revision();
+    }
     auto& compute = graphics.GetComputeContext();
 	graphics.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
 	graphics.SetViewportAndScissor(m_View.Viewport, m_View.Scissor);

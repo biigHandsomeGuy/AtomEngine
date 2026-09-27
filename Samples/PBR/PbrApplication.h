@@ -21,12 +21,21 @@ struct ViewportRequest
     uint32_t Height = 0;
 };
 
+struct ApplicationValidation
+{
+    uint32_t Errors = 0;
+    uint32_t Completed = 0;
+    uint32_t Expected = 0;
+};
+
 // Applications supply UI without making the renderer depend on editor code.
 class PbrApplicationUi
 {
 public:
     virtual ~PbrApplicationUi() = default;
     virtual void Initialize(Scene& scene, ModelAssetManager& assets) {}
+    virtual void StartValidation(const Scene& scene, ModelAssetManager& assets) {}
+    virtual ApplicationValidation Validation() const { return {}; }
     virtual ViewportRequest Draw(Scene& scene, PbrRenderer& renderer, const ViewportImage& image) = 0;
     virtual void Shutdown() {}
 };
@@ -60,6 +69,7 @@ private:
     std::unique_ptr<CameraController> m_CameraController;
     std::unique_ptr<PbrApplicationUi> m_Ui;
     DescriptorHandle m_ViewportDescriptors[3];
+    std::vector<DescriptorHandle> m_FreeUiDescriptors;
     bool m_UiInitialized = false;
     uint32_t m_SmokeFrameLimit = 0;
     uint64_t m_CompletedFrames = 0;

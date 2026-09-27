@@ -79,6 +79,7 @@ private:
 
     Scene& m_Scene;
     RenderView& m_View;
+    uint64_t m_LastSceneRevision = UINT64_MAX;
     std::unique_ptr<SSAO::ViewPasses> m_SsaoPasses;
     DescriptorHandle m_CommonTextures;
     DescriptorHandle m_PostProcessTextures;

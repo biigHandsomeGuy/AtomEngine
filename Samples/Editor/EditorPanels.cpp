@@ -13,14 +13,12 @@
 #include <commdlg.h>
 #include <cmath>
 #include <cstring>
-#include <fstream>
+
 #include <memory>
 #include <optional>
 #include <system_error>
-#include <unordered_set>
 
 #include <Imgui/imgui.h>
-#include "../../Dependencies/tinygltf/json.hpp"
 
 #include "FileSystem.h"
 #include "GameCore.h"
@@ -31,7 +29,6 @@
 
 namespace
 {
-    using Json = nlohmann::json;
 
     std::string ToUtf8(const std::filesystem::path& path)
     {
@@ -78,24 +75,6 @@ namespace
                 snapshot.Rotation.x, snapshot.Rotation.y, snapshot.Rotation.z, snapshot.Rotation.w)));
             model->Transform.scale = snapshot.Scale;
         }
-    }
-
-    std::filesystem::path AssetPathForDocument(const Model& model)
-    {
-        std::filesystem::path assetPath = PathFromUtf8(model.Asset ? model.Asset->SourcePath : std::string{});
-        if (assetPath.empty())
-            return {};
-
-        std::error_code ec;
-        const auto projectRoot = std::filesystem::path(FileSystem::GetFullPath(".")).lexically_normal();
-        const auto absolute = std::filesystem::absolute(assetPath, ec).lexically_normal();
-        if (!ec)
-        {
-            auto relative = std::filesystem::relative(absolute, projectRoot, ec);
-            if (!ec && !relative.empty() && *relative.begin() != "..")
-                return relative;
-        }
-        return assetPath;
     }
 
     void SetStatus(AtomEditor::UiState& state, std::string message, bool isError = false)
@@ -154,126 +133,6 @@ namespace
         return true;
     }
 
-    bool SaveSceneToFile(const Scene& scene, const std::filesystem::path& path, std::string& error)
-    {
-        Json document;
-        document["format"] = "AtomEngineScene";
-        document["version"] = 2;
-        document["nextEntityId"] = scene.GetNextEntityId();
-        document["models"] = Json::array();
-        for (const auto& model : scene.Models)
-        {
-            const auto translation = model.Transform.transform.GetTranslation();
-            const auto rotation = model.Transform.transform.GetRotation();
-            DirectX::XMFLOAT4 q{};
-            DirectX::XMStoreFloat4(&q, static_cast<DirectX::XMVECTOR>(rotation));
-            Json entry = Json::object();
-            entry["id"] = model.Id;
-            entry["name"] = model.InstanceName;
-            entry["asset"] = ToUtf8(AssetPathForDocument(model));
-            entry["translation"] = Json::array();
-            entry["translation"].push_back(static_cast<float>(translation.GetX()));
-            entry["translation"].push_back(static_cast<float>(translation.GetY()));
-            entry["translation"].push_back(static_cast<float>(translation.GetZ()));
-            entry["rotation"] = Json::array();
-            entry["rotation"].push_back(q.x);
-            entry["rotation"].push_back(q.y);
-            entry["rotation"].push_back(q.z);
-            entry["rotation"].push_back(q.w);
-            entry["scale"] = model.Transform.scale;
-            document["models"].push_back(std::move(entry));
-        }
-
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        if (!output)
-        {
-            error = "Could not open scene file for writing.";
-            return false;
-        }
-        output << document.dump(2);
-        if (!output)
-        {
-            error = "Could not write the scene file.";
-            return false;
-        }
-        return true;
-    }
-
-    bool LoadSceneFromFile(Scene& scene, const std::filesystem::path& path, AtomEditor::UiState& state, ModelAssetManager& assets, std::string& error)
-    {
-        Json document;
-        try
-        {
-            std::ifstream input(path, std::ios::binary);
-            if (!input)
-            {
-                error = "Could not open scene file.";
-                return false;
-            }
-            input >> document;
-        }
-        catch (const std::exception& exception)
-        {
-            error = exception.what();
-            return false;
-        }
-
-        const int version = document.value("version", 0);
-        if (document.value("format", std::string{}) != "AtomEngineScene" || (version != 1 && version != 2) || !document.contains("models") || !document["models"].is_array())
-        {
-            error = "Unsupported or malformed AtomEngine scene document.";
-            return false;
-        }
-
-        std::vector<Model> loadedModels;
-        std::unordered_set<EntityId> loadedEntityIds;
-        for (const auto& item : document["models"])
-        {
-            try
-            {
-                const auto assetString = item.at("asset").get<std::string>();
-                std::filesystem::path assetPath = std::filesystem::u8path(assetString);
-                if (assetPath.is_relative())
-                    assetPath = std::filesystem::path(FileSystem::GetFullPath(assetString));
-
-                std::string loadError;
-                auto loaded = assets.LoadBlocking(ToUtf8(assetPath), &loadError);
-                if (!loaded.Asset)
-                {
-                    error = "Failed to load " + assetString + ": " + loadError;
-                    return false;
-                }
-                Model model = ModelUtility::CreateModel(std::move(loaded));
-                if (version >= 2)
-                {
-                    model.Id = item.at("id").get<EntityId>();
-                    if (model.Id == InvalidEntityId || !loadedEntityIds.insert(model.Id).second)
-                    {
-                        error = "Scene contains an invalid or duplicate entity ID.";
-                        return false;
-                    }
-                }
-                model.InstanceName = item.value("name", model.InstanceName);
-                const auto& t = item.at("translation");
-                const auto& r = item.at("rotation");
-                model.Transform.transform.SetTranslation(Vector3(t.at(0).get<float>(), t.at(1).get<float>(), t.at(2).get<float>()));
-                model.Transform.transform.SetRotation(Quaternion(DirectX::XMVectorSet(r.at(0).get<float>(), r.at(1).get<float>(), r.at(2).get<float>(), r.at(3).get<float>())));
-                model.Transform.scale = std::max(0.001f, item.value("scale", 1.0f));
-                loadedModels.push_back(std::move(model));
-            }
-            catch (const std::exception& exception)
-            {
-                error = exception.what();
-                return false;
-            }
-        }
-
-        scene.ReplaceModels(std::move(loadedModels));
-        if (version >= 2)
-            scene.SetNextEntityId(document.value("nextEntityId", EntityId{ 1 }));
-        state.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models.front().Id;
-        return true;
-    }
 }
 
 namespace AtomEditor
@@ -350,7 +209,10 @@ namespace AtomEditor
             initialName = model.InstanceName;
         }
         if (nameChanged)
+        {
             model.InstanceName = name;
+            scene.MarkModified();
+        }
         if (ImGui::IsItemDeactivatedAfterEdit() && pendingNameEntity == model.Id)
         {
             const EntityId id = model.Id;
@@ -371,7 +233,10 @@ namespace AtomEditor
             initialTransform = CaptureTransform(model);
         }
         if (positionChanged)
+        {
             model.Transform.transform.SetTranslation(Vector3(position[0], position[1], position[2]));
+            scene.MarkModified();
+        }
         if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
         {
             const EntityId id = model.Id;
@@ -392,7 +257,10 @@ namespace AtomEditor
             initialTransform = CaptureTransform(model);
         }
         if (rotationChanged)
+        {
             model.Transform.transform.SetRotation(Quaternion(DirectX::XMConvertToRadians(euler[0]), DirectX::XMConvertToRadians(euler[1]), DirectX::XMConvertToRadians(euler[2])));
+            scene.MarkModified();
+        }
         if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
         {
             const EntityId id = model.Id;
@@ -404,11 +272,14 @@ namespace AtomEditor
             pendingTransformEntity = InvalidEntityId;
         }
 
-        ImGui::DragFloat("Uniform Scale", &model.Transform.scale, 0.01f, 0.001f, 10000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+        const auto beforeScale = CaptureTransform(model);
+        const bool scaleChanged = ImGui::DragFloat("Uniform Scale", &model.Transform.scale, 0.01f, 0.001f, 10000.0f, "%.3f",
+            ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+        if (scaleChanged) scene.MarkModified();
         if (ImGui::IsItemActivated())
         {
             pendingTransformEntity = model.Id;
-            initialTransform = CaptureTransform(model);
+            initialTransform = beforeScale;
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && pendingTransformEntity == model.Id)
         {
@@ -522,36 +393,8 @@ namespace AtomEditor
         for (const auto id : state.PendingImports) assets.Cancel(id);
         state.PendingImports.clear();
     }
-    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history, ModelAssetManager& assets)
+    bool SelectSceneFile(bool save, std::filesystem::path& file)
     {
-        std::filesystem::path path;
-        if (!ShowSceneDialog(false, path))
-            return false;
-        CancelPendingImports(state, assets);
-        std::string error;
-        if (!LoadSceneFromFile(scene, path, state, assets, error))
-        {
-            SetStatus(state, "Open failed: " + error, true);
-            return false;
-        }
-        CancelPendingImports(state, assets);
-        history.Clear();
-        SetStatus(state, "Opened " + ToUtf8(path.filename()));
-        return true;
-    }
-
-    bool SaveSceneDialog(const Scene& scene, UiState& state)
-    {
-        std::filesystem::path path;
-        if (!ShowSceneDialog(true, path))
-            return false;
-        std::string error;
-        if (!SaveSceneToFile(scene, path, error))
-        {
-            SetStatus(state, "Save failed: " + error, true);
-            return false;
-        }
-        SetStatus(state, "Saved " + ToUtf8(path.filename()));
-        return true;
+        return ShowSceneDialog(save, file);
     }
 }

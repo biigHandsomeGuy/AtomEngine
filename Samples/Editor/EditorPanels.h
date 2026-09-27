@@ -29,6 +29,5 @@ namespace AtomEditor
     void ProcessImports(Scene& scene, UiState& state, CommandHistory& history, ModelAssetManager& assets);
     void CancelPendingImports(UiState& state, ModelAssetManager& assets);
 
-    bool OpenSceneDialog(Scene& scene, UiState& state, CommandHistory& history, ModelAssetManager& assets);
-    bool SaveSceneDialog(const Scene& scene, UiState& state);
+    bool SelectSceneFile(bool save, std::filesystem::path& file);
 }

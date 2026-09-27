@@ -8,6 +8,8 @@
     <ClCompile Include="EditorMain.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="EditorLayer.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="EditorPanels.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="SceneDocument.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="SceneDocumentChecks.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\PBR\PbrApplication.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\PBR\PbrRenderer.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\PBR\PbrUiPanels.cpp"><Filter>Source Files</Filter></ClCompile>
@@ -15,6 +17,8 @@
   <ItemGroup>
     <ClInclude Include="EditorLayer.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="EditorPanels.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="SceneDocument.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="SceneDocumentChecks.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="EditorCommandHistory.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="..\PBR\PbrApplication.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="..\PBR\PbrRenderer.h"><Filter>Header Files</Filter></ClInclude>

@@ -22,7 +22,7 @@ The script builds only PBR and AtomEditor and runs each for 60 frames, including
 pwsh -File scripts/Build-Pbr.ps1 -Target All -Configuration Release -SmokeTest
 ```
 
-The editor provides scene hierarchy, transforms, asynchronous model import with status/cancellation, scene save/load, and undo/redo. Its view owns its render targets, camera, and temporal history and renders at the panel's pixel dimensions. See [architecture and migration stages](docs/architecture/editor-and-renderer.md) for the implemented boundaries and remaining work.
+The editor provides scene hierarchy, transforms, asynchronous model import, asynchronous scene opening with progress/cancellation, atomic scene save, and undo/redo. Failed or cancelled scene loads preserve the active document and history. Use Ctrl+O to open, Ctrl+S to save, Ctrl+Shift+S to save as, and Ctrl+Z/Ctrl+Y to undo/redo. Its view owns its render targets, camera, and temporal history and renders at the panel's pixel dimensions; scene edits reset TAA history. Editor smoke runs also require all 12 document and command checks to pass. See [architecture and migration stages](docs/architecture/editor-and-renderer.md) for the implemented boundaries and remaining work.
 
 #### Some features of AtomEngine
 

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <utility>
+#include <unordered_set>
 #include <vector>
 
 #include "Model.h"
@@ -13,11 +14,15 @@ struct Scene
 	std::vector<Model> Models;
 	std::vector<UINT> MaterialIndex;
 
+	uint64_t Revision() const { return m_Revision; }
+	void MarkModified() { ++m_Revision; }
+
 	Model& AddModel(Model&& model)
 	{
 		PrepareModelId(model);
 
 		Models.push_back(std::move(model));
+		MarkModified();
 		return Models.back();
 	}
 
@@ -27,6 +32,7 @@ struct Scene
 			return false;
 		PrepareModelId(model);
 		Models.insert(Models.begin() + std::min(index, Models.size()), std::move(model));
+		MarkModified();
 		return true;
 	}
 
@@ -37,6 +43,7 @@ struct Scene
 			return std::nullopt;
 		Model model = std::move(*found);
 		Models.erase(found);
+		MarkModified();
 		return model;
 	}
 
@@ -63,11 +70,27 @@ struct Scene
 
 	void ReplaceModels(std::vector<Model> models)
 	{
-		Models.clear();
-		MaterialIndex.clear();
-		m_NextEntityId = 1;
+		std::unordered_set<EntityId> ids;
+		ids.reserve(models.size());
+		EntityId nextId = 1;
 		for (auto& model : models)
-			AddModel(std::move(model));
+		{
+			if (model.Id == InvalidEntityId || ids.count(model.Id) != 0)
+			{
+				do
+				{
+					model.Id = nextId++;
+					if (nextId == InvalidEntityId) nextId = 1;
+				} while (model.Id == InvalidEntityId || ids.count(model.Id) != 0);
+			}
+			else if (model.Id >= nextId)
+				nextId = model.Id == UINT64_MAX ? InvalidEntityId : model.Id + 1;
+			ids.insert(model.Id);
+		}
+		Models.swap(models);
+		MaterialIndex.clear();
+		m_NextEntityId = nextId;
+		MarkModified();
 	}
 
 	EntityId GetNextEntityId() const { return m_NextEntityId; }
@@ -75,7 +98,10 @@ struct Scene
 	void SetNextEntityId(EntityId id)
 	{
 		if (id != InvalidEntityId && id > m_NextEntityId)
+		{
 			m_NextEntityId = id;
+			MarkModified();
+		}
 	}
 
 	private:
@@ -100,4 +126,5 @@ struct Scene
 	}
 
 	EntityId m_NextEntityId = 1;
+	uint64_t m_Revision = 0;
 };

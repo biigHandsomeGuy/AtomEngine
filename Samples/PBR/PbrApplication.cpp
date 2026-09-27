@@ -41,6 +41,7 @@ void PbrApplication::Startup()
     m_Ui->Initialize(m_Scene, m_Assets);
     if (m_SmokeFrameLimit != 0)
     {
+        m_Ui->StartValidation(m_Scene, m_Assets);
         CheckViewIsolation();
         StartAssetChecks();
     }
@@ -67,13 +68,30 @@ void PbrApplication::InitializeUi()
     io.ConfigDpiScaleFonts = true;
     io.ConfigDpiScaleViewports = true;
     io.Fonts->AddFontDefault();
-    io.Fonts->Build();
 
     ImGui_ImplWin32_Init(GameCore::g_hWnd);
-    const DescriptorHandle fontDescriptor = g_BindlessHeap.Alloc();
-    ImGui_ImplDX12_Init(g_Device, 3, SwapChainFormat, g_BindlessHeap.GetHeapPointer(),
-        static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(fontDescriptor),
-        static_cast<D3D12_GPU_DESCRIPTOR_HANDLE>(fontDescriptor));
+    ImGui_ImplDX12_InitInfo init;
+    init.Device = g_Device;
+    init.CommandQueue = g_CommandManager.GetCommandQueue();
+    init.NumFramesInFlight = 3;
+    init.RTVFormat = SwapChainFormat;
+    init.SrvDescriptorHeap = g_BindlessHeap.GetHeapPointer();
+    init.UserData = this;
+    init.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info,
+        D3D12_CPU_DESCRIPTOR_HANDLE* cpu, D3D12_GPU_DESCRIPTOR_HANDLE* gpu)
+    {
+        auto& descriptors = static_cast<PbrApplication*>(info->UserData)->m_FreeUiDescriptors;
+        const auto descriptor = descriptors.empty() ? g_BindlessHeap.Alloc() : descriptors.back();
+        if (!descriptors.empty()) descriptors.pop_back();
+        *cpu = descriptor;
+        *gpu = descriptor;
+    };
+    init.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* info,
+        D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu)
+    {
+        static_cast<PbrApplication*>(info->UserData)->m_FreeUiDescriptors.emplace_back(cpu, gpu);
+    };
+    ImGui_ImplDX12_Init(&init);
     for (auto& descriptor : m_ViewportDescriptors)
         descriptor = g_BindlessHeap.Alloc();
     m_UiInitialized = true;
@@ -81,6 +99,7 @@ void PbrApplication::InitializeUi()
 
 void PbrApplication::Cleanup()
 {
+    const auto uiValidation = m_Ui->Validation();
     if (m_SmokeFrameLimit >= 60 && m_AssetChecks != 6)
         ++m_AssetErrors;
     m_Ui->Shutdown();
@@ -121,12 +140,15 @@ void PbrApplication::Cleanup()
         const bool deviceRemoved = FAILED(g_Device->GetDeviceRemovedReason());
         if (m_SmokeFrameLimit >= 60 && (m_ResizeChecks != 4 || m_WindowResizes != 1))
             ++m_ViewErrors;
-        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 || m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
+        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 ||
+            uiValidation.Errors != 0 || uiValidation.Completed != uiValidation.Expected ||
+            m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
         std::cout << "PBR_SMOKE frames=" << m_CompletedFrames << " errors=" << validationErrors
             << " deviceRemoved=" << deviceRemoved << " validation=" << validationAvailable
             << " viewErrors=" << m_ViewErrors << " resizeChecks=" << m_ResizeChecks
             << " windowResizes=" << m_WindowResizes << " assetErrors=" << m_AssetErrors
-            << " assetChecks=" << m_AssetChecks << '\n';
+            << " assetChecks=" << m_AssetChecks << " uiErrors=" << uiValidation.Errors
+            << " uiChecks=" << uiValidation.Completed << " uiExpected=" << uiValidation.Expected << '\n';
     }
 }
 
