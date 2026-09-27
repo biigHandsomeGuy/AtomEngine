@@ -9,6 +9,7 @@
 
 #include "DescriptorHeap.h"
 #include "TextureManager.h"
+#include <cstdint>
 #include <memory>
 #include <wrl/client.h>
 
@@ -20,8 +21,10 @@ using namespace DirectX;
 using namespace Math;
 
 using TextureID = uint32_t;
+using EntityId = uint64_t;
 
 static constexpr uint32_t INVALID_INDEX = 0xffffffff;
+static constexpr EntityId InvalidEntityId = 0;
 
 // per-instance constants (GPU CBV)
 __declspec(align(256))
@@ -177,6 +180,7 @@ class Model
 {
 public:
 
+    EntityId Id = InvalidEntityId;
     std::string InstanceName;
 
     std::shared_ptr<ModelAsset> Asset;

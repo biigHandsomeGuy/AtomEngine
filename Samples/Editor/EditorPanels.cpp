@@ -15,6 +15,7 @@
 #include <cstring>
 #include <fstream>
 #include <system_error>
+#include <unordered_set>
 
 #include <Imgui/imgui.h>
 #include "../../Dependencies/tinygltf/json.hpp"
@@ -126,7 +127,8 @@ namespace
     {
         Json document;
         document["format"] = "AtomEngineScene";
-        document["version"] = 1;
+        document["version"] = 2;
+        document["nextEntityId"] = scene.GetNextEntityId();
         document["models"] = Json::array();
         for (const auto& model : scene.Models)
         {
@@ -135,6 +137,7 @@ namespace
             DirectX::XMFLOAT4 q{};
             DirectX::XMStoreFloat4(&q, static_cast<DirectX::XMVECTOR>(rotation));
             Json entry = Json::object();
+            entry["id"] = model.Id;
             entry["name"] = model.InstanceName;
             entry["asset"] = ToUtf8(AssetPathForDocument(model));
             entry["translation"] = Json::array();
@@ -184,13 +187,15 @@ namespace
             return false;
         }
 
-        if (document.value("format", std::string{}) != "AtomEngineScene" || document.value("version", 0) != 1 || !document.contains("models") || !document["models"].is_array())
+        const int version = document.value("version", 0);
+        if (document.value("format", std::string{}) != "AtomEngineScene" || (version != 1 && version != 2) || !document.contains("models") || !document["models"].is_array())
         {
             error = "Unsupported or malformed AtomEngine scene document.";
             return false;
         }
 
         std::vector<Model> loadedModels;
+        std::unordered_set<EntityId> loadedEntityIds;
         for (const auto& item : document["models"])
         {
             try
@@ -208,6 +213,15 @@ namespace
                     return false;
                 }
                 Model model = ModelUtility::CreateModel(std::move(loaded));
+                if (version >= 2)
+                {
+                    model.Id = item.at("id").get<EntityId>();
+                    if (model.Id == InvalidEntityId || !loadedEntityIds.insert(model.Id).second)
+                    {
+                        error = "Scene contains an invalid or duplicate entity ID.";
+                        return false;
+                    }
+                }
                 model.InstanceName = item.value("name", model.InstanceName);
                 const auto& t = item.at("translation");
                 const auto& r = item.at("rotation");
@@ -223,8 +237,10 @@ namespace
             }
         }
 
-        scene.Models = std::move(loadedModels);
-        state.SelectedModel = scene.Models.empty() ? -1 : 0;
+        scene.ReplaceModels(std::move(loadedModels));
+        if (version >= 2)
+            scene.SetNextEntityId(document.value("nextEntityId", EntityId{ 1 }));
+        state.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models.front().Id;
         return true;
     }
 }
@@ -245,15 +261,17 @@ namespace AtomEditor
         {
             auto& model = scene.Models[i];
             const std::string label = model.InstanceName.empty() ? "Model " + std::to_string(i + 1) : model.InstanceName;
-            if (ImGui::Selectable((label + "##model" + std::to_string(i)).c_str(), state.SelectedModel == static_cast<int>(i)))
-                state.SelectedModel = static_cast<int>(i);
+            if (ImGui::Selectable((label + "##entity" + std::to_string(model.Id)).c_str(), state.SelectedEntity == model.Id))
+                state.SelectedEntity = model.Id;
         }
-        if (state.SelectedModel >= static_cast<int>(scene.Models.size()))
-            state.SelectedModel = scene.Models.empty() ? -1 : static_cast<int>(scene.Models.size() - 1);
-        if (state.SelectedModel >= 0 && ImGui::Button("Delete selected"))
+        if (scene.FindModel(state.SelectedEntity) == nullptr)
+            state.SelectedEntity = InvalidEntityId;
+        if (state.SelectedEntity != InvalidEntityId && ImGui::Button("Delete selected"))
         {
-            scene.Models.erase(scene.Models.begin() + state.SelectedModel);
-            state.SelectedModel = scene.Models.empty() ? -1 : std::min(state.SelectedModel, static_cast<int>(scene.Models.size() - 1));
+            const auto selected = std::find_if(scene.Models.begin(), scene.Models.end(), [&state](const Model& model) { return model.Id == state.SelectedEntity; });
+            const size_t selectedIndex = static_cast<size_t>(std::distance(scene.Models.begin(), selected));
+            scene.RemoveModel(state.SelectedEntity);
+            state.SelectedEntity = scene.Models.empty() ? InvalidEntityId : scene.Models[std::min(selectedIndex, scene.Models.size() - 1)].Id;
         }
         ImGui::End();
     }
@@ -261,14 +279,15 @@ namespace AtomEditor
     void DrawInspector(Scene& scene, UiState& state)
     {
         ImGui::Begin("Inspector");
-        if (state.SelectedModel < 0 || state.SelectedModel >= static_cast<int>(scene.Models.size()))
+        Model* selectedModel = scene.FindModel(state.SelectedEntity);
+        if (selectedModel == nullptr)
         {
             ImGui::TextDisabled("Select a model in the Scene Hierarchy.");
             ImGui::End();
             return;
         }
 
-        auto& model = scene.Models[state.SelectedModel];
+        auto& model = *selectedModel;
         char name[256]{};
         strncpy_s(name, model.InstanceName.c_str(), _TRUNCATE);
         if (ImGui::InputText("Name", name, sizeof(name)))
@@ -327,8 +346,8 @@ namespace AtomEditor
             auto loaded = ModelUtility::LoadGltfAsset(ToUtf8(state.SelectedAsset), &error);
             if (loaded.Asset)
             {
-                scene.Models.push_back(ModelUtility::CreateModel(std::move(loaded)));
-                state.SelectedModel = static_cast<int>(scene.Models.size() - 1);
+                auto& importedModel = scene.AddModel(ModelUtility::CreateModel(std::move(loaded)));
+                state.SelectedEntity = importedModel.Id;
                 SetStatus(state, "Imported " + ToUtf8(state.SelectedAsset.filename()));
             }
             else

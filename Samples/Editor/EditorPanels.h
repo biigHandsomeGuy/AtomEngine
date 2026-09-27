@@ -10,7 +10,7 @@ namespace AtomEditor
 {
     struct UiState
     {
-        int SelectedModel = -1;
+        EntityId SelectedEntity = InvalidEntityId;
         std::filesystem::path ContentRoot;
         std::filesystem::path CurrentFolder;
         std::filesystem::path SelectedAsset;

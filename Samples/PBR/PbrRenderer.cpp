@@ -161,9 +161,9 @@ void PbrRenderer::Startup()
 	//pbrModel = CreateModel(LoadGltfAsset(FileSystem::GetFullPath("Assets/Models/Sponza/Sponza.glb")));
 	//pbrModel.
 	m_SkyBox.model = std::move(skyBox);
-	m_Scene.Models.push_back(std::move(pbrModel));
+	m_Scene.AddModel(std::move(pbrModel));
 	AtomEditor::Initialize(m_EditorUi);
-	m_EditorUi.SelectedModel = m_Scene.Models.empty() ? -1 : 0;
+	m_EditorUi.SelectedEntity = m_Scene.Models.empty() ? InvalidEntityId : m_Scene.Models.front().Id;
 
 	s_IBL_PSOCache.clear();
 
