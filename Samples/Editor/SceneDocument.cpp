@@ -192,6 +192,7 @@ namespace AtomEditor
         m_Active->Cancelled.store(true);
         m_Active->Status.State = SceneLoadState::Cancelled;
         m_Active->Assets.clear();
+        m_Active->RequestedPaths.clear();
     }
 
     void SceneDocumentLoader::WorkerLoop()
@@ -257,6 +258,8 @@ namespace AtomEditor
                 job.Status.Error = "Failed to load " + asset.SourcePath + ": " +
                     (asset.Error.empty() ? "Asset request cancelled." : asset.Error);
                 job.Status.State = SceneLoadState::Failed;
+                job.Assets.clear();
+                job.RequestedPaths.clear();
                 return;
             }
             if (asset.State == AssetLoadState::Ready) ++job.Status.ReadyModels;
@@ -293,6 +296,7 @@ namespace AtomEditor
         selection = scene.Models.empty() ? InvalidEntityId : scene.Models.front().Id;
         job.Status.State = SceneLoadState::Applied;
         job.Assets.clear();
+        job.RequestedPaths.clear();
         return true;
     }
 

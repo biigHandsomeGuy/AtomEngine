@@ -19,7 +19,7 @@ namespace AtomEditor
         std::vector<std::filesystem::path> Entries;
         std::string StatusMessage;
         bool StatusIsError = false;
-        std::vector<AssetRequestId> PendingImports;
+        std::vector<AssetRequest> PendingImports;
     };
 
     void Initialize(UiState& state);

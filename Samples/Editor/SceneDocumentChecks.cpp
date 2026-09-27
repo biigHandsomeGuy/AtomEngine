@@ -37,10 +37,11 @@ namespace AtomEditor
     }
 
     SceneDocumentChecks::SceneDocumentChecks(const Scene& source, ModelAssetManager& assets,
-        const std::filesystem::path& root) : m_Loader(root)
+        const std::filesystem::path& root) : m_Loader(root), m_Assets(assets), m_OriginalBudget(assets.CacheStats().Budget)
     {
         try
         {
+            assets.SetBudget({ 0, 0 });
             if (source.Models.empty() || !source.Models.front().Asset || !source.Models.front().GPU)
                 throw std::runtime_error("Validation requires a resident startup model.");
             m_Asset = source.Models.front().Asset;
@@ -84,7 +85,7 @@ namespace AtomEditor
 
             const auto folder = root / "bin-int" / "smoke-documents";
             std::filesystem::create_directories(folder);
-            for (size_t i = 0; i < 8; ++i) m_Files[i] = folder / ("scene-" + std::to_string(i) + ".atomscene");
+            for (size_t i = 0; i < 9; ++i) m_Files[i] = folder / ("scene-" + std::to_string(i) + ".atomscene");
             m_BadFile = folder / "superseded.atomscene";
             std::string error;
             if (!SaveSceneDocument(m_Scene, m_Files[0], root, error)) throw std::runtime_error(error);
@@ -114,13 +115,28 @@ namespace AtomEditor
             auto empty = valid;
             empty["models"] = Json::array();
             Write(m_Files[7], empty);
+            auto leaseScene = valid;
+            const char* names[] = { "lease-a.glb", "lease-b.glb" };
+            for (size_t i = 0; i < 2; ++i)
+            {
+                std::filesystem::copy_file(root / "Assets" / "Models" / "cube.glb", folder / names[i],
+                    std::filesystem::copy_options::overwrite_existing);
+                leaseScene["models"][i]["asset"] = PathToUtf8(folder / names[i]);
+            }
+            Write(m_Files[8], leaseScene);
         }
         catch (const std::exception& error)
         {
             ++m_Result.Errors;
             std::cerr << "EDITOR_CHECK_FAILED fixture: " << error.what() << '\n';
-            m_Case = 8;
+            m_Case = 9;
+            assets.SetBudget(m_OriginalBudget);
         }
+    }
+
+    SceneDocumentChecks::~SceneDocumentChecks()
+    {
+        m_Assets.SetBudget(m_OriginalBudget);
     }
 
     bool SceneDocumentChecks::SceneUnchanged() const
@@ -148,14 +164,14 @@ namespace AtomEditor
 
     void SceneDocumentChecks::Update(ModelAssetManager& assets)
     {
-        if (m_Case >= 8) return;
+        if (m_Case >= 9) return;
         if (!m_Pending) BeginCase();
         m_Loader.Update(assets);
         m_Unchanged = m_Unchanged && SceneUnchanged();
         const auto status = m_Loader.Status();
         if (m_Loader.Busy() && status.State != SceneLoadState::Ready) return;
         bool passed = m_Unchanged && status.File == m_Files[m_Case];
-        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7;
+        const bool success = m_Case == 0 || m_Case == 1 || m_Case == 6 || m_Case == 7 || m_Case == 8;
         if (success)
         {
             passed = passed && status.State == SceneLoadState::Ready &&
@@ -164,6 +180,12 @@ namespace AtomEditor
                 m_Loader.Status().State == SceneLoadState::Applied;
             if (m_Case == 7)
                 passed = passed && m_Scene.Models.empty() && m_State.SelectedEntity == InvalidEntityId;
+            else if (m_Case == 8)
+                passed = passed && m_Scene.Models.size() == 2 && assets.CacheStats().OverBudget() &&
+                    m_Scene.Models[0].GPU && m_Scene.Models[1].GPU &&
+                    m_Scene.Models[0].GPU != m_Scene.Models[1].GPU &&
+                    PathFromUtf8(m_Scene.Models[0].Asset->SourcePath).filename() == "lease-a.glb" &&
+                    PathFromUtf8(m_Scene.Models[1].Asset->SourcePath).filename() == "lease-b.glb";
             else
             {
                 passed = passed && m_Scene.Models.size() == 2;
@@ -188,9 +210,11 @@ namespace AtomEditor
                 !m_Loader.Apply(m_Scene, m_History, m_State.SelectedEntity, assets) && SceneUnchanged();
         }
         const char* labels[] = { "version 2 roundtrip", "version 1 migration", "duplicate IDs",
-            "invalid transform", "partial asset failure", "cancel", "superseded load", "empty scene" };
+            "invalid transform", "partial asset failure", "cancel", "superseded load", "empty scene",
+            "new multi-asset scene transaction survives zero cache budgets" };
         Check(passed, labels[m_Case]);
         ++m_Case;
+        if (m_Case == 9) assets.SetBudget(m_OriginalBudget);
         m_Pending = false;
     }
 }

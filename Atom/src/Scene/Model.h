@@ -184,6 +184,8 @@ struct ModelGPU
 
     std::vector<MaterialGPU> Materials;
     std::vector<TextureID> Textures;
+    std::vector<std::shared_ptr<const TextureResidency>> TextureOwners;
+    uint64_t ResidentBytes = 0; // D3D12 committed geometry and image allocations.
 };
 
 

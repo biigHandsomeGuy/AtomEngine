@@ -12,6 +12,7 @@ namespace AtomEditor
     {
     public:
         SceneDocumentChecks(const Scene& source, ModelAssetManager& assets, const std::filesystem::path& root);
+        ~SceneDocumentChecks();
         void Update(ModelAssetManager& assets);
         ApplicationValidation Result() const { return m_Result; }
 
@@ -24,8 +25,8 @@ namespace AtomEditor
         CommandHistory m_History;
         UiState m_State;
         SceneDocumentLoader m_Loader;
-        ApplicationValidation m_Result{ 0, 0, 12 };
-        std::filesystem::path m_Files[8];
+        ApplicationValidation m_Result{ 0, 0, 13 };
+        std::filesystem::path m_Files[9];
         std::filesystem::path m_BadFile;
         std::shared_ptr<const ModelAsset> m_Asset;
         std::shared_ptr<const ModelGPU> m_GPU;
@@ -36,5 +37,7 @@ namespace AtomEditor
         size_t m_Case = 0;
         bool m_Pending = false;
         bool m_Unchanged = true;
+        ModelAssetManager& m_Assets;
+        AssetCacheBudget m_OriginalBudget;
     };
 }

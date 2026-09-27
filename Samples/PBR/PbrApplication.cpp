@@ -8,6 +8,7 @@
 #include <fstream>
 #include <string>
 #include <stdexcept>
+#include <chrono>
 #include <d3d12sdklayers.h>
 
 #include <Imgui/imgui.h>
@@ -49,6 +50,7 @@ void PbrApplication::Startup()
         CheckViewIsolation();
         CheckFrameScheduler();
         StartAssetChecks();
+        CheckAssetCache();
     }
 }
 
@@ -108,6 +110,7 @@ void PbrApplication::Cleanup()
     const auto uiValidation = m_Ui->Validation();
     if (m_SmokeFrameLimit >= 60 && m_AssetChecks != 6)
         ++m_AssetErrors;
+    if (m_SmokeFrameLimit != 0 && m_CacheChecks != 12) ++m_CacheErrors;
     m_Ui->Shutdown();
     if (m_UiInitialized)
     {
@@ -157,7 +160,7 @@ void PbrApplication::Cleanup()
                 m_CompletedFrames - FrameScheduler::FramesInFlight : 0) ||
             m_Frames.FrameOpen() || m_Frames.PendingFrames() != 0 || m_Frames.RetainedResources() != 0)
             ++m_FrameErrors;
-        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 ||
+        m_ExitCode = validationErrors != 0 || deviceRemoved || m_ViewErrors != 0 || m_AssetErrors != 0 || m_CacheErrors != 0 ||
             m_FrameErrors != 0 || uiValidation.Errors != 0 || uiValidation.Completed != uiValidation.Expected ||
             m_CompletedFrames < m_SmokeFrameLimit ? 1 : 0;
         std::cout << "PBR_SMOKE frames=" << m_CompletedFrames << " errors=" << validationErrors
@@ -170,7 +173,8 @@ void PbrApplication::Cleanup()
             << " submissions=" << m_Frames.Stats().Submissions << " slotReuses=" << m_Frames.Stats().SlotReuses
             << " drained=" << (m_Frames.PendingFrames() == 0 && m_Frames.RetainedResources() == 0)
             << " presentationChecks=" << m_PresentationChecks << " multiViewChecks=" << m_MultiViewChecks
-            << " secondViewFrames=" << m_SecondViewFrames << '\n';
+            << " secondViewFrames=" << m_SecondViewFrames
+            << " cacheErrors=" << m_CacheErrors << " cacheChecks=" << m_CacheChecks << '\n';
     }
 }
 
@@ -494,6 +498,190 @@ void PbrApplication::PollAssetChecks()
         !g_CommandManager.IsFenceComplete(jobs[5].UploadFence))
         ++m_AssetErrors;
     m_AssetChecks = 6;
+}
+
+void PbrApplication::CheckAssetCache()
+{
+    auto check = [this](bool passed, const char* name)
+    {
+        ++m_CacheChecks;
+        if (!passed)
+        {
+            ++m_CacheErrors;
+            std::cerr << "CACHE_CHECK_FAILED " << name << '\n';
+        }
+    };
+    try
+    {
+        const auto root = PathFromUtf8(FileSystem::GetFullPath("bin-int/smoke-cache"));
+        std::filesystem::create_directories(root);
+        const float vertices[] = { 0, 0, 0, 1, 0, 0, 0, 1, 0 };
+        std::ofstream binary(root / "triangle.bin", std::ios::binary | std::ios::trunc);
+        binary.write(reinterpret_cast<const char*>(vertices), sizeof(vertices));
+        binary.close();
+        const std::string fixture = R"({"asset":{"version":"2.0"},"buffers":[{"uri":"triangle.bin","byteLength":36}],"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}],"images":[{"uri":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="}],"textures":[{"source":0}],"materials":[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0}}}],"meshes":[{"primitives":[{"attributes":{"POSITION":0},"material":0,"mode":4}]}]})";
+        const char* names[] = { "a.gltf", "b.gltf", "c.gltf", "cancel.gltf" };
+        for (const auto name : names) std::ofstream(root / name) << fixture;
+        const auto aPath = PathToUtf8(root / names[0]);
+        const auto bPath = PathToUtf8(root / names[1]);
+        const auto cPath = PathToUtf8(root / names[2]);
+        const auto baseline = g_TextureManager.Stats();
+        ModelAssetManager assets;
+        auto load = [&](const std::string& path)
+        {
+            std::string error;
+            auto data = assets.LoadBlocking(path, &error);
+            if (!data.Asset || !data.GPU || data.GPU->Textures.size() != 1)
+                throw std::runtime_error("Cache fixture import failed: " + error);
+            return data;
+        };
+        auto a = load(aPath);
+        const uint64_t aCpu = assets.CacheStats().CpuBytes;
+        auto b = load(bPath);
+        const uint64_t bCpu = assets.CacheStats().CpuBytes - aCpu;
+        auto c = load(cPath);
+        const auto total = assets.CacheStats();
+        const auto aGpu = a.GPU->ResidentBytes;
+        const auto bGpu = b.GPU->ResidentBytes;
+        const auto cGpu = c.GPU->ResidentBytes;
+        std::weak_ptr<const ModelGPU> weakA = a.GPU, weakB = b.GPU, weakC = c.GPU;
+        std::weak_ptr<const ModelAsset> weakCpuA = a.Asset;
+        const auto oldTexture = a.GPU->Textures.front();
+        const auto oldDescriptor = g_TextureManager.GetBindlessIndex(oldTexture);
+        const auto oldMirror = g_TextureManager.GetSrvHandle(oldTexture);
+        const auto oldRequest = assets.Request(aPath).Id();
+        check(total.Entries == 3 && total.ReadyEntries == 3 && total.ProtectedEntries == 3 &&
+            total.CpuBytes > 0 && total.GpuBytes == aGpu + bGpu + cGpu &&
+            a.GPU->TextureOwners.size() == 1 && aGpu > a.GPU->TextureOwners.front()->Bytes() &&
+            g_TextureManager.Stats().OwnedTextures == baseline.OwnedTextures + 3,
+            "CPU estimates and committed GPU/texture allocation accounting");
+        a = {}; b = {}; c = {};
+        // Touch A: B is now oldest. CPU pressure must evict B alone.
+        assets.Request(aPath);
+        assets.SetBudget({ total.CpuBytes - bCpu, UINT64_MAX });
+        auto stats = assets.CacheStats();
+        check(weakB.expired() && !weakA.expired() && !weakC.expired() && stats.Evictions == 1 &&
+            stats.CpuBytes == total.CpuBytes - bCpu && stats.GpuBytes == aGpu + cGpu && !stats.OverBudget(),
+            "CPU budget evicts least recently used unowned entry");
+        assets.SetBudget({ UINT64_MAX, aGpu });
+        stats = assets.CacheStats();
+        check(weakC.expired() && !weakA.expired() && stats.Evictions == 2 &&
+            stats.GpuBytes == aGpu && !stats.OverBudget(), "GPU budget follows the same LRU order");
+        auto cpuOwner = weakCpuA.lock();
+        assets.SetBudget({ 0, 0 });
+        stats = assets.CacheStats();
+        check(stats.OverBudget() && stats.ProtectedEntries == 1 && !weakA.expired(),
+            "an external CPU owner protects its paired residency above a soft limit");
+        cpuOwner.reset();
+        assets.Trim();
+        bool staleRejected = false;
+        try { g_TextureManager.Get(oldTexture); }
+        catch (const std::out_of_range&) { staleRejected = true; }
+        const bool released = weakA.expired() && assets.CacheStats().Entries == 0 &&
+            g_TextureManager.Stats().LiveTextures == baseline.LiveTextures;
+        auto lease = assets.Request(aPath);
+        a = load(aPath);
+        const auto newTexture = a.GPU->Textures.front();
+        check(released && staleRejected && lease.Id() != oldRequest && newTexture != oldTexture &&
+            g_TextureManager.GetBindlessIndex(newTexture) == oldDescriptor &&
+            g_TextureManager.GetSrvHandle(newTexture).ptr == oldMirror.ptr &&
+            g_TextureManager.Stats().DescriptorReuses > baseline.DescriptorReuses,
+            "reload uses new IDs and recycles both descriptor slots without stale texture aliasing");
+        weakA = a.GPU;
+        a = {};
+        auto secondLease = lease;
+        lease = {};
+        assets.Trim();
+        stats = assets.CacheStats();
+        check(stats.ReadyEntries == 1 && stats.ProtectedEntries == 1 && stats.OverBudget() &&
+            assets.Snapshot(secondLease).State == AssetLoadState::Ready && !weakA.expired(),
+            "a copied request lease protects ready data before scene commit");
+        secondLease = {};
+        assets.Trim();
+        check(weakA.expired() && assets.CacheStats().Entries == 0 &&
+            g_TextureManager.Stats().LiveTextures == baseline.LiveTextures,
+            "last request release makes its cache and owned texture evictable");
+
+        a = load(aPath);
+        weakA = a.GPU;
+        FrameScheduler frames(g_CommandManager);
+        struct QueueGate
+        {
+            Microsoft::WRL::ComPtr<ID3D12Fence> Fence;
+            ~QueueGate() { if (Fence) Fence->Signal(1); }
+        } gate; // Releases the queue before frames/assets destruct on exceptions.
+        ASSERT_SUCCEEDED(g_Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&gate.Fence)));
+        ASSERT_SUCCEEDED(g_CommandManager.GetCommandQueue()->Wait(gate.Fence.Get(), 1));
+        frames.BeginFrame();
+        frames.Retain(a.GPU);
+        frames.EndFrame();
+        a = {};
+        assets.Trim();
+        check(frames.PendingFrames() == 1 && !weakA.expired() && assets.CacheStats().ProtectedEntries == 1 &&
+            assets.CacheStats().OverBudget() && g_TextureManager.Stats().OwnedTextures == baseline.OwnedTextures + 1,
+            "a pending GPU frame retains geometry, texture and descriptors during cache pressure");
+        ASSERT_SUCCEEDED(gate.Fence->Signal(1));
+        frames.Drain();
+        assets.Trim();
+        check(weakA.expired() && assets.CacheStats().GpuBytes == 0 && assets.CacheStats().Entries == 0 &&
+            g_TextureManager.Stats().LiveTextures == baseline.LiveTextures,
+            "frame completion releases all residency before eviction");
+
+        gate.Fence.Reset();
+        ASSERT_SUCCEEDED(g_Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&gate.Fence)));
+        ASSERT_SUCCEEDED(g_CommandManager.GetCommandQueue()->Wait(gate.Fence.Get(), 1));
+        auto cancelled = assets.Request(PathToUtf8(root / names[3]));
+        uint64_t uploadFence = 0;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            assets.Update();
+            auto snapshot = assets.Snapshot(cancelled);
+            if (snapshot.State == AssetLoadState::Uploading) { uploadFence = snapshot.UploadFence; break; }
+            if (snapshot.State == AssetLoadState::Failed) throw std::runtime_error(snapshot.Error);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (uploadFence == 0) throw std::runtime_error("Textured upload did not reach its fence.");
+        const bool didCancel = assets.Cancel(cancelled);
+        cancelled = {};
+        assets.Trim();
+        check(didCancel && !g_CommandManager.IsFenceComplete(uploadFence) && assets.CacheStats().GpuBytes > 0 &&
+            g_TextureManager.Stats().OwnedTextures == baseline.OwnedTextures + 1,
+            "cancelled textured upload remains resident until its GPU fence completes");
+        ASSERT_SUCCEEDED(gate.Fence->Signal(1));
+        g_CommandManager.WaitForFence(uploadFence);
+        assets.Update();
+        check(assets.CacheStats().Entries == 0 && assets.CacheStats().CpuBytes == 0 && assets.CacheStats().GpuBytes == 0 &&
+            g_TextureManager.Stats().LiveTextures == baseline.LiveTextures,
+            "completed cancellation releases textures and unleased terminal diagnostics");
+        const auto reuseCount = g_TextureManager.Stats().DescriptorReuses;
+        TextureID previous = newTexture;
+        bool cycles = true;
+        for (size_t index = 0; index < 12; ++index)
+        {
+            auto data = load(aPath);
+            const auto texture = data.GPU->Textures.front();
+            cycles &= texture > previous && assets.CacheStats().ProtectedEntries == 1;
+            previous = texture;
+            data = {};
+            assets.Trim();
+            cycles &= assets.CacheStats().Entries == 0 && g_TextureManager.Stats().LiveTextures == baseline.LiveTextures;
+        }
+        const bool recycledEveryTime = g_TextureManager.Stats().DescriptorReuses == reuseCount + 12;
+        auto shutdownLease = assets.Request(aPath);
+        auto shutdownData = load(aPath);
+        std::weak_ptr<const ModelGPU> shutdownOwner = shutdownData.GPU;
+        shutdownData = {};
+        assets.Shutdown();
+        check(cycles && recycledEveryTime && shutdownLease.Id() != 0 && shutdownOwner.expired() &&
+            assets.CacheStats().Entries == 0 && g_TextureManager.Stats().LiveTextures == baseline.LiveTextures,
+            "repeated eviction is bounded and shutdown strips cache data from outstanding leases");
+    }
+    catch (const std::exception& error)
+    {
+        ++m_CacheErrors;
+        std::cerr << "CACHE_CHECK_FAILED " << error.what() << '\n';
+    }
 }
 
 bool PbrApplication::IsDone()

@@ -64,6 +64,7 @@ private:
     void StartAssetChecks();
     void PollAssetChecks();
     void CheckFrameScheduler();
+    void CheckAssetCache();
 
     Scene m_Scene;
     ModelAssetManager m_Assets;
@@ -84,7 +85,7 @@ private:
     uint32_t m_ViewErrors = 0;
     uint32_t m_ResizeChecks = 0;
     uint32_t m_WindowResizes = 0;
-    AssetRequestId m_AssetRequests[6]{};
+    AssetRequest m_AssetRequests[6]{};
     uint32_t m_AssetErrors = 0;
     uint32_t m_AssetChecks = 0;
     bool m_UploadCancelRequested = false;
@@ -93,4 +94,6 @@ private:
     uint32_t m_PresentationChecks = 0;
     uint32_t m_MultiViewChecks = 0;
     uint64_t m_SecondViewFrames = 0;
+    uint32_t m_CacheErrors = 0;
+    uint32_t m_CacheChecks = 0;
 };

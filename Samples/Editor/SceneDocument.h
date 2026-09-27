@@ -71,8 +71,8 @@ namespace AtomEditor
         {
             SceneLoadStatus Status;
             SceneDocumentData Document;
-            std::vector<AssetRequestId> Assets;
-            std::unordered_map<std::string, AssetRequestId> RequestedPaths;
+            std::vector<AssetRequest> Assets;
+            std::unordered_map<std::string, AssetRequest> RequestedPaths;
             std::atomic_bool Cancelled{ false };
         };
 

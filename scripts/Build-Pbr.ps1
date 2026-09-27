@@ -82,7 +82,7 @@ foreach ($item in $targets) {
         if ($smoke.Output -notmatch 'assetErrors=0 assetChecks=6') {
             throw "Asset import, sharing, diagnostics or cancellation checks failed: $item (log: $smokeLog)"
         }
-        $expectedUiChecks = if ($item -eq 'Editor') { 12 } else { 0 }
+        $expectedUiChecks = if ($item -eq 'Editor') { 13 } else { 0 }
         if ($smoke.Output -notmatch "uiErrors=0 uiChecks=$expectedUiChecks uiExpected=$expectedUiChecks") {
             Write-Output $smoke.Output
             throw "Scene document and command checks failed: $item (log: $smokeLog)"
@@ -94,6 +94,10 @@ foreach ($item in $targets) {
         if ($smoke.Output -notmatch 'multiViewChecks=4 secondViewFrames=60') {
             Write-Output $smoke.Output
             throw "Shared renderer resources and actual multi-view rendering checks failed: $item (log: $smokeLog)"
+        }
+        if ($smoke.Output -notmatch 'cacheErrors=0 cacheChecks=12') {
+            Write-Output $smoke.Output
+            throw "Asset budget, lease, eviction or texture lifetime checks failed: $item (log: $smokeLog)"
         }
         Write-Output "$item rendered 60 frames and exited normally ($validation; log: $smokeLog)"
     }

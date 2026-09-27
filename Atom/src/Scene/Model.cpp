@@ -545,11 +545,22 @@ namespace ModelUtility
     {
         auto gpu = std::make_shared<ModelGPU>();
         for (const auto& image : asset.Images)
-            gpu->Textures.push_back(Graphics::g_TextureManager.CreateTexture2D(image.Width, image.Height,
+        {
+            auto texture = Graphics::g_TextureManager.CreateOwnedTexture2D(image.Width, image.Height,
                 image.Srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM,
-                image.Pixels.data(), &context));
+                image.Pixels.data(), context);
+            gpu->Textures.push_back(texture->Id());
+            gpu->ResidentBytes += texture->Bytes();
+            gpu->TextureOwners.push_back(std::move(texture));
+        }
         for (const auto& mesh : asset.Meshes)
+        {
             gpu->Meshes.push_back(UploadMesh(mesh, context));
+            const auto vertexDesc = gpu->Meshes.back().VertexBuffer->GetDesc();
+            const auto indexDesc = gpu->Meshes.back().IndexBuffer->GetDesc();
+            gpu->ResidentBytes += Graphics::g_Device->GetResourceAllocationInfo(0, 1, &vertexDesc).SizeInBytes;
+            gpu->ResidentBytes += Graphics::g_Device->GetResourceAllocationInfo(0, 1, &indexDesc).SizeInBytes;
+        }
         auto resolve = [&](uint32_t index)
         {
             return ToSceneHeapIndex(index == INVALID_INDEX ? INVALID_TEXTURE : gpu->Textures.at(index), Graphics::g_TextureManager);

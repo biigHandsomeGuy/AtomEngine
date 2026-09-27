@@ -310,6 +310,24 @@ namespace AtomEditor
         ImGui::SameLine();
         if (ImGui::Button("Refresh"))
             RefreshEntries(state);
+        auto cache = assets.CacheStats();
+        constexpr uint64_t mib = 1024 * 1024;
+        int cpuBudget = static_cast<int>(std::min(cache.Budget.CpuBytes / mib, uint64_t(65536)));
+        int gpuBudget = static_cast<int>(std::min(cache.Budget.GpuBytes / mib, uint64_t(65536)));
+        const bool cpuChanged = ImGui::InputInt("CPU cache budget (MiB)", &cpuBudget);
+        const bool gpuChanged = ImGui::InputInt("GPU cache budget (MiB)", &gpuBudget);
+        if (cpuChanged || gpuChanged)
+        {
+            assets.SetBudget({ static_cast<uint64_t>(std::clamp(cpuBudget, 0, 65536)) * mib,
+                static_cast<uint64_t>(std::clamp(gpuBudget, 0, 65536)) * mib });
+            cache = assets.CacheStats();
+        }
+        ImGui::Text("Cache: CPU %.1f MiB / GPU %.1f MiB",
+            double(cache.CpuBytes) / mib, double(cache.GpuBytes) / mib);
+        ImGui::Text("%zu entries, %zu protected, %llu evicted", cache.Entries,
+            cache.ProtectedEntries, static_cast<unsigned long long>(cache.Evictions));
+        if (cache.OverBudget())
+            ImGui::TextWrapped("Budget exceeded: active loads, scenes, undo history or unfinished frames still use these assets.");
         ImGui::TextWrapped("%s", ToUtf8(state.CurrentFolder).c_str());
         ImGui::BeginChild("ContentEntries", ImVec2(0, 180), true);
         for (const auto& entry : state.Entries)
@@ -338,7 +356,7 @@ namespace AtomEditor
         for (const auto id : state.PendingImports)
         {
             const auto job = assets.Snapshot(id);
-            ImGui::PushID(static_cast<int>(id));
+            ImGui::PushID(static_cast<int>(id.Id()));
             ImGui::TextWrapped("%s: %s", ToUtf8(std::filesystem::u8path(job.SourcePath).filename()).c_str(), ModelAssetManager::StateName(job.State));
             if (ImGui::Button(job.CancelRequested ? "Cancelling..." : "Cancel import"))
                 assets.Cancel(id);
