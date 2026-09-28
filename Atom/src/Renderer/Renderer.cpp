@@ -18,9 +18,6 @@
 #include "../CompiledShaders/DrawNormalsVS.h"
 #include "../CompiledShaders/PostProcessCS.h"
 #include "../CompiledShaders/PBRShadingPS.h"
-#include "../CompiledShaders/PBRShadingGiPS.h"
-#include "../CompiledShaders/GiTraceCS.h"
-#include "../CompiledShaders/GiCompositeCS.h"
 #include "../CompiledShaders/SkyBoxPS.h"
 #include "../CompiledShaders/ShadowPS.h"
 #include "../CompiledShaders/DrawNormalsPS.h"
@@ -80,16 +77,6 @@ namespace Renderer
         s_ComputeRootSig.Finalize(L"Renderer Compute RootSig");
     }
 
-    static void CreateGiRootSignature(RootSignature& root)
-    {
-        root.Reset(3, 1);
-        root[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 5);
-        root[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
-        root[2].InitAsConstantBuffer(0);
-        root.InitStaticSampler(0, SamplerLinearClampDesc);
-        root.Finalize(L"PBR screen-space GI root signature");
-    }
-
     static void CreateBindlessRootSignature()
     {
         g_BindlessRootSig.Reset(1, 5);
@@ -106,8 +93,7 @@ namespace Renderer
     }
 
     static void CreatePSOs(const PipelineFormats& formats, RootSignature& s_RootSig, RootSignature& s_ComputeRootSig,
-        std::unordered_map<std::string, GraphicsPSO>& s_PSOs, GraphicsPSO& s_SkyboxPSO, ComputePSO& s_PostProcessPSO,
-        bool pbrGiVariant = false)
+        std::unordered_map<std::string, GraphicsPSO>& s_PSOs, GraphicsPSO& s_SkyboxPSO, ComputePSO& s_PostProcessPSO)
     {
         static const D3D12_INPUT_ELEMENT_DESC kInputLayout[] =
         {
@@ -132,23 +118,6 @@ namespace Renderer
         opaque.SetPixelShader(g_pPBRShadingPS, sizeof(g_pPBRShadingPS));
         opaque.Finalize();
         s_PSOs["opaque"] = std::move(opaque);
-
-        if (pbrGiVariant)
-        {
-            GraphicsPSO giOpaque(L"Opaque with GI material output");
-            giOpaque.SetRootSignature(s_RootSig);
-            giOpaque.SetRasterizerState(RasterizerDefault);
-            giOpaque.SetBlendState(CD3DX12_BLEND_DESC(D3D12_DEFAULT));
-            giOpaque.SetDepthStencilState(DepthStateReadWrite);
-            giOpaque.SetInputLayout(_countof(kInputLayout), kInputLayout);
-            giOpaque.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-            const DXGI_FORMAT targets[] = { formats.Color, formats.Color };
-            giOpaque.SetRenderTargetFormats(2, targets, formats.Depth);
-            giOpaque.SetVertexShader(g_pPBRShadingVS, sizeof(g_pPBRShadingVS));
-            giOpaque.SetPixelShader(g_pPBRShadingGiPS, sizeof(g_pPBRShadingGiPS));
-            giOpaque.Finalize();
-            s_PSOs["opaqueGi"] = std::move(giOpaque);
-        }
 
         GraphicsPSO drawNormals(L"DrawNormals PSO");
         drawNormals.SetRootSignature(s_RootSig);
@@ -210,14 +179,7 @@ namespace Renderer
         }
         CreateGraphicsRootSignature(GraphicsRoot);
         CreateComputeRootSignature(ComputeRoot);
-        CreateGiRootSignature(GiRoot);
-        CreatePSOs(formats, GraphicsRoot, ComputeRoot, Graphics, Skybox, Post, true);
-        GiTrace.SetRootSignature(GiRoot);
-        GiTrace.SetComputeShader(g_pGiTraceCS, sizeof(g_pGiTraceCS));
-        GiTrace.Finalize();
-        GiComposite.SetRootSignature(GiRoot);
-        GiComposite.SetComputeShader(g_pGiCompositeCS, sizeof(g_pGiCompositeCS));
-        GiComposite.Finalize();
+        CreatePSOs(formats, GraphicsRoot, ComputeRoot, Graphics, Skybox, Post);
         m_Formats = formats;
         m_Initialized = true;
     }

@@ -432,9 +432,6 @@
     <FxCompile Include="Shaders\PBRShadingPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\PBRShadingGiPS.hlsl"><Filter>Assets\Shaders</Filter></FxCompile>
-    <FxCompile Include="Shaders\GiTraceCS.hlsl"><Filter>Assets\Shaders</Filter></FxCompile>
-    <FxCompile Include="Shaders\GiCompositeCS.hlsl"><Filter>Assets\Shaders</Filter></FxCompile>
     <FxCompile Include="Shaders\LambertModelVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
@@ -496,6 +493,5 @@
     <None Include="Shaders\Common.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
-    <None Include="Shaders\GiCommon.hlsli"><Filter>Assets\Shaders</Filter></None>
   </ItemGroup>
 </Project>

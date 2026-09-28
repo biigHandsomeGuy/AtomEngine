@@ -117,7 +117,6 @@ private:
     uint32_t m_MaterialProbePitch = 0;
     uint64_t m_MaterialProbeFrame = 0;
     std::vector<float> m_MaterialPixels;
-    std::vector<float> m_GiBaselinePixels;
     bool m_MaterialPixelsValid = false;
     uint32_t m_MaterialErrors = 0;
     uint32_t m_MaterialChecks = 0;

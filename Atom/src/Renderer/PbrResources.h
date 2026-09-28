@@ -21,12 +21,9 @@ namespace Renderer
         bool Matches(PipelineFormats formats) const;
         RootSignature GraphicsRoot;
         RootSignature ComputeRoot;
-        RootSignature GiRoot;
         std::unordered_map<std::string, GraphicsPSO> Graphics;
         GraphicsPSO Skybox{ L"PBR skybox" };
         ComputePSO Post{ L"PBR temporal post" };
-        ComputePSO GiTrace{ L"PBR screen-space GI trace" };
-        ComputePSO GiComposite{ L"PBR screen-space GI composite" };
     private:
         PipelineFormats m_Formats;
         bool m_Initialized = false;

@@ -14,7 +14,6 @@ public:
     RenderView& operator=(const RenderView&) = delete;
 
     bool Resize(uint32_t width, uint32_t height);
-    void EnsureGiResources();
     void Destroy();
     void InvalidateHistory();
     uint32_t Width() const { return SceneColor.GetResource() ? SceneColor.GetWidth() : 0; }
@@ -34,9 +33,6 @@ public:
     ColorBuffer History[2];
     DepthBuffer SceneDepth;
     ColorBuffer SceneNormal;
-    ColorBuffer GiDiffuseWeight;
-    ColorBuffer GiHalf;
-    ColorBuffer GiComposite;
     DepthBuffer Shadow;
     ColorBuffer LinearDepthFull;
     ColorBuffer LinearDepthHalf;

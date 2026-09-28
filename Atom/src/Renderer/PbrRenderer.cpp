@@ -8,7 +8,6 @@
 #include "PipelineState.h"
 #include "BufferManager.h"
 #include "CommandListManager.h"
-#include <cmath>
 #include <stdexcept>
 
 #include "Model.h"
@@ -50,14 +49,12 @@ void PbrRenderer::Initialize()
         m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() }))
         throw std::logic_error("PBR view requires initialized resources with matching formats.");
     m_CommonTextures = g_BindlessHeap.Alloc(10);
-    for (auto& history : m_PostProcessTextures)
-        for (auto& table : history) table = g_BindlessHeap.Alloc(4);
+    for (auto& table : m_PostProcessTextures) table = g_BindlessHeap.Alloc(4);
     m_SsaoPasses = std::make_unique<SSAO::ViewPasses>(SSAO::ViewResources{
         m_View.SceneDepth, m_View.SceneNormal, m_View.LinearDepthFull, m_View.LinearDepthHalf,
         m_View.SsaoFull, m_View.SsaoHalf, m_View.SsaoBlur });
     SetupGeometryGraph();
     SetupLightingGraph();
-    SetupGiGraph();
     SetupPostProcessGraphs();
     UpdateViewDescriptors();
     m_Initialized = true;
@@ -65,10 +62,9 @@ void PbrRenderer::Initialize()
 void PbrRenderer::Shutdown()
 {
     m_GeometryGraph.Clear();
-    for (auto& graph : m_LightingGraphs) graph.Clear();
-    m_GiGraph.Clear();
-    for (auto& history : m_PostProcessGraphs)
-        for (auto& graph : history) graph.Clear();
+    m_LightingGraph.Clear();
+    for (auto& graph : m_PostProcessGraphs)
+        graph.Clear();
 
     m_SsaoPasses.reset();
     m_Initialized = false;
@@ -163,22 +159,21 @@ void PbrRenderer::SetupGeometryGraph()
 
 void PbrRenderer::SetupLightingGraph()
 {
-	for (auto& graph : m_LightingGraphs) graph.Clear();
-	auto render = [this](CommandContext& commandContext)
+	m_LightingGraph.Clear();
+	m_LightingGraph.AddPass(L"Lighting / Opaque and sky", {
+		{ &m_View.SceneColor, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
+		{ &m_View.SceneDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, RenderGraph::Access::Write },
+		{ &m_View.Shadow, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+		{ &m_View.SsaoFull, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read }
+	}, [this](CommandContext& commandContext)
 	{
 		auto& context = commandContext.GetGraphicsContext();
 		context.SetViewportAndScissor(m_View.Viewport, m_View.Scissor);
 		context.SetRootSignature(m_Resources.Pipelines.GraphicsRoot);
-		context.SetPipelineState(m_Resources.Pipelines.Graphics.at(m_GiSettings.Enabled ? "opaqueGi" : "opaque"));
+		context.SetPipelineState(m_Resources.Pipelines.Graphics.at("opaque"));
 		context.GetCommandList()->SetGraphicsRootDescriptorTable(Renderer::kCommonSRVs, m_CommonTextures);
 		context.ClearColor(m_View.SceneColor);
-		if (m_GiSettings.Enabled)
-		{
-			context.ClearColor(m_View.GiDiffuseWeight);
-			const D3D12_CPU_DESCRIPTOR_HANDLE targets[] = { m_View.SceneColor.GetRTV(), m_View.GiDiffuseWeight.GetRTV() };
-			context.SetRenderTargets(2, targets, m_View.SceneDepth.GetDSV());
-		}
-		else context.SetRenderTarget(m_View.SceneColor.GetRTV(), m_View.SceneDepth.GetDSV());
+		context.SetRenderTarget(m_View.SceneColor.GetRTV(), m_View.SceneDepth.GetDSV());
 		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 		auto shading = m_ShaderAttribs;
         shading.UseShadow = shading.UseShadow && m_LightCastsShadows;
@@ -197,114 +192,30 @@ void PbrRenderer::SetupLightingGraph()
 			&m_EnvMapAttribs);
 		context.SetRootSignature(m_Resources.Pipelines.GraphicsRoot);
 		context.SetPipelineState(m_Resources.Pipelines.Skybox);
-		context.SetRenderTarget(m_View.SceneColor.GetRTV(), m_View.SceneDepth.GetDSV());
 		m_Resources.Skybox.Draw(context, false);
-	};
-	m_LightingGraphs[0].AddPass(L"Lighting / Opaque and sky", {
-		{ &m_View.SceneColor, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
-		{ &m_View.SceneDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, RenderGraph::Access::Write },
-		{ &m_View.Shadow, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-		{ &m_View.SsaoFull, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read }
-	}, render);
-	m_LightingGraphs[1].AddPass(L"Lighting / GI source and sky", {
-		{ &m_View.SceneColor, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
-		{ &m_View.GiDiffuseWeight, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
-		{ &m_View.SceneDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, RenderGraph::Access::Write },
-		{ &m_View.Shadow, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-		{ &m_View.SsaoFull, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read }
-	}, render);
-}
-
-void PbrRenderer::SetupGiGraph()
-{
-    struct GiConstants
-    {
-        Math::Matrix4 Projection;
-        Math::Matrix4 InverseProjection;
-        XMFLOAT4 ScreenSize;
-        XMFLOAT4 Trace;
-        XMFLOAT4 Control;
-    };
-    m_GiGraph.Clear();
-    m_GiGraph.AddPass(L"GI / Trace visible diffuse bounce", {
-        { &m_View.SceneColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.SceneDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.SceneNormal, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.GiDiffuseWeight, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.GiHalf, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
-    }, [this](CommandContext& commandContext)
-    {
-        auto& compute = commandContext.GetComputeContext();
-        const GiConstants constants{
-            m_View.Camera.GetProjMatrix(), Math::Invert(m_View.Camera.GetProjMatrix()),
-            XMFLOAT4(float(m_View.Width()), float(m_View.Height()), 1.0f / m_View.Width(), 1.0f / m_View.Height()),
-            XMFLOAT4(m_GiSettings.Radius, m_GiSettings.Thickness, float(m_GiSettings.Rays), float(m_GiSettings.Steps)),
-            XMFLOAT4(m_View.Jitter.x, m_View.Jitter.y, m_GiSettings.Intensity,
-                float(m_ppAttribs.useTAA ? m_View.FrameIndex : 0))
-        };
-        const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-            m_View.SceneColor.GetSRV(), m_View.SceneDepth.GetDepthSRV(), m_View.SceneNormal.GetSRV(),
-            m_View.GiDiffuseWeight.GetSRV(), m_View.SceneColor.GetSRV()
-        };
-        compute.SetRootSignature(m_Resources.Pipelines.GiRoot);
-        compute.SetPipelineState(m_Resources.Pipelines.GiTrace);
-        compute.SetDynamicDescriptors(0, 0, 5, srvs);
-        compute.SetDynamicDescriptor(1, 0, m_View.GiHalf.GetUAV());
-        compute.SetDynamicConstantBufferView(2, sizeof(constants), &constants);
-        compute.Dispatch2D(m_View.GiHalf.GetWidth(), m_View.GiHalf.GetHeight(), 8, 8);
-    });
-    m_GiGraph.AddPass(L"GI / Bilateral composite", {
-        { &m_View.SceneColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.SceneDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.SceneNormal, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.GiDiffuseWeight, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.GiHalf, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-        { &m_View.GiComposite, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
-    }, [this](CommandContext& commandContext)
-    {
-        auto& compute = commandContext.GetComputeContext();
-        const GiConstants constants{
-            m_View.Camera.GetProjMatrix(), Math::Invert(m_View.Camera.GetProjMatrix()),
-            XMFLOAT4(float(m_View.Width()), float(m_View.Height()), 1.0f / m_View.Width(), 1.0f / m_View.Height()),
-            XMFLOAT4(m_GiSettings.Radius, m_GiSettings.Thickness, float(m_GiSettings.Rays), float(m_GiSettings.Steps)),
-            XMFLOAT4(m_View.Jitter.x, m_View.Jitter.y, m_GiSettings.Intensity,
-                float(m_ppAttribs.useTAA ? m_View.FrameIndex : 0))
-        };
-        const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-            m_View.SceneColor.GetSRV(), m_View.SceneDepth.GetDepthSRV(), m_View.SceneNormal.GetSRV(),
-            m_View.GiDiffuseWeight.GetSRV(), m_View.GiHalf.GetSRV()
-        };
-        compute.SetRootSignature(m_Resources.Pipelines.GiRoot);
-        compute.SetPipelineState(m_Resources.Pipelines.GiComposite);
-        compute.SetDynamicDescriptors(0, 0, 5, srvs);
-        compute.SetDynamicDescriptor(1, 0, m_View.GiComposite.GetUAV());
-        compute.SetDynamicConstantBufferView(2, sizeof(constants), &constants);
-        compute.Dispatch2D(m_View.GiComposite.GetWidth(), m_View.GiComposite.GetHeight(), 8, 8);
-    });
+	});
 }
 
 void PbrRenderer::SetupPostProcessGraphs()
 {
 	for (uint32_t historyReadIndex = 0; historyReadIndex < 2; ++historyReadIndex)
-	for (uint32_t giVariant = 0; giVariant < 2; ++giVariant)
 	{
 		const uint32_t historyWriteIndex = (historyReadIndex + 1u) & 1u;
-		RenderGraph& graph = m_PostProcessGraphs[historyReadIndex][giVariant];
-		auto& source = giVariant ? m_View.GiComposite : m_View.SceneColor;
+		RenderGraph& graph = m_PostProcessGraphs[historyReadIndex];
 		graph.Clear();
 		graph.AddPass(L"Post / Temporal resolve", {
-			{ &source, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &m_View.SceneColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.History[historyReadIndex], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.SceneDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.Output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
-		}, [this, historyReadIndex, giVariant](CommandContext& commandContext)
+		}, [this, historyReadIndex](CommandContext& commandContext)
 		{
 			auto& compute = commandContext.GetComputeContext();
 			compute.SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, Graphics::g_BindlessHeap.GetHeapPointer());
 			compute.SetRootSignature(m_Resources.Pipelines.ComputeRoot);
 			compute.SetPipelineState(m_Resources.Pipelines.Post);
-			compute.SetDescriptorTable(0, m_PostProcessTextures[historyReadIndex][giVariant]);
-			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex][giVariant] + Graphics::CbvSrvUavDescriptorSize * 3);
+			compute.SetDescriptorTable(0, m_PostProcessTextures[historyReadIndex]);
+			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex] + Graphics::CbvSrvUavDescriptorSize * 3);
 			compute.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
 			compute.Dispatch((m_View.Output.GetWidth() + 7) / 8, (m_View.Output.GetHeight() + 7) / 8);
 		});
@@ -353,22 +264,13 @@ void PbrRenderer::UpdateViewDescriptors()
             source[index], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     // Immutable between view resizes; both history variants can be in flight.
     for (uint32_t history = 0; history < 2; ++history)
-    for (uint32_t gi = 0; gi < 2; ++gi)
     {
-        D3D12_CPU_DESCRIPTOR_HANDLE post[] = { (gi && m_View.GiComposite.GetResource() ? m_View.GiComposite : m_View.SceneColor).GetSRV(), m_View.History[history].GetSRV(),
+        D3D12_CPU_DESCRIPTOR_HANDLE post[] = { m_View.SceneColor.GetSRV(), m_View.History[history].GetSRV(),
             m_View.SceneDepth.GetDepthSRV(), m_View.Output.GetUAV() };
         for (uint32_t index = 0; index < _countof(post); ++index)
-            g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures[history][gi] + index * CbvSrvUavDescriptorSize,
+            g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures[history] + index * CbvSrvUavDescriptorSize,
                 post[index], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
-}
-void PbrRenderer::UpdateGiPostDescriptors()
-{
-    // The GI tables still contain their initialization placeholders until the
-    // first GI frame. Once published, they are never rewritten before a GPU-idle resize.
-    for (uint32_t history = 0; history < 2; ++history)
-        g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures[history][1],
-            m_View.GiComposite.GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 void PbrRenderer::ExtractSceneView()
 {
@@ -408,30 +310,6 @@ void PbrRenderer::ExtractSceneView()
 void PbrRenderer::Render(GraphicsContext& graphics)
 {
     if (!m_Initialized || !m_Resources.Initialized()) throw std::logic_error("PBR view is not initialized.");
-    auto finiteRange = [](float value, float fallback, float low, float high)
-    {
-        return std::clamp(std::isfinite(value) ? value : fallback, low, high);
-    };
-    m_GiSettings.Radius = finiteRange(m_GiSettings.Radius, 4.0f, 0.5f, 15.0f);
-    m_GiSettings.Thickness = finiteRange(m_GiSettings.Thickness, 0.35f, 0.05f, 1.0f);
-    m_GiSettings.Intensity = finiteRange(m_GiSettings.Intensity, 1.0f, 0.0f, 4.0f);
-    m_GiSettings.Rays = std::clamp(m_GiSettings.Rays, 1u, 12u);
-    m_GiSettings.Steps = std::clamp(m_GiSettings.Steps, 4u, 32u);
-    const bool giEnabled = m_GiSettings.Enabled;
-    if (giEnabled && !m_View.GiComposite.GetResource())
-    {
-        m_View.EnsureGiResources();
-        UpdateGiPostDescriptors();
-    }
-    if (giEnabled != m_LastGiSettings.Enabled ||
-        (giEnabled && (m_GiSettings.Radius != m_LastGiSettings.Radius ||
-            m_GiSettings.Thickness != m_LastGiSettings.Thickness ||
-            m_GiSettings.Intensity != m_LastGiSettings.Intensity ||
-            m_GiSettings.Rays != m_LastGiSettings.Rays || m_GiSettings.Steps != m_LastGiSettings.Steps)))
-    {
-        m_View.InvalidateHistory();
-    }
-    m_LastGiSettings = m_GiSettings;
     ExtractSceneView();
     if (m_Scene.Revision() != m_LastSceneRevision)
     {
@@ -449,8 +327,7 @@ void PbrRenderer::Render(GraphicsContext& graphics)
 	m_SsaoPasses->Render(graphics, m_View.Camera);
 
 	// ------------------------------- Opaque and sky -------------------------------
-	m_LightingGraphs[giEnabled ? 1 : 0].Execute(graphics);
-	if (giEnabled) m_GiGraph.Execute(graphics);
+	m_LightingGraph.Execute(graphics);
 	graphics.TransitionResource(m_View.SceneColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	graphics.TransitionResource(m_View.SceneDepth, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
@@ -463,7 +340,7 @@ void PbrRenderer::Render(GraphicsContext& graphics)
     m_ppAttribs.CurrJitter = m_View.Jitter;
     m_ppAttribs.PrevJitter = m_View.HistoryValid ? m_View.PreviousJitter : m_View.Jitter;
 
-	m_PostProcessGraphs[taaReadIndex][giEnabled ? 1 : 0].Execute(compute);
+	m_PostProcessGraphs[taaReadIndex].Execute(compute);
 
     if (m_ppAttribs.useTAA)
     {

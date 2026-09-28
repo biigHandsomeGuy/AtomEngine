@@ -21,8 +21,6 @@ bool RenderView::Resize(uint32_t width, uint32_t height)
     History[1].Create(L"View / Temporal history 1", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
     SceneDepth.Create(L"View / Depth", width, height, DXGI_FORMAT_D24_UNORM_S8_UINT);
     SceneNormal.Create(L"View / Normals", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
-    // Views that never enable GI do not reserve its full-resolution HDR targets.
-    if (GiComposite.GetResource()) EnsureGiResources();
     if (!Shadow.GetResource())
         Shadow.Create(L"View / Shadow", 2048, 2048, DXGI_FORMAT_D16_UNORM);
     LinearDepthFull.Create(L"View / Linear depth", width, height, 1, DXGI_FORMAT_R32_FLOAT);
@@ -39,16 +37,6 @@ bool RenderView::Resize(uint32_t width, uint32_t height)
     Camera.Update();
     InvalidateHistory();
     return true;
-}
-
-void RenderView::EnsureGiResources()
-{
-    const uint32_t width = Width(), height = Height();
-    if (!width || !height || (GiComposite.GetResource() && GiComposite.GetWidth() == width && GiComposite.GetHeight() == height))
-        return;
-    GiDiffuseWeight.Create(L"View / GI diffuse weight", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
-    GiHalf.Create(L"View / GI half resolution", (width + 1) / 2, (height + 1) / 2, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
-    GiComposite.Create(L"View / GI HDR composite", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
 }
 
 void RenderView::InvalidateHistory()
@@ -69,9 +57,6 @@ void RenderView::Destroy()
         history.Destroy();
     SceneDepth.Destroy();
     SceneNormal.Destroy();
-    GiDiffuseWeight.Destroy();
-    GiHalf.Destroy();
-    GiComposite.Destroy();
     Shadow.Destroy();
     LinearDepthFull.Destroy();
     LinearDepthHalf.Destroy();

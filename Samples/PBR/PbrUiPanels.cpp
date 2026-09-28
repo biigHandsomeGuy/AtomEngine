@@ -39,18 +39,6 @@ void DrawRendererSettings(PbrRenderer& renderer)
     ImGui::Checkbox("UseSsao", &shading.UseSSAO);
     ImGui::Checkbox("UseShadow", &shading.UseShadow);
     ImGui::Checkbox("Use scene materials", &shading.UseTexture);
-    auto& gi = renderer.GiSettings();
-    ImGui::Checkbox("Screen-space GI", &gi.Enabled);
-    if (gi.Enabled)
-    {
-        ImGui::SliderFloat("GI bounce radius", &gi.Radius, 0.5f, 15.0f, "%.2f");
-        ImGui::SliderFloat("GI intensity", &gi.Intensity, 0.0f, 4.0f, "%.2f");
-        ImGui::SliderFloat("GI thickness", &gi.Thickness, 0.05f, 1.0f, "%.2f");
-        int rays = static_cast<int>(gi.Rays), steps = static_cast<int>(gi.Steps);
-        if (ImGui::SliderInt("GI rays", &rays, 1, 12)) gi.Rays = static_cast<uint32_t>(rays);
-        if (ImGui::SliderInt("GI trace steps", &steps, 4, 32)) gi.Steps = static_cast<uint32_t>(steps);
-        if (!post.useTAA) ImGui::TextDisabled("TAA smooths GI sampling noise.");
-    }
     ImGui::Checkbox("UseEmu", &shading.UseEmu);
     ImGui::Checkbox("UseSSS", &shading.UseSSS);
     if (shading.UseSSS)
