@@ -2,6 +2,11 @@ cbuffer VSConstant : register(b0)
 {
     float4x4 gModel;
     float4x4 gNormalMatrix;
+#ifdef ATOM_PBR_MOTION
+    float4x4 gPrevModelViewProj;
+    float2 gPrevJitter;
+    uint gMotionValid;
+#endif
 }
 
 cbuffer GlobalConstants : register(b1)
@@ -28,6 +33,10 @@ struct VertexOut
 {
 	float4 PosH     : SV_POSITION;
     float3 NormalW  : NORMAL;
+#ifdef ATOM_PBR_MOTION
+    float4 PrevClip : TEXCOORD0;
+    nointerpolation uint MotionValid : TEXCOORD1;
+#endif
 };
 
 VertexOut main(VertexIn vin)
@@ -42,6 +51,11 @@ VertexOut main(VertexIn vin)
 
     vout.PosH = mul(gViewProj, mul(gModel, float4(vin.PosL, 1.0f)));
     vout.PosH.xy += gJitter * vout.PosH.w;
+#ifdef ATOM_PBR_MOTION
+    vout.PrevClip = mul(gPrevModelViewProj, float4(vin.PosL, 1.0f));
+    vout.PrevClip.xy += gPrevJitter * vout.PrevClip.w;
+    vout.MotionValid = gMotionValid;
+#endif
 	
     return vout;
 }

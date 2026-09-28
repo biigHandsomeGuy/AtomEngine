@@ -666,6 +666,20 @@
       <HeaderFileOutput>CompiledShaders/%(Filename).h</HeaderFileOutput>
       <ObjectFileOutput></ObjectFileOutput>
     </FxCompile>
+    <FxCompile Include="Shaders\PbrMotionVS.hlsl">
+      <ShaderType>Vertex</ShaderType>
+      <ShaderModel>6.6</ShaderModel>
+      <VariableName>g_p%(Filename)</VariableName>
+      <HeaderFileOutput>CompiledShaders/%(Filename).h</HeaderFileOutput>
+      <ObjectFileOutput></ObjectFileOutput>
+    </FxCompile>
+    <FxCompile Include="Shaders\PbrMotionPS.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>6.6</ShaderModel>
+      <VariableName>g_p%(Filename)</VariableName>
+      <HeaderFileOutput>CompiledShaders/%(Filename).h</HeaderFileOutput>
+      <ObjectFileOutput></ObjectFileOutput>
+    </FxCompile>
     <FxCompile Include="Shaders\PBRShadingVS.hlsl">
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_p%(Filename)</VariableName>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompiledShaders/%(Filename).h</HeaderFileOutput>

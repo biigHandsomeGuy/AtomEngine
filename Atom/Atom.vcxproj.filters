@@ -471,6 +471,12 @@
     <FxCompile Include="Shaders\PbrTemporalCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\PbrMotionVS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\PbrMotionPS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\AoBlurUpsampleCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>

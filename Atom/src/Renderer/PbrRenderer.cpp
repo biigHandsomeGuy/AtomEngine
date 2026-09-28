@@ -9,6 +9,7 @@
 #include "BufferManager.h"
 #include "CommandListManager.h"
 #include <stdexcept>
+#include <cstring>
 
 #include "Model.h"
 
@@ -46,10 +47,10 @@ void PbrRenderer::Initialize()
     if (m_Initialized) throw std::logic_error("PBR view is already initialized.");
     if (!m_Resources.Initialized() || !m_Resources.Pipelines.Matches({
         m_View.SceneColor.GetFormat(), m_View.SceneDepth.GetFormat(),
-        m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() }))
+        m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat(), m_View.Motion.GetFormat() }))
         throw std::logic_error("PBR view requires initialized resources with matching formats.");
     m_CommonTextures = g_BindlessHeap.Alloc(10);
-    for (auto& table : m_PostProcessTextures) table = g_BindlessHeap.Alloc(7);
+    for (auto& table : m_PostProcessTextures) table = g_BindlessHeap.Alloc(8);
     m_SsaoPasses = std::make_unique<SSAO::ViewPasses>(SSAO::ViewResources{
         m_View.SceneDepth, m_View.SceneNormal, m_View.LinearDepthFull, m_View.LinearDepthHalf,
         m_View.SsaoFull, m_View.SsaoHalf, m_View.SsaoBlur });
@@ -67,6 +68,9 @@ void PbrRenderer::Shutdown()
         graph.Clear();
 
     m_SsaoPasses.reset();
+    m_PreviousModels.clear();
+    m_ModelSnapshotSerial = 0;
+    m_LastSceneRevision = UINT64_MAX;
     m_Initialized = false;
 }
 
@@ -75,13 +79,16 @@ void PbrRenderer::SetupGeometryGraph()
 	m_GeometryGraph.Clear();
 	m_GeometryGraph.AddPass(L"Geometry / Depth and normals", {
 		{ &m_View.SceneNormal, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
+		{ &m_View.Motion, D3D12_RESOURCE_STATE_RENDER_TARGET, RenderGraph::Access::Write },
 		{ &m_View.SceneDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, RenderGraph::Access::Write }
 	}, [this](CommandContext& commandContext)
 	{
 		auto& context = commandContext.GetGraphicsContext();
 		context.ClearColor(m_View.SceneNormal);
+		context.ClearColor(m_View.Motion);
 		context.ClearDepthAndStencil(m_View.SceneDepth);
-		context.SetRenderTarget(m_View.SceneNormal.GetRTV(), m_View.SceneDepth.GetDSV());
+		const D3D12_CPU_DESCRIPTOR_HANDLE targets[] = { m_View.SceneNormal.GetRTV(), m_View.Motion.GetRTV() };
+		context.SetRenderTargets(2, targets, m_View.SceneDepth.GetDSV());
 		context.SetRootSignature(m_Resources.Pipelines.GraphicsRoot);
 		context.SetPipelineState(m_Resources.Pipelines.Graphics.at("drawNormals"));
 
@@ -118,12 +125,24 @@ void PbrRenderer::SetupGeometryGraph()
 		m_LightPassGlobalConstants.CameraPos = m_View.Camera.GetPosition();
 
 		m_LightPassGlobalConstants.Jitter = m_View.Jitter;
+		m_LightPassGlobalConstants.InvScreenSize = {
+			1.0f / m_View.Viewport.Width, 1.0f / m_View.Viewport.Height };
 		context.SetDynamicConstantBufferView(kCommonCBV, sizeof(GlobalConstants), &m_LightPassGlobalConstants);
 
 		for (auto& model : m_Scene.Models)
 		{
 			model.UpdateConstants();
-			context.SetDynamicConstantBufferView(kMeshConstants, sizeof(MeshConstants), &model.Constants);
+			MotionMeshConstants constants;
+			constants.ModelMatrix = model.Constants.ModelMatrix;
+			constants.NormalMatrix = model.Constants.NormalMatrix;
+			const auto previous = m_PreviousModels.find(model.Id);
+			const bool valid = m_View.HistoryValid && previous != m_PreviousModels.end() &&
+				previous->second.GPU == model.GPU.get();
+			constants.PreviousModelViewProjection = m_View.PreviousViewProjection *
+				(valid ? previous->second.Matrix : constants.ModelMatrix);
+			constants.PreviousJitter = m_View.PreviousJitter;
+			constants.Valid = valid ? 1u : 0u;
+			context.SetDynamicConstantBufferView(kMeshConstants, sizeof(constants), &constants);
 			model.Draw(context);
 		}
 	});
@@ -208,6 +227,7 @@ void PbrRenderer::SetupPostProcessGraphs()
 			{ &m_View.History[historyReadIndex], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.SceneDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.HistoryDepth[historyReadIndex], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &m_View.Motion, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.Output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write },
 			{ &m_View.History[historyWriteIndex], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write },
 			{ &m_View.HistoryDepth[historyWriteIndex], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
@@ -218,7 +238,7 @@ void PbrRenderer::SetupPostProcessGraphs()
 			compute.SetRootSignature(m_Resources.Pipelines.ComputeRoot);
 			compute.SetPipelineState(m_Resources.Pipelines.Post);
 			compute.SetDescriptorTable(0, m_PostProcessTextures[historyReadIndex]);
-			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex] + Graphics::CbvSrvUavDescriptorSize * 4);
+			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex] + Graphics::CbvSrvUavDescriptorSize * 5);
 			compute.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
 			compute.Dispatch((m_View.Output.GetWidth() + 7) / 8, (m_View.Output.GetHeight() + 7) / 8);
 		});
@@ -260,7 +280,8 @@ void PbrRenderer::UpdateViewDescriptors()
     {
         const uint32_t writeHistory = (history + 1u) & 1u;
         D3D12_CPU_DESCRIPTOR_HANDLE post[] = { m_View.SceneColor.GetSRV(), m_View.History[history].GetSRV(),
-            m_View.SceneDepth.GetDepthSRV(), m_View.HistoryDepth[history].GetSRV(), m_View.Output.GetUAV(),
+            m_View.SceneDepth.GetDepthSRV(), m_View.HistoryDepth[history].GetSRV(), m_View.Motion.GetSRV(),
+            m_View.Output.GetUAV(),
             m_View.History[writeHistory].GetUAV(), m_View.HistoryDepth[writeHistory].GetUAV() };
         for (uint32_t index = 0; index < _countof(post); ++index)
             g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures[history] + index * CbvSrvUavDescriptorSize,
@@ -308,7 +329,21 @@ void PbrRenderer::Render(GraphicsContext& graphics)
     ExtractSceneView();
     if (m_Scene.Revision() != m_LastSceneRevision)
     {
-        m_View.InvalidateHistory();
+        // Preserve history for a transform-only edit so motion vectors can reproject it.
+        bool transformOnly = m_Scene.Models.size() == m_PreviousModels.size();
+        bool moved = false;
+        for (const auto& model : m_Scene.Models)
+        {
+            const auto previous = m_PreviousModels.find(model.Id);
+            if (previous == m_PreviousModels.end() || previous->second.GPU != model.GPU.get())
+            {
+                transformOnly = false;
+                break;
+            }
+            const auto current = model.Transform.GetMatrix();
+            moved |= std::memcmp(&current, &previous->second.Matrix, sizeof(current)) != 0;
+        }
+        if (!transformOnly || !moved) m_View.InvalidateHistory();
         m_LastSceneRevision = m_Scene.Revision();
     }
     auto& compute = graphics.GetComputeContext();
@@ -352,4 +387,16 @@ void PbrRenderer::Render(GraphicsContext& graphics)
         m_View.PreviousViewProjection = m_LightPassGlobalConstants.ViewProjMatrix;
         m_View.PreviousJitter = { 0.0f, 0.0f };
     }
+
+    ++m_ModelSnapshotSerial;
+    for (const auto& model : m_Scene.Models)
+    {
+        auto& previous = m_PreviousModels[model.Id];
+        previous.Matrix = model.Transform.GetMatrix();
+        previous.GPU = model.GPU.get();
+        previous.LastSeen = m_ModelSnapshotSerial;
+    }
+    for (auto previous = m_PreviousModels.begin(); previous != m_PreviousModels.end();)
+        if (previous->second.LastSeen != m_ModelSnapshotSerial) previous = m_PreviousModels.erase(previous);
+        else ++previous;
 }

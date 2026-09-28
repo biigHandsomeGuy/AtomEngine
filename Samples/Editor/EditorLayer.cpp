@@ -67,6 +67,7 @@ namespace AtomEditor
         m_DocumentLoader->Update(*m_Assets);
         if (m_DocumentLoader->Apply(scene, m_History, m_State.SelectedEntity, *m_Assets))
         {
+            renderer.InvalidateHistory();
             const auto status = m_DocumentLoader->Status();
             m_DocumentPath = status.File;
             renderer.SetSceneCameraSource(InvalidEntityId);

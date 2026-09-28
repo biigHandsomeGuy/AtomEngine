@@ -12,6 +12,7 @@
 #include "ConstantBuffers.h"
 #include "PbrResources.h"
 #include <DirectXCollision.h>
+#include <unordered_map>
 
 
 using Microsoft::WRL::ComPtr;
@@ -48,6 +49,7 @@ public:
     void Shutdown();
     bool ResizeView(uint32_t width, uint32_t height);
     void Render(GraphicsContext& graphics);
+    void InvalidateHistory() { m_View.InvalidateHistory(); }
 
     const Math::Camera& Camera() const { return m_View.Camera; }
     float& CameraNearClip() { return m_View.NearClip; }
@@ -83,6 +85,22 @@ private:
 
 
 private:
+    struct PreviousModel
+    {
+        Math::Matrix4 Matrix{ Math::kIdentity };
+        const ModelGPU* GPU = nullptr;
+        uint64_t LastSeen = 0;
+    };
+
+    __declspec(align(256)) struct MotionMeshConstants
+    {
+        Math::Matrix4 ModelMatrix{ Math::kIdentity };
+        Math::Matrix4 NormalMatrix{ Math::kIdentity };
+        Math::Matrix4 PreviousModelViewProjection{ Math::kIdentity };
+        DirectX::XMFLOAT2 PreviousJitter{};
+        uint32_t Valid = 0;
+    };
+
     ShadowCamera m_SunShadowCamera;
 
     ShaderParams m_ShaderAttribs;
@@ -97,6 +115,8 @@ private:
     PbrResources& m_Resources;
     bool m_Initialized = false;
     uint64_t m_LastSceneRevision = UINT64_MAX;
+    std::unordered_map<EntityId, PreviousModel> m_PreviousModels;
+    uint64_t m_ModelSnapshotSerial = 0;
     EntityId m_ResolvedCamera = InvalidEntityId;
     EntityId m_ResolvedLight = InvalidEntityId;
     bool m_LightCastsShadows = false;

@@ -15,6 +15,7 @@ namespace Renderer
         DXGI_FORMAT Depth = DXGI_FORMAT_D24_UNORM_S8_UINT;
         DXGI_FORMAT Normal = DXGI_FORMAT_R16G16B16A16_FLOAT;
         DXGI_FORMAT Shadow = DXGI_FORMAT_D16_UNORM;
+        DXGI_FORMAT Motion = DXGI_FORMAT_R16G16B16A16_FLOAT;
     };
     extern DescriptorHeap s_TextureHeap;
     extern DescriptorHandle m_CommonTextures;

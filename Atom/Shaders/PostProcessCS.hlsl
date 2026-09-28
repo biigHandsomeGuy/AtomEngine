@@ -6,6 +6,7 @@ Texture2D<float> DepthTexture : register(t2);
 RWTexture2D<float4> OutTexture : register(u0);
 #ifdef ATOM_PBR_TEMPORAL
 Texture2D<float> HistoryDepthTexture : register(t3);
+Texture2D<float4> MotionTexture : register(t4);
 RWTexture2D<float4> HistoryColorOut : register(u1);
 RWTexture2D<float> HistoryDepthOut : register(u2);
 #endif
@@ -165,25 +166,6 @@ float2 ReprojectHistoryUv(float2 uv, float depth)
     return prevUv;
 }
 
-#ifdef ATOM_PBR_TEMPORAL
-float2 ReprojectHistoryUvAndDepth(float2 uv, float depth, out float projectedDepth)
-{
-    float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0) - CurrJitter;
-    float4 world = mul(InvViewProj, float4(ndc, depth, 1.0));
-    world /= max(world.w, 1e-6);
-    float4 prevClip = mul(PrevViewProj, world);
-    if (prevClip.w <= 1e-6)
-    {
-        projectedDepth = 1.0;
-        return -1.0;
-    }
-    float3 prevNdc = prevClip.xyz / prevClip.w;
-    projectedDepth = prevNdc.z;
-    prevNdc.xy += PrevJitter;
-    return float2(prevNdc.x * 0.5 + 0.5, 0.5 - prevNdc.y * 0.5);
-}
-#endif
-
 [numthreads(8, 8, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
@@ -207,9 +189,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     float3 colorLinear = sceneColor;
     if (UseTAA && TAAHistoryValid && depth < 0.999999)
     {
-        float expectedDepth;
-        float2 prevUv = ReprojectHistoryUvAndDepth(uv, depth, expectedDepth);
-        bool validHistory = all(prevUv >= rcpFrame * 0.5) && all(prevUv <= 1.0 - rcpFrame * 0.5) &&
+        float4 motionSample = MotionTexture.Load(int3(pixel, 0));
+        float2 prevUv = uv + motionSample.xy;
+        float expectedDepth = 1.0 - motionSample.z;
+        bool validHistory = motionSample.w > 0.5 &&
+            all(prevUv >= rcpFrame * 0.5) && all(prevUv <= 1.0 - rcpFrame * 0.5) &&
             expectedDepth >= 0.0 && expectedDepth < 1.0;
         if (validHistory)
         {
@@ -240,7 +224,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 
             // Camera motion excludes the known subpixel jitter displacement.
             float2 jitterUv = (PrevJitter - CurrJitter) * float2(0.5, -0.5);
-            float2 motionPixels = abs(prevUv - uv - jitterUv) * screenSize;
+            float2 motionPixels = abs(motionSample.xy - jitterUv) * screenSize;
             float motion = saturate(max(motionPixels.x, motionPixels.y) / 8.0);
             float currentLuma = GetLuminance(sceneColor);
             float historyLuma = GetLuminance(historyColor);

@@ -16,12 +16,14 @@
 #include "../CompiledShaders/SkyBoxVS.h"
 #include "../CompiledShaders/ShadowVS.h"
 #include "../CompiledShaders/DrawNormalsVS.h"
+#include "../CompiledShaders/PbrMotionVS.h"
 #include "../CompiledShaders/PostProcessCS.h"
 #include "../CompiledShaders/PbrTemporalCS.h"
 #include "../CompiledShaders/PBRShadingPS.h"
 #include "../CompiledShaders/SkyBoxPS.h"
 #include "../CompiledShaders/ShadowPS.h"
 #include "../CompiledShaders/DrawNormalsPS.h"
+#include "../CompiledShaders/PbrMotionPS.h"
 
 using namespace Graphics;
 
@@ -67,7 +69,7 @@ namespace Renderer
     static void CreateComputeRootSignature(RootSignature& s_ComputeRootSig, bool pbrTemporal = false)
     {
         s_ComputeRootSig.Reset(3, 4);
-        s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, pbrTemporal ? 4 : 3);
+        s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, pbrTemporal ? 5 : 3);
         s_ComputeRootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, pbrTemporal ? 3 : 1);
         s_ComputeRootSig[2].InitAsConstantBuffer(0);
 
@@ -128,9 +130,19 @@ namespace Renderer
         drawNormals.SetDepthStencilState(DepthStateReadWrite);
         drawNormals.SetInputLayout(_countof(kInputLayout), kInputLayout);
         drawNormals.SetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-        drawNormals.SetRenderTargetFormat(formats.Normal, formats.Depth);
-        drawNormals.SetVertexShader(g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS));
-        drawNormals.SetPixelShader(g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS));
+        if (pbrTemporal)
+        {
+            const DXGI_FORMAT targets[] = { formats.Normal, formats.Motion };
+            drawNormals.SetRenderTargetFormats(2, targets, formats.Depth);
+            drawNormals.SetVertexShader(g_pPbrMotionVS, sizeof(g_pPbrMotionVS));
+            drawNormals.SetPixelShader(g_pPbrMotionPS, sizeof(g_pPbrMotionPS));
+        }
+        else
+        {
+            drawNormals.SetRenderTargetFormat(formats.Normal, formats.Depth);
+            drawNormals.SetVertexShader(g_pDrawNormalsVS, sizeof(g_pDrawNormalsVS));
+            drawNormals.SetPixelShader(g_pDrawNormalsPS, sizeof(g_pDrawNormalsPS));
+        }
         drawNormals.Finalize();
         s_PSOs["drawNormals"] = std::move(drawNormals);
 
@@ -172,7 +184,8 @@ namespace Renderer
     bool PbrPipelines::Matches(PipelineFormats formats) const
     {
         return m_Initialized && formats.Color == m_Formats.Color && formats.Depth == m_Formats.Depth &&
-            formats.Normal == m_Formats.Normal && formats.Shadow == m_Formats.Shadow;
+            formats.Normal == m_Formats.Normal && formats.Motion == m_Formats.Motion &&
+            formats.Shadow == m_Formats.Shadow;
     }
 
     void PbrPipelines::Initialize(PipelineFormats formats)

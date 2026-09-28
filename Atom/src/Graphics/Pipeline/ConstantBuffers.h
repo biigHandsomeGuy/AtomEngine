@@ -29,8 +29,7 @@ __declspec(align(256)) struct GlobalConstants
     Math::Vector3 CameraPos = { 0.0f, 0.0f, 0.0f };
     Math::Vector3 SunPos = { 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT2 Jitter = { 0.0f, 0.0f };
-    float Padding0 = 0.0f;
-    float Padding1 = 0.0f;
+    DirectX::XMFLOAT2 InvScreenSize = { 0.0f, 0.0f };
     DirectX::XMFLOAT4 SunDirection{ 0, 0, -1, 0 }; // Direction of emitted rays.
     DirectX::XMFLOAT4 SunRadiance{ 0, 0, 0, 0 }; // Linear RGB color * intensity.
 };
