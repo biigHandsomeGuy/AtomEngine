@@ -134,7 +134,7 @@ void PbrApplication::Cleanup()
         ++m_AssetErrors;
     if (m_SmokeFrameLimit != 0 && m_CacheChecks != 12) ++m_CacheErrors;
     if (m_SmokeFrameLimit >= 60 && m_SceneChecks != 15) ++m_SceneErrors;
-    if (m_SmokeFrameLimit >= 60 && m_MaterialChecks != 18) ++m_MaterialErrors;
+    if (m_SmokeFrameLimit >= 60 && m_MaterialChecks != 22) ++m_MaterialErrors;
     m_Ui->Shutdown();
     if (m_UiInitialized)
     {
@@ -310,7 +310,7 @@ void PbrApplication::RenderScene()
     GraphicsContext& graphics = GraphicsContext::Begin(L"PBR application frame");
     const auto secondViewFrameBefore = m_SecondView.FrameIndex;
     if (m_SmokeFrameLimit >= 60) PrepareSceneViewChecks();
-    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 24) PrepareMaterialProbe();
+    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 28) PrepareMaterialProbe();
     for (const auto& model : m_Scene.Models) m_Frames.Retain(model.GPU);
     m_Renderer.Render(graphics);
     if (m_SecondRenderer)
@@ -324,7 +324,7 @@ void PbrApplication::RenderScene()
     if (m_SmokeFrameLimit >= 60) PollSceneViewChecks(secondViewFrameBefore);
     if (m_SmokeFrameLimit >= 60 && (m_CompletedFrames == 6 || m_CompletedFrames == 7))
         CaptureLightProbe(graphics);
-    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 24)
+    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 28)
     {
         for (const auto& model : m_MaterialScene.Models) m_Frames.Retain(model.GPU);
         m_MaterialRenderer->Render(graphics);
@@ -361,14 +361,18 @@ void PbrApplication::CheckViewIsolation()
     other.Resize(32, 24);
     other.HistoryValid = true;
     const auto* otherHistory = other.History[0].GetResource();
+    const auto* otherHistoryDepth = other.HistoryDepth[0].GetResource();
     const auto* output = m_View.Output.GetResource();
     if (m_Renderer.ResizeView(0, 0) || m_View.Output.GetResource() != output ||
         other.Output.GetResource() == output || other.History[0].GetResource() != otherHistory ||
+        other.HistoryDepth[0].GetResource() != otherHistoryDepth ||
+        other.HistoryDepth[0].GetResource() == m_View.HistoryDepth[0].GetResource() ||
         !other.HistoryValid || g_SceneColorBuffer.GetResource() || g_PostProcessBuffer.GetResource())
         ++m_ViewErrors;
     // Recreate another view without changing this view's resources or history.
     other.Resize(33, 25);
-    if (m_View.Output.GetResource() != output || other.Width() != 33 || other.Height() != 25 || other.HistoryValid)
+    if (m_View.Output.GetResource() != output || other.Width() != 33 || other.Height() != 25 ||
+        other.HistoryValid || other.HistoryDepth[0].GetWidth() != 33 || other.HistoryDepth[0].GetHeight() != 25)
         ++m_ViewErrors;
     other.Destroy();
     m_SecondView.Resize(320, 180);
@@ -1097,6 +1101,19 @@ void PbrApplication::PrepareMaterialProbe()
         m_MaterialView.EditorCamera.Update();
         return;
     }
+    case 25:
+        m_MaterialRenderer->PostSettings().useTAA = true;
+        return;
+    case 26:
+        return;
+    case 27:
+        m_MaterialRenderer->PostSettings().useGama = false;
+        return;
+    case 28:
+        m_MaterialRenderer->PostSettings().useBloom = true;
+        m_MaterialRenderer->PostSettings().bloomThreshold = 0.1f;
+        m_MaterialRenderer->PostSettings().bloomStrength = 1.0f;
+        return;
     }
     model.SetMaterialOverride(0, values);
     m_MaterialScene.MarkModified();
@@ -1106,8 +1123,10 @@ void PbrApplication::CaptureMaterialProbe(GraphicsContext& graphics)
 {
     m_MaterialProbe = std::make_shared<ReadbackBuffer>();
     m_MaterialProbeFrame = m_CompletedFrames;
-    m_MaterialProbePitch = graphics.ReadbackTexture(*m_MaterialProbe, m_MaterialView.SceneColor);
-    graphics.TransitionResource(m_MaterialView.SceneColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    auto& source = m_MaterialProbeFrame >= 25 ?
+        m_MaterialView.History[m_MaterialView.HistoryReadIndex] : m_MaterialView.SceneColor;
+    m_MaterialProbePitch = graphics.ReadbackTexture(*m_MaterialProbe, source);
+    graphics.TransitionResource(source, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
     m_Frames.Retain(m_MaterialProbe);
 }
 
@@ -1148,6 +1167,24 @@ void PbrApplication::FinishMaterialProbe(uint64_t fence)
         MaterialCheck(valid, "untextured material renders finite HDR pixels");
     else if (m_MaterialProbeFrame == 24)
         MaterialCheck(valid && m_MaterialScene.Models.size() == 30 && difference > 1, "complete 30-sphere material gallery renders finite HDR pixels");
+    else if (m_MaterialProbeFrame >= 25 && m_MaterialProbeFrame <= 28)
+    {
+        double energy = 0;
+        float peak = 0;
+        for (float value : pixels)
+        {
+            energy += std::max(0.0f, value);
+            peak = std::max(peak, value);
+        }
+        const bool stable = m_MaterialProbeFrame == 25 ||
+            std::abs(energy - m_TemporalEnergy) <= std::max(1.0, m_TemporalEnergy * 0.05);
+        MaterialCheck(valid && peak > 1.0f && stable &&
+            m_MaterialView.FrameIndex == m_MaterialProbeFrame - 24,
+            "TAA stores stable HDR history independently of gamma and bloom");
+        std::cout << "TAA_PROBE frame=" << m_MaterialProbeFrame << " peak=" << peak
+            << " energy=" << energy << " previous=" << m_TemporalEnergy << '\n';
+        m_TemporalEnergy = energy;
+    }
     else if (m_MaterialProbeFrame != 19 && m_MaterialProbeFrame != 22)
     {
         bool exact = true;

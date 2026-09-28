@@ -4,6 +4,11 @@ Texture2D ScreenTexture : register(t0);
 Texture2D HistoryTexture : register(t1);
 Texture2D<float> DepthTexture : register(t2);
 RWTexture2D<float4> OutTexture : register(u0);
+#ifdef ATOM_PBR_TEMPORAL
+Texture2D<float> HistoryDepthTexture : register(t3);
+RWTexture2D<float4> HistoryColorOut : register(u1);
+RWTexture2D<float> HistoryDepthOut : register(u2);
+#endif
 
 cbuffer MaterialConstants : register(b0)
 {
@@ -160,6 +165,25 @@ float2 ReprojectHistoryUv(float2 uv, float depth)
     return prevUv;
 }
 
+#ifdef ATOM_PBR_TEMPORAL
+float2 ReprojectHistoryUvAndDepth(float2 uv, float depth, out float projectedDepth)
+{
+    float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0) - CurrJitter;
+    float4 world = mul(InvViewProj, float4(ndc, depth, 1.0));
+    world /= max(world.w, 1e-6);
+    float4 prevClip = mul(PrevViewProj, world);
+    if (prevClip.w <= 1e-6)
+    {
+        projectedDepth = 1.0;
+        return -1.0;
+    }
+    float3 prevNdc = prevClip.xyz / prevClip.w;
+    projectedDepth = prevNdc.z;
+    prevNdc.xy += PrevJitter;
+    return float2(prevNdc.x * 0.5 + 0.5, 0.5 - prevNdc.y * 0.5);
+}
+#endif
+
 [numthreads(8, 8, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
@@ -178,6 +202,58 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     float2 uv = (float2(pixel) + 0.5f) / screenSize;
 
     float3 sceneColor = ScreenTexture.Sample(gsamAnisotropicClamp, uv).rgb;
+#ifdef ATOM_PBR_TEMPORAL
+    float depth = DepthTexture.Load(int3(pixel, 0));
+    float3 colorLinear = sceneColor;
+    if (UseTAA && TAAHistoryValid && depth < 0.999999)
+    {
+        float expectedDepth;
+        float2 prevUv = ReprojectHistoryUvAndDepth(uv, depth, expectedDepth);
+        bool validHistory = all(prevUv >= rcpFrame * 0.5) && all(prevUv <= 1.0 - rcpFrame * 0.5) &&
+            expectedDepth >= 0.0 && expectedDepth < 1.0;
+        if (validHistory)
+        {
+            uint2 prevPixel = min(uint2(prevUv * screenSize), uint2(width, height) - 1);
+            float storedDepth = HistoryDepthTexture.Load(int3(prevPixel, 0));
+            float depthTolerance = max(2e-5, 0.04 * (1.0 - expectedDepth));
+            validHistory = abs(storedDepth - expectedDepth) <= depthTolerance;
+        }
+        if (validHistory)
+        {
+            float3 historyColor = HistoryTexture.SampleLevel(gsamLinearClamp, prevUv, 0).rgb;
+            float3 minimum = sceneColor, maximum = sceneColor;
+            float3 sum = 0.0, sumSquared = 0.0;
+            [unroll] for (int y = -1; y <= 1; ++y)
+            [unroll] for (int x = -1; x <= 1; ++x)
+            {
+                int2 neighbor = clamp(int2(pixel) + int2(x, y), int2(0, 0), int2(width, height) - 1);
+                float3 sampleColor = ScreenTexture.Load(int3(neighbor, 0)).rgb;
+                minimum = min(minimum, sampleColor);
+                maximum = max(maximum, sampleColor);
+                sum += sampleColor;
+                sumSquared += sampleColor * sampleColor;
+            }
+            float3 mean = sum / 9.0;
+            float3 sigma = sqrt(max(sumSquared / 9.0 - mean * mean, 0.0));
+            historyColor = clamp(historyColor, max(minimum, mean - 1.5 * sigma),
+                min(maximum, mean + 1.5 * sigma));
+
+            // Camera motion excludes the known subpixel jitter displacement.
+            float2 jitterUv = (PrevJitter - CurrJitter) * float2(0.5, -0.5);
+            float2 motionPixels = abs(prevUv - uv - jitterUv) * screenSize;
+            float motion = saturate(max(motionPixels.x, motionPixels.y) / 8.0);
+            float currentLuma = GetLuminance(sceneColor);
+            float historyLuma = GetLuminance(historyColor);
+            float reactive = saturate(1.5 * abs(currentLuma - historyLuma) /
+                max(0.1, max(currentLuma, historyLuma)));
+            float feedback = saturate(TAAFeedback) * (1.0 - 0.55 * motion) * (1.0 - 0.75 * reactive);
+            colorLinear = lerp(sceneColor, historyColor, feedback);
+        }
+    }
+    // Keep linear HDR history independent of tone mapping, bloom and gamma.
+    HistoryColorOut[pixel] = float4(colorLinear, 1.0);
+    HistoryDepthOut[pixel] = depth;
+#else
     float3 currToneMapped = ApplyToneMapping(sceneColor);
     float3 colorLinear = UseTAA ? currToneMapped : sceneColor;
 
@@ -239,6 +315,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
         const float historyWeight = feedback * (1.0f - reject);
         colorLinear = lerp(currToneMapped, historyColor, historyWeight);
     }
+#endif
 
     if (UseFXAA && !UseTAA)
     {
@@ -387,10 +464,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
         }
     }
 
+#ifdef ATOM_PBR_TEMPORAL
+    colorLinear = ApplyToneMapping(colorLinear);
+#else
     if (!UseTAA)
     {
         colorLinear = ApplyToneMapping(colorLinear);
     }
+#endif
     if (UseBloom)
     {
         colorLinear = saturate(colorLinear + SampleBloom(uv, rcpFrame) * BloomStrength);

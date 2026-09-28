@@ -468,6 +468,9 @@
     <FxCompile Include="Shaders\PostProcessCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\PbrTemporalCS.hlsl">
+      <Filter>Assets\Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\AoBlurUpsampleCS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>

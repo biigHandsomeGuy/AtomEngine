@@ -106,7 +106,7 @@ foreach ($item in $targets) {
             Write-Output $smoke.Output
             throw "Scene entity, camera/light extraction or view-source checks failed: $item (log: $smokeLog)"
         }
-        if ($smoke.Output -notmatch 'materialErrors=0 materialChecks=18') {
+        if ($smoke.Output -notmatch 'materialErrors=0 materialChecks=22') {
             Write-Output $smoke.Output
             throw "Material import, overrides or GPU pixel checks failed: $item (log: $smokeLog)"
         }

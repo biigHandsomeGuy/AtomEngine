@@ -17,6 +17,7 @@
 #include "../CompiledShaders/ShadowVS.h"
 #include "../CompiledShaders/DrawNormalsVS.h"
 #include "../CompiledShaders/PostProcessCS.h"
+#include "../CompiledShaders/PbrTemporalCS.h"
 #include "../CompiledShaders/PBRShadingPS.h"
 #include "../CompiledShaders/SkyBoxPS.h"
 #include "../CompiledShaders/ShadowPS.h"
@@ -63,18 +64,18 @@ namespace Renderer
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
     }
 
-    static void CreateComputeRootSignature(RootSignature& s_ComputeRootSig)
+    static void CreateComputeRootSignature(RootSignature& s_ComputeRootSig, bool pbrTemporal = false)
     {
         s_ComputeRootSig.Reset(3, 4);
-        s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 3);
-        s_ComputeRootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1);
+        s_ComputeRootSig[0].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, pbrTemporal ? 4 : 3);
+        s_ComputeRootSig[1].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, pbrTemporal ? 3 : 1);
         s_ComputeRootSig[2].InitAsConstantBuffer(0);
 
         s_ComputeRootSig.InitStaticSampler(0, SamplerLinearWrapDesc);
         s_ComputeRootSig.InitStaticSampler(1, SamplerLinearClampDesc);
         s_ComputeRootSig.InitStaticSampler(2, SamplerAnisotropicWrapDesc);
         s_ComputeRootSig.InitStaticSampler(3, SamplerAnisotropicClampDesc);
-        s_ComputeRootSig.Finalize(L"Renderer Compute RootSig");
+        s_ComputeRootSig.Finalize(pbrTemporal ? L"PBR Temporal RootSig" : L"Renderer Compute RootSig");
     }
 
     static void CreateBindlessRootSignature()
@@ -93,7 +94,8 @@ namespace Renderer
     }
 
     static void CreatePSOs(const PipelineFormats& formats, RootSignature& s_RootSig, RootSignature& s_ComputeRootSig,
-        std::unordered_map<std::string, GraphicsPSO>& s_PSOs, GraphicsPSO& s_SkyboxPSO, ComputePSO& s_PostProcessPSO)
+        std::unordered_map<std::string, GraphicsPSO>& s_PSOs, GraphicsPSO& s_SkyboxPSO, ComputePSO& s_PostProcessPSO,
+        bool pbrTemporal = false)
     {
         static const D3D12_INPUT_ELEMENT_DESC kInputLayout[] =
         {
@@ -160,7 +162,10 @@ namespace Renderer
         s_SkyboxPSO.Finalize();
 
         s_PostProcessPSO.SetRootSignature(s_ComputeRootSig);
-        s_PostProcessPSO.SetComputeShader(g_pPostProcessCS, sizeof(g_pPostProcessCS));
+        if (pbrTemporal)
+            s_PostProcessPSO.SetComputeShader(g_pPbrTemporalCS, sizeof(g_pPbrTemporalCS));
+        else
+            s_PostProcessPSO.SetComputeShader(g_pPostProcessCS, sizeof(g_pPostProcessCS));
         s_PostProcessPSO.Finalize();
     }
 
@@ -178,8 +183,8 @@ namespace Renderer
             return;
         }
         CreateGraphicsRootSignature(GraphicsRoot);
-        CreateComputeRootSignature(ComputeRoot);
-        CreatePSOs(formats, GraphicsRoot, ComputeRoot, Graphics, Skybox, Post);
+        CreateComputeRootSignature(ComputeRoot, true);
+        CreatePSOs(formats, GraphicsRoot, ComputeRoot, Graphics, Skybox, Post, true);
         m_Formats = formats;
         m_Initialized = true;
     }

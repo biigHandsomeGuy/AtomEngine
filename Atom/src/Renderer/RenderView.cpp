@@ -19,6 +19,8 @@ bool RenderView::Resize(uint32_t width, uint32_t height)
     Output.Create(L"View / Output", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
     History[0].Create(L"View / Temporal history 0", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
     History[1].Create(L"View / Temporal history 1", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
+    HistoryDepth[0].Create(L"View / Temporal depth 0", width, height, 1, DXGI_FORMAT_R32_FLOAT);
+    HistoryDepth[1].Create(L"View / Temporal depth 1", width, height, 1, DXGI_FORMAT_R32_FLOAT);
     SceneDepth.Create(L"View / Depth", width, height, DXGI_FORMAT_D24_UNORM_S8_UINT);
     SceneNormal.Create(L"View / Normals", width, height, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
     if (!Shadow.GetResource())
@@ -55,6 +57,8 @@ void RenderView::Destroy()
     Output.Destroy();
     for (auto& history : History)
         history.Destroy();
+    for (auto& historyDepth : HistoryDepth)
+        historyDepth.Destroy();
     SceneDepth.Destroy();
     SceneNormal.Destroy();
     Shadow.Destroy();

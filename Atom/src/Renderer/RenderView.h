@@ -31,6 +31,7 @@ public:
     ColorBuffer SceneColor;
     ColorBuffer Output;
     ColorBuffer History[2];
+    ColorBuffer HistoryDepth[2];
     DepthBuffer SceneDepth;
     ColorBuffer SceneNormal;
     DepthBuffer Shadow;

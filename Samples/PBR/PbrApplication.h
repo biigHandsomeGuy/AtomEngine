@@ -118,6 +118,7 @@ private:
     uint64_t m_MaterialProbeFrame = 0;
     std::vector<float> m_MaterialPixels;
     bool m_MaterialPixelsValid = false;
+    double m_TemporalEnergy = 0;
     uint32_t m_MaterialErrors = 0;
     uint32_t m_MaterialChecks = 0;
     uint32_t m_SceneErrors = 0;

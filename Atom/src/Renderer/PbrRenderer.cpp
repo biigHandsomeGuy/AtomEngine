@@ -49,7 +49,7 @@ void PbrRenderer::Initialize()
         m_View.SceneNormal.GetFormat(), m_View.Shadow.GetFormat() }))
         throw std::logic_error("PBR view requires initialized resources with matching formats.");
     m_CommonTextures = g_BindlessHeap.Alloc(10);
-    for (auto& table : m_PostProcessTextures) table = g_BindlessHeap.Alloc(4);
+    for (auto& table : m_PostProcessTextures) table = g_BindlessHeap.Alloc(7);
     m_SsaoPasses = std::make_unique<SSAO::ViewPasses>(SSAO::ViewResources{
         m_View.SceneDepth, m_View.SceneNormal, m_View.LinearDepthFull, m_View.LinearDepthHalf,
         m_View.SsaoFull, m_View.SsaoHalf, m_View.SsaoBlur });
@@ -207,7 +207,10 @@ void PbrRenderer::SetupPostProcessGraphs()
 			{ &m_View.SceneColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.History[historyReadIndex], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
 			{ &m_View.SceneDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
-			{ &m_View.Output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
+			{ &m_View.HistoryDepth[historyReadIndex], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &m_View.Output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write },
+			{ &m_View.History[historyWriteIndex], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write },
+			{ &m_View.HistoryDepth[historyWriteIndex], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, RenderGraph::Access::Write }
 		}, [this, historyReadIndex](CommandContext& commandContext)
 		{
 			auto& compute = commandContext.GetComputeContext();
@@ -215,25 +218,15 @@ void PbrRenderer::SetupPostProcessGraphs()
 			compute.SetRootSignature(m_Resources.Pipelines.ComputeRoot);
 			compute.SetPipelineState(m_Resources.Pipelines.Post);
 			compute.SetDescriptorTable(0, m_PostProcessTextures[historyReadIndex]);
-			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex] + Graphics::CbvSrvUavDescriptorSize * 3);
+			compute.SetDescriptorTable(1, m_PostProcessTextures[historyReadIndex] + Graphics::CbvSrvUavDescriptorSize * 4);
 			compute.SetDynamicConstantBufferView(2, sizeof(PostProcess::RenderAttribs), &m_ppAttribs);
 			compute.Dispatch((m_View.Output.GetWidth() + 7) / 8, (m_View.Output.GetHeight() + 7) / 8);
 		});
 
-		graph.AddPass(L"Post / Store temporal history", {
-			{ &m_View.Output, D3D12_RESOURCE_STATE_COPY_SOURCE, RenderGraph::Access::Read },
-			{ &m_View.History[historyWriteIndex], D3D12_RESOURCE_STATE_COPY_DEST, RenderGraph::Access::Write }
-		}, [this, historyWriteIndex](CommandContext& commandContext)
-		{
-			auto& compute = commandContext.GetComputeContext();
-			compute.GetCommandList()->CopyResource(
-				m_View.History[historyWriteIndex].GetResource(),
-				m_View.Output.GetResource());
-		});
-
 		graph.AddPass(L"Post / Publish output and history", {
 			{ &m_View.Output, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, RenderGraph::Access::Read },
-			{ &m_View.History[historyWriteIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, RenderGraph::Access::Read }
+			{ &m_View.History[historyWriteIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, RenderGraph::Access::Read },
+			{ &m_View.HistoryDepth[historyWriteIndex], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, RenderGraph::Access::Read }
 		}, {});
 	}
 }
@@ -265,8 +258,10 @@ void PbrRenderer::UpdateViewDescriptors()
     // Immutable between view resizes; both history variants can be in flight.
     for (uint32_t history = 0; history < 2; ++history)
     {
+        const uint32_t writeHistory = (history + 1u) & 1u;
         D3D12_CPU_DESCRIPTOR_HANDLE post[] = { m_View.SceneColor.GetSRV(), m_View.History[history].GetSRV(),
-            m_View.SceneDepth.GetDepthSRV(), m_View.Output.GetUAV() };
+            m_View.SceneDepth.GetDepthSRV(), m_View.HistoryDepth[history].GetSRV(), m_View.Output.GetUAV(),
+            m_View.History[writeHistory].GetUAV(), m_View.HistoryDepth[writeHistory].GetUAV() };
         for (uint32_t index = 0; index < _countof(post); ++index)
             g_Device->CopyDescriptorsSimple(1, m_PostProcessTextures[history] + index * CbvSrvUavDescriptorSize,
                 post[index], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
