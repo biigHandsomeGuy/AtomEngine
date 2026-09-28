@@ -11,7 +11,7 @@ git submodule update --init --recursive
 pwsh -File scripts/Build-Pbr.ps1 -Target All -Configuration Debug -SmokeTest
 ```
 
-The script builds only PBR and AtomEditor and runs each for 60 frames, including four view sizes, odd-size SSAO, TAA toggling/history reset, a real main-window resize, and resource-isolation checks. It also checks asynchronous model loading, shared asset residency, malformed/missing-file diagnostics, and cancellation before/after GPU submission. Five frame-scheduler checks validate fenced resource retention, three queued slots, reuse, and drain; normal rendering submits without waiting for every frame to finish; smoke-only light/material HDR readbacks wait for their frame fences. Debug smoke tests require D3D12 validation and fail on validation errors, device removal, failed view/asset/frame checks, premature exit, or timeout. Logs are saved under `bin-int/build-logs`. Both applications also require 12 cache checks for budgets, LRU eviction, request/frame ownership, textured-upload cancellation and descriptor reuse. Smoke runs do not save ImGui layout preferences. Windows Graphics Tools must be available for Debug validation.
+The script builds only PBR and AtomEditor and runs each for 60 frames, including four view sizes, odd-size SSAO, TAA and GI toggling/history reset, a real main-window resize, and resource-isolation checks. It also checks asynchronous model loading, shared asset residency, malformed/missing-file diagnostics, and cancellation before/after GPU submission. Five frame-scheduler checks validate fenced resource retention, three queued slots, reuse, and drain; normal rendering submits without waiting for every frame to finish; smoke-only light/material HDR readbacks wait for their frame fences. Debug smoke tests require D3D12 validation and fail on validation errors, device removal, failed view/asset/frame checks, premature exit, or timeout. Logs are saved under `bin-int/build-logs`. Both applications also require 12 cache checks for budgets, LRU eviction, request/frame ownership, textured-upload cancellation and descriptor reuse. Smoke runs do not save ImGui layout preferences. Windows Graphics Tools must be available for Debug validation.
 
 ```powershell
 # Interactive editor
@@ -34,6 +34,8 @@ The Content Browser shows model cache residency and lets you set CPU/GPU soft bu
 
 The shared PBR renderer lives in Atom core. Multiple views reuse one set of pipelines, environment/BRDF resources and skybox residency; each view has independent attachments, camera, descriptors and temporal state. Smoke runs render two complete views for all 60 frames and validate independent resize/history and renderer recreation.
 
+**Renderer Settings → Screen-space GI** enables a real-time diffuse bounce in the PBR sample and editor. It traces visible surfaces at half resolution from the current depth, normals and HDR lighting, then applies a bilateral upscale before temporal resolve. Radius, thickness, intensity and sample count are adjustable per view. TAA smooths the sampling noise. GI is off by default and its view textures are allocated on first use. As a screen-space method, it cannot contribute from surfaces outside the camera view or hidden behind visible geometry; the existing environment lighting remains the fallback.
+
 The hierarchy supports models, cameras and directional lights with shared stable entity IDs. Create cameras from the editor view, edit lens/pose, and choose an active scene camera. In **Scene View**, enable **Preview scene camera** and select either the active camera or a specific camera for that viewport; turning preview off restores independent editor navigation. Directional-light orientation, linear RGB color, intensity, shadow bounds and shadow enable state drive the PBR passes. Creation, deletion and property edits support undo/redo. The renderer currently uses one active directional light plus image-based lighting.
 
 Scene format version 4 saves per-instance material overrides, camera/light components and active references alongside models; version 3 also remains readable. Existing version 1/2 model scenes migrate to explicit default camera/light entities. Both smoke applications require 15 scene checks, including per-view camera isolation and HDR GPU pixel readback proving that enabling/disabling direct light changes finite rendered pixels.
@@ -48,7 +50,7 @@ Use **File → Open Material Lab** to load the checked-in 30-sphere scene and en
 
 *Tone-mapped GPU HDR readback of the smoke gallery; this is a render preview, not an editor UI screenshot.*
 
-Both smoke applications require 18 material checks, including actual GPU output changes for color, metallic, roughness, normal scale, texture toggles and emission. Emissive pixel deltas also verify sRGB texture decoding. The renderer currently handles opaque material factors; alpha mask/blending, double-sided materials, vertex colors, material occlusion maps and additional texture UV sets remain future work.
+Both smoke applications require 21 material checks, including actual GPU output changes for color, metallic, roughness, normal scale, texture toggles, emission and GI. Emissive pixel deltas also verify sRGB texture decoding. The renderer currently handles opaque material factors; alpha mask/blending, double-sided materials, vertex colors, material occlusion maps and additional texture UV sets remain future work.
 
 #### Some features of AtomEngine
 
@@ -64,6 +66,7 @@ Both smoke applications require 18 material checks, including actual GPU output 
 - [x] Image Based Lighting(Spilt Sum Approximate)
 - [x] pecentage Closer Soft Shadow Mapping
 - [x] Screen Space Ambient Occlusion
+- [x] Screen-space diffuse global illumination (single bounce)
 - [x] Fast Approximate Anti Alising
 - [x] Pre-integral Sub-Surface Scatter
 - [ ] Async compute scheduling (the PBR frame currently uses one direct queue)

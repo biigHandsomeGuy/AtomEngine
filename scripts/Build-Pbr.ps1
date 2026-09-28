@@ -94,7 +94,7 @@ foreach ($item in $targets) {
             Write-Output $smoke.Output
             throw "Frame lifetime, reuse or drain checks failed: $item (log: $smokeLog)"
         }
-        if ($smoke.Output -notmatch 'multiViewChecks=4 secondViewFrames=60') {
+        if ($smoke.Output -notmatch 'multiViewChecks=8 secondViewFrames=60') {
             Write-Output $smoke.Output
             throw "Shared renderer resources and actual multi-view rendering checks failed: $item (log: $smokeLog)"
         }
@@ -106,7 +106,7 @@ foreach ($item in $targets) {
             Write-Output $smoke.Output
             throw "Scene entity, camera/light extraction or view-source checks failed: $item (log: $smokeLog)"
         }
-        if ($smoke.Output -notmatch 'materialErrors=0 materialChecks=18') {
+        if ($smoke.Output -notmatch 'materialErrors=0 materialChecks=21') {
             Write-Output $smoke.Output
             throw "Material import, overrides or GPU pixel checks failed: $item (log: $smokeLog)"
         }

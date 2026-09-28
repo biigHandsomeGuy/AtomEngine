@@ -124,7 +124,16 @@ Texture2D<float4> GetBindlessTexture2D(uint index)
     return ResourceDescriptorHeap[NonUniformResourceIndex(index)];
 }
 
+#ifdef ATOM_GI_MRT
+struct PbrOutput
+{
+    float4 Color : SV_Target0;
+    float4 DiffuseWeight : SV_Target1;
+};
+PbrOutput main(VertexOut pin)
+#else
 float4 main(VertexOut pin) : SV_Target
+#endif
 {
     float3 albedo = gBaseColorFactor.rgb;
     float metalness = gMetallicFactor;
@@ -293,6 +302,16 @@ float4 main(VertexOut pin) : SV_Target
     }
     
 	// Final fragment color.
-    return float4(directLighting + ambientLighting * ambientOcclution + emissive, 1.0);
+    float4 color = float4(directLighting + ambientLighting * ambientOcclution + emissive, 1.0);
+#ifdef ATOM_GI_MRT
+    // Indirect incident radiance is weighted by the receiving diffuse BRDF.
+    float3 diffuseWeight = (1.0 - F_Schlick(F0, NoV)) * (1.0 - metalness) * albedo;
+    PbrOutput output;
+    output.Color = color;
+    output.DiffuseWeight = float4(max(diffuseWeight, 0.0), 1.0);
+    return output;
+#else
+    return color;
+#endif
 }
  

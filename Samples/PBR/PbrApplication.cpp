@@ -134,7 +134,7 @@ void PbrApplication::Cleanup()
         ++m_AssetErrors;
     if (m_SmokeFrameLimit != 0 && m_CacheChecks != 12) ++m_CacheErrors;
     if (m_SmokeFrameLimit >= 60 && m_SceneChecks != 15) ++m_SceneErrors;
-    if (m_SmokeFrameLimit >= 60 && m_MaterialChecks != 18) ++m_MaterialErrors;
+    if (m_SmokeFrameLimit >= 60 && m_MaterialChecks != 21) ++m_MaterialErrors;
     m_Ui->Shutdown();
     if (m_UiInitialized)
     {
@@ -182,7 +182,7 @@ void PbrApplication::Cleanup()
         const bool deviceRemoved = FAILED(g_Device->GetDeviceRemovedReason());
         if (m_SmokeFrameLimit >= 60 && (m_ResizeChecks != 4 || m_WindowResizes != 1))
             ++m_ViewErrors;
-        if (m_SecondViewFrames != m_CompletedFrames || m_MultiViewChecks != 4) ++m_ViewErrors;
+        if (m_SecondViewFrames != m_CompletedFrames || m_MultiViewChecks != 8) ++m_ViewErrors;
         if (m_FrameChecks != 5 || (m_SmokeFrameLimit >= 60 && m_PresentationChecks != 2) ||
             m_Frames.Stats().Submissions != m_CompletedFrames ||
             m_Frames.Stats().SlotReuses != (m_CompletedFrames > FrameScheduler::FramesInFlight ?
@@ -261,6 +261,12 @@ void PbrApplication::RenderScene()
         const uint32_t phase = static_cast<uint32_t>(std::min(m_CompletedFrames / 15, uint64_t(3)));
         request = sizes[phase];
         m_Renderer.PostSettings().useTAA = m_CompletedFrames < 35 || m_CompletedFrames >= 40;
+        if (m_SmokeFrameLimit >= 60)
+        {
+            if (m_CompletedFrames == 41) m_Renderer.GiSettings().Enabled = true;
+            if (m_CompletedFrames == 42) m_Renderer.GiSettings().Intensity = 1.5f;
+            if (m_CompletedFrames == 44) m_Renderer.GiSettings().Enabled = false;
+        }
     }
     if (m_Renderer.ResizeView(request.Width, request.Height) && m_SmokeFrameLimit != 0)
     {
@@ -310,9 +316,17 @@ void PbrApplication::RenderScene()
     GraphicsContext& graphics = GraphicsContext::Begin(L"PBR application frame");
     const auto secondViewFrameBefore = m_SecondView.FrameIndex;
     if (m_SmokeFrameLimit >= 60) PrepareSceneViewChecks();
-    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 24) PrepareMaterialProbe();
+    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 27) PrepareMaterialProbe();
     for (const auto& model : m_Scene.Models) m_Frames.Retain(model.GPU);
     m_Renderer.Render(graphics);
+    if (m_SmokeFrameLimit >= 60 && m_CompletedFrames >= 41 && m_CompletedFrames <= 44)
+    {
+        ++m_MultiViewChecks;
+        const uint64_t expectedHistoryFrame = m_CompletedFrames == 43 ? 2 : 1;
+        if (m_View.FrameIndex != expectedHistoryFrame || !m_View.HistoryValid ||
+            (m_CompletedFrames < 44 && !m_View.GiComposite.GetResource()) ||
+            m_SecondView.GiComposite.GetResource()) ++m_ViewErrors;
+    }
     if (m_SecondRenderer)
     {
         m_SecondRenderer->Render(graphics);
@@ -324,7 +338,7 @@ void PbrApplication::RenderScene()
     if (m_SmokeFrameLimit >= 60) PollSceneViewChecks(secondViewFrameBefore);
     if (m_SmokeFrameLimit >= 60 && (m_CompletedFrames == 6 || m_CompletedFrames == 7))
         CaptureLightProbe(graphics);
-    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 24)
+    if (m_MaterialRenderer && m_CompletedFrames >= 14 && m_CompletedFrames <= 27)
     {
         for (const auto& model : m_MaterialScene.Models) m_Frames.Retain(model.GPU);
         m_MaterialRenderer->Render(graphics);
@@ -1041,6 +1055,22 @@ void PbrApplication::PrepareMaterialProbe()
     auto values = model.MaterialValues(0);
     switch (m_CompletedFrames)
     {
+    case 25:
+        m_MaterialScene.Models[29].Transform.transform.SetTranslation(Vector3(-4.2f, -7.5f, 0));
+        m_MaterialScene.MarkModified();
+        m_MaterialRenderer->PostSettings().useTAA = false;
+        m_MaterialRenderer->GiSettings().Enabled = false;
+        return;
+    case 26:
+        m_MaterialRenderer->GiSettings().Enabled = true;
+        m_MaterialRenderer->GiSettings().Radius = 6.0f;
+        m_MaterialRenderer->GiSettings().Thickness = 0.5f;
+        m_MaterialRenderer->GiSettings().Rays = 12;
+        m_MaterialRenderer->GiSettings().Steps = 24;
+        return;
+    case 27:
+        m_MaterialRenderer->GiSettings().Intensity = 0;
+        return;
     case 14:
         values = {}; values.BaseColorFactor = {0.5f, 0.5f, 0.5f, 1};
         values.MetallicFactor = 0; values.RoughnessFactor = 0.2f;
@@ -1106,8 +1136,9 @@ void PbrApplication::CaptureMaterialProbe(GraphicsContext& graphics)
 {
     m_MaterialProbe = std::make_shared<ReadbackBuffer>();
     m_MaterialProbeFrame = m_CompletedFrames;
-    m_MaterialProbePitch = graphics.ReadbackTexture(*m_MaterialProbe, m_MaterialView.SceneColor);
-    graphics.TransitionResource(m_MaterialView.SceneColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    auto& source = m_MaterialRenderer->GiSettings().Enabled ? m_MaterialView.GiComposite : m_MaterialView.SceneColor;
+    m_MaterialProbePitch = graphics.ReadbackTexture(*m_MaterialProbe, source);
+    graphics.TransitionResource(source, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
     m_Frames.Retain(m_MaterialProbe);
 }
 
@@ -1148,6 +1179,34 @@ void PbrApplication::FinishMaterialProbe(uint64_t fence)
         MaterialCheck(valid, "untextured material renders finite HDR pixels");
     else if (m_MaterialProbeFrame == 24)
         MaterialCheck(valid && m_MaterialScene.Models.size() == 30 && difference > 1, "complete 30-sphere material gallery renders finite HDR pixels");
+    else if (m_MaterialProbeFrame == 25)
+    {
+        m_GiBaselinePixels = pixels;
+        MaterialCheck(valid && m_MaterialScene.Models.size() == 30, "GI comparison baseline renders finite HDR pixels");
+    }
+    else if (m_MaterialProbeFrame == 26)
+    {
+        double added = 0, removed = 0;
+        if (pixels.size() == m_GiBaselinePixels.size())
+            for (size_t i = 0; i < pixels.size(); ++i)
+            {
+                const double delta = double(pixels[i]) - m_GiBaselinePixels[i];
+                added += std::max(delta, 0.0);
+                removed += std::max(-delta, 0.0);
+            }
+        std::cout << "GI_PROBE added=" << added << " removed=" << removed << '\n';
+        MaterialCheck(valid && pixels.size() == m_GiBaselinePixels.size() && added > 1 && removed < 0.25,
+            "screen-space GI adds finite HDR light without subtracting energy");
+    }
+    else if (m_MaterialProbeFrame == 27)
+    {
+        double baselineError = 0;
+        if (pixels.size() == m_GiBaselinePixels.size())
+            for (size_t i = 0; i < pixels.size(); ++i)
+                baselineError += std::abs(double(pixels[i]) - m_GiBaselinePixels[i]);
+        MaterialCheck(valid && pixels.size() == m_GiBaselinePixels.size() && baselineError < 0.25,
+            "zero GI intensity restores the opaque HDR baseline");
+    }
     else if (m_MaterialProbeFrame != 19 && m_MaterialProbeFrame != 22)
     {
         bool exact = true;

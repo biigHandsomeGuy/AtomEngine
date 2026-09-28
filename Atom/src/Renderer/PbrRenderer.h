@@ -36,6 +36,16 @@ __declspec(align(256)) struct ShaderParams
     float SpecularFactor = {};
 };
 
+struct ScreenSpaceGiSettings
+{
+    bool Enabled = false;
+    float Radius = 4.0f;
+    float Thickness = 0.35f;
+    float Intensity = 1.0f;
+    uint32_t Rays = 6;
+    uint32_t Steps = 16;
+};
+
 class PbrRenderer
 {
 public:
@@ -53,6 +63,7 @@ public:
     float& CameraNearClip() { return m_View.NearClip; }
     float& CameraFarClip() { return m_View.FarClip; }
     ShaderParams& ShadingSettings() { return m_ShaderAttribs; }
+    ScreenSpaceGiSettings& GiSettings() { return m_GiSettings; }
     EnvMapRenderer::RenderAttribs& EnvironmentSettings() { return m_EnvMapAttribs; }
     PostProcess::RenderAttribs& PostSettings() { return m_ppAttribs; }
     const PbrResources& SharedResources() const { return m_Resources; }
@@ -76,9 +87,11 @@ public:
 private:
 	void SetupGeometryGraph();
 	void SetupLightingGraph();
+    void SetupGiGraph();
 	void SetupPostProcessGraphs();
 
     void UpdateViewDescriptors();
+    void UpdateGiPostDescriptors();
     void ExtractSceneView();
 
 
@@ -86,6 +99,8 @@ private:
     ShadowCamera m_SunShadowCamera;
 
     ShaderParams m_ShaderAttribs;
+    ScreenSpaceGiSettings m_GiSettings;
+    ScreenSpaceGiSettings m_LastGiSettings;
     EnvMapRenderer::RenderAttribs m_EnvMapAttribs;
     PostProcess::RenderAttribs m_ppAttribs;
 
@@ -104,8 +119,9 @@ private:
     Math::Vector3 m_ShadowBounds{ 1, 1, 1 };
     std::unique_ptr<SSAO::ViewPasses> m_SsaoPasses;
     DescriptorHandle m_CommonTextures;
-    DescriptorHandle m_PostProcessTextures[2];
+    DescriptorHandle m_PostProcessTextures[2][2]; // history index, GI disabled/enabled
     RenderGraph m_GeometryGraph;
-    RenderGraph m_LightingGraph;
-    RenderGraph m_PostProcessGraphs[2];
+    RenderGraph m_LightingGraphs[2];
+    RenderGraph m_GiGraph;
+    RenderGraph m_PostProcessGraphs[2][2];
 };
